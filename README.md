@@ -18,7 +18,7 @@ npm install -g grunt-cli
 cd to directory for code
 //this is where we will put the code
 
-git clone https://github.com/sgterban/ember-grunt.git
+git clone https://github.com/kennethdavidbuck/ember-start.git
 //this downloads the repository
 
 cd into repository root
