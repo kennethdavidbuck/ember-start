@@ -22,7 +22,7 @@ git clone https://github.com/kennethdavidbuck/ember-start.git
 //this downloads the repository
 
 cd into repository root
-//this is where we'll runt grunt tasks from
+//this is where we'll run grunt tasks from
 
 npm install
 //this will install all the dependencies of the project
