@@ -66,6 +66,12 @@ These tests will run in the **terminal on save** of javascript files within the 
 
 Qunit Tests via web browser can be found at **http://localhost:9091/**
 
+## Documentaiton
+
+This project includes yuidoc, and will automatically check for the appropraite markup and compile api documentation. 
+
+Access the docs at at - **http://localhost:9093/**
+
 ## Release Process
 
 This project is already setup for you to build release builds of your Ember applications.  Note that the release process will check your javascript files for jshint errors and warnings.  You will need to fix these warnings in order to complete the release process.  
@@ -79,7 +85,6 @@ cd into repo
 grunt release
 ```
 
-Access your production candidate at **http://localhost:9091**
 The **/release** directory will contain your production-ready code
 
 ##Thank You
