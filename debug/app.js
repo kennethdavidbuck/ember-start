@@ -66673,3 +66673,14 @@ App.HighChartView = App.BaseView.extend({
 		this.set('chart',new Highcharts.Chart(this.get('data')));
 	}.observes('data')
 });
+/*
+* Application Bootstrapping. Preload app data/do injections here. 
+*/
+App.initializer({
+	//
+	name: 'bootstrap',
+	//
+	initialize: function(container) {
+		"use strict";
+	}
+});

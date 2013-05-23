@@ -76,6 +76,9 @@ module.exports = function(grunt) {
 					'debug/templates.js',
 					'app/views/*.js',
 					
+					// Bootstrap
+					'app/bootstrap.js',
+					
 					// Modules
 					'app/modules/**/routes/*.js',
 					'app/modules/**/models/*.js',
