@@ -1,4 +1,4 @@
-# ember-start
+# Ember Start
 
 This is a build/development tool for Ember developers to setup a basic application that includes: LESS compilation, concatenation of all javascript to a single app.js file, ember templates compilation, jshinting, yui documentation compilation, local http server, project watch tools.  It also includes a "release" function which will uglify (minify/compress) all files for a production deployment version of your app.  
 
