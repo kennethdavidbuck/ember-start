@@ -64,7 +64,7 @@ This project includes a basic testing infrastructure.  All tests should be locat
 
 These tests will run in the **terminal on save** of javascript files within the /app directory.  The tests are compiled into qunit/test.js, which is included in the index.html file also in this directory.  Unit Test away!
 
-Qunit Tests via web browser can be found at **http://localhost:9092/**
+Qunit Tests via web browser can be found at **http://localhost:9091/**
 
 ## Release Process
 
