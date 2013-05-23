@@ -1,5 +1,5 @@
 /**
-* Simple Wrapper View for HighChart 
+* Simple Wrapper View for HighCharts
 *
 * @namespace Views
 * @class HighChartView

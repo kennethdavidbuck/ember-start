@@ -101,7 +101,8 @@ module.exports = function(grunt) {
 				options: {
 					templateName: function(sourceFile) {
 						var pieces = sourceFile.split("/");
-						return pieces[pieces.length - 1]; // output: _header.hbs
+						pieces = pieces[pieces.length - 1]; // output: _header.hbs
+						return pieces.replace("&","/");
 					}
 				},
 				files: {
