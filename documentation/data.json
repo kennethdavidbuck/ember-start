@@ -1,0 +1,442 @@
+{
+    "project": {
+        "name": "Project Name",
+        "description": "Project Description",
+        "version": "1.0",
+        "url": "http://www.example.com"
+    },
+    "files": {
+        "app/controllers/app.js": {
+            "name": "app/controllers/app.js",
+            "modules": {},
+            "classes": {
+                "Controllers.AppController": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Controllers": 1
+            }
+        },
+        "app/models/user.js": {
+            "name": "app/models/user.js",
+            "modules": {},
+            "classes": {
+                "Models.User": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Models": 1
+            }
+        },
+        "app/views/backgroundColor.js": {
+            "name": "app/views/backgroundColor.js",
+            "modules": {},
+            "classes": {
+                "Views.BackgroundColorView": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Views": 1
+            }
+        },
+        "app/views/colouredValue.js": {
+            "name": "app/views/colouredValue.js",
+            "modules": {},
+            "classes": {
+                "Views.ColoredValueView": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Views": 1
+            }
+        },
+        "app/views/highChart.js": {
+            "name": "app/views/highChart.js",
+            "modules": {},
+            "classes": {
+                "Views.HighChartView": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Views": 1
+            }
+        },
+        "app/core/controllers/baseArray.js": {
+            "name": "app/core/controllers/baseArray.js",
+            "modules": {},
+            "classes": {
+                "Core.BaseArrayController": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Core": 1
+            }
+        },
+        "app/core/controllers/baseObject.js": {
+            "name": "app/core/controllers/baseObject.js",
+            "modules": {},
+            "classes": {
+                "Core.BaseObjectController": 1
+            },
+            "fors": {},
+            "namespaces": {}
+        },
+        "app/core/models/baseModel.js": {
+            "name": "app/core/models/baseModel.js",
+            "modules": {},
+            "classes": {
+                "Core.BaseModel": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Core": 1
+            }
+        },
+        "app/core/views/baseView.js": {
+            "name": "app/core/views/baseView.js",
+            "modules": {},
+            "classes": {
+                "Core.BaseView": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Core": 1
+            }
+        }
+    },
+    "modules": {},
+    "classes": {
+        "Controllers.AppController": {
+            "name": "Controllers.AppController",
+            "shortname": "Controllers.AppController",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Controllers",
+            "file": "app/controllers/app.js",
+            "line": 1,
+            "description": "Main Application controller"
+        },
+        "Models.User": {
+            "name": "Models.User",
+            "shortname": "Models.User",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Models",
+            "file": "app/models/user.js",
+            "line": 1,
+            "description": "Basic User model"
+        },
+        "Views.BackgroundColorView": {
+            "name": "Views.BackgroundColorView",
+            "shortname": "Views.BackgroundColorView",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Views",
+            "file": "app/views/backgroundColor.js",
+            "line": 1
+        },
+        "Views.ColoredValueView": {
+            "name": "Views.ColoredValueView",
+            "shortname": "Views.ColoredValueView",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Views",
+            "file": "app/views/colouredValue.js",
+            "line": 1,
+            "description": "Formats value and  colors based on a supplied  truthValue."
+        },
+        "Views.HighChartView": {
+            "name": "Views.HighChartView",
+            "shortname": "Views.HighChartView",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Views",
+            "file": "app/views/highChart.js",
+            "line": 1,
+            "description": "Simple Wrapper View for HighChart"
+        },
+        "Core.BaseArrayController": {
+            "name": "Core.BaseArrayController",
+            "shortname": "Core.BaseArrayController",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Core",
+            "file": "app/core/controllers/baseArray.js",
+            "line": 1,
+            "is_constructor": 1
+        },
+        "Core.BaseObjectController": {
+            "name": "Core.BaseObjectController",
+            "shortname": "BaseObjectController",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Core",
+            "file": "app/core/controllers/baseObject.js",
+            "line": 1
+        },
+        "Core.BaseModel": {
+            "name": "Core.BaseModel",
+            "shortname": "Core.BaseModel",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Core",
+            "file": "app/core/models/baseModel.js",
+            "line": 1
+        },
+        "Core.BaseView": {
+            "name": "Core.BaseView",
+            "shortname": "Core.BaseView",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Core",
+            "file": "app/core/views/baseView.js",
+            "line": 1
+        }
+    },
+    "classitems": [
+        {
+            "file": "app/models/user.js",
+            "line": 8,
+            "description": "Users Username",
+            "itemtype": "property",
+            "name": "username",
+            "type": "{String}",
+            "class": "Models.User",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/models/user.js",
+            "line": 15,
+            "description": "Users Email",
+            "itemtype": "property",
+            "name": "email",
+            "type": "{String}",
+            "class": "Models.User",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/models/user.js",
+            "line": 22,
+            "description": "Date user was created",
+            "itemtype": "property",
+            "name": "createdAt",
+            "type": "{String}",
+            "class": "Models.User",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/models/user.js",
+            "line": 29,
+            "description": "Users Full Name (firstName LastName)",
+            "itemtype": "property",
+            "name": "fullName",
+            "type": "{String}",
+            "class": "Models.User",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 17,
+            "description": "Transition duration",
+            "itemtype": "property",
+            "name": "duration",
+            "type": "{Integer}",
+            "default": "400",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 25,
+            "description": "Color to use when truthValue is true (hex etc)",
+            "itemtype": "property",
+            "name": "trueColor",
+            "type": "{String}",
+            "default": "#8dc500",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 33,
+            "description": "Color to use when truthValue is false (hex etc)",
+            "itemtype": "property",
+            "name": "falseColor",
+            "type": "{String}",
+            "default": "#cc0000",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 41,
+            "itemtype": "property",
+            "name": "truthValue",
+            "type": "{Boolean}",
+            "default": "true",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 48,
+            "description": "Actual value to display (a string, number etc.)",
+            "itemtype": "property",
+            "name": "value",
+            "type": "{String}",
+            "default": "0",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 56,
+            "description": "Reverse trueColor and falseColor",
+            "itemtype": "property",
+            "name": "swapColors",
+            "type": "{Boolean}",
+            "default": "false",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 64,
+            "description": "If set to true adds a dollar sign, and applicable commas",
+            "itemtype": "property",
+            "name": "isCurrency",
+            "type": "{Boolean}",
+            "default": "false",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/colouredValue.js",
+            "line": 72,
+            "description": "Current value formatted with $ and commas",
+            "itemtype": "property",
+            "name": "formatValue",
+            "type": "{String}",
+            "class": "Views.ColoredValueView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/views/highChart.js",
+            "line": 8,
+            "description": "A wrapped instance of HighChart",
+            "itemtype": "property",
+            "name": "chart",
+            "type": "{HighChart}",
+            "class": "Views.HighChartView",
+            "namespace": "Views"
+        },
+        {
+            "file": "app/core/models/baseModel.js",
+            "line": 6,
+            "description": "Sums up all values from a given property in the model",
+            "params": [
+                {
+                    "name": "property",
+                    "description": "The a property (must be an array!) to iterate over"
+                },
+                {
+                    "name": "key",
+                    "description": "The property being added to the total sum"
+                }
+            ],
+            "return": {
+                "description": "Resulting total after summing up all object",
+                "type": "Number"
+            },
+            "class": "Core.BaseModel",
+            "namespace": "Core"
+        },
+        {
+            "file": "app/core/models/baseModel.js",
+            "line": 24,
+            "description": "Checks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
+            "params": [
+                {
+                    "name": "property",
+                    "description": "An array within the current model"
+                },
+                {
+                    "name": "key",
+                    "description": "Used to check if a given property if true or false"
+                },
+                {
+                    "name": "value",
+                    "description": "User to obtain property value to add to the total"
+                }
+            ],
+            "return": {
+                "description": "Sum of values where property of satisfied",
+                "type": "Number"
+            },
+            "class": "Core.BaseModel",
+            "namespace": "Core"
+        },
+        {
+            "file": "app/core/models/baseModel.js",
+            "line": 46,
+            "description": "Checks if a given property results to true. If so a total is incremented",
+            "params": [
+                {
+                    "name": "property",
+                    "description": "An array within the current model"
+                },
+                {
+                    "name": "keys",
+                    "description": "a single, or list of keys to check on the model (for a boolean value)"
+                }
+            ],
+            "return": {
+                "description": "Total count of objects satisfying all key requirements",
+                "type": "Number"
+            },
+            "class": "Core.BaseModel",
+            "namespace": "Core"
+        }
+    ],
+    "warnings": [
+        {
+            "message": "Missing item type\nSums up all values from a given property in the model",
+            "line": " app/core/models/baseModel.js:6"
+        },
+        {
+            "message": "Missing item type\nChecks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
+            "line": " app/core/models/baseModel.js:24"
+        },
+        {
+            "message": "Missing item type\nChecks if a given property results to true. If so a total is incremented",
+            "line": " app/core/models/baseModel.js:46"
+        }
+    ]
+}
