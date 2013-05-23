@@ -83,4 +83,4 @@ Access your production candidate at **http://localhost:9091**
 The **/release** directory will contain your production-ready code
 
 ##Thank You
-A big thank-you goes out to sgterban, who authored of ember-grunt. This is my variation of the work they started, and form which most of the README.md is also derived from.
+A big thank-you goes out to sgterban, who authored ember-grunt. This is my variation of the work they started, and form which most of the README.md is also derived from.
