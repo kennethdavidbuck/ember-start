@@ -4,6 +4,4 @@
 * @namespace Controllers
 * @class AppController
 */
-App.AppController = Ember.ObjectController.extend({
-	content:null
-});
+App.AppController = Ember.ObjectController.extend();

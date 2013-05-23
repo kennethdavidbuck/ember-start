@@ -66197,11 +66197,59 @@ Ember.Handlebars.registerBoundHelper('toUpperCase', function(value) {
 	return String(value).toUpperCase();
 });
 
-// Instantiat Application
-var App = Em.Application.create({
+/**
+ * EMBER DEBUGGING APPROACHES
+ * source: http://www.akshay.cc/blog/2013-02-22-debugging-ember-js-and-ember-data.html
+ *
+ * Log Object Bindings:
+ * Ember.LOG_BINDINGS = true;
+ *
+ * View All Registered Route:
+ * Ember.keys(App.Router.router.recognizer.names);
+ *
+ * Log State Transitions:
+ * record.stateManager.get('currentPath')
+ *
+ * View Registered Temlates:
+ * Ember.keys(Ember.TEMPLATES)
+ *
+ * View an instance of something from the container:
+ * App.__container__.lookup("controller:posts")
+ * App.__container__.lookup("route:application")
+ *
+ * View ember-data's identity map:
+ * App.__container__.lookup('store:main').recordCache # all records in memory
+ * App.__container__.lookup('store:main').recordCache[2].get('data.attributes') #attributes
+ * App.__container__.lookup('store:main').recordCache[2].get('comments') #loaded associations
+ *
+ * See all observers for a object, key:
+ * Ember.observersFor(comments, keyName);
+ *
+ * Dealing with deprecations:
+ * Ember.ENV.RAISE_ON_DEPRECATION = true
+ * Ember.LOG_STACKTRACE_ON_DEPRECATION = true
+ *
+ *
+ * Handlebars:
+ * {{debugger}}
+ * {{log record}}
+ *
+ * Implement a Ember.onerror hook to log all errors in production:
+ * Ember.onerror = function(error) {
+ *  Em.$.ajax('/error-notification', 'POST', {
+ *     stack: error.stack,
+ *    otherInformation: 'exception message'
+ *  });
+ * }
+ *
+ * Use ember extension when its ready:
+ * https://github.com/tildeio/ember-extension.git
+ */
+
+// Application
+window.App = Ember.Application.create({
 	LOG_TRANSITIONS: true
 });
-
 /**
 * Application Router
 *
@@ -66211,23 +66259,25 @@ App.Router.map(function() {
 	"use strict";
 });
 
-App.AppRoute = Ember.Route.extend();
+/**
+*	Define base api url
+*/
+DS.RESTAdapter.reopen({
+	namespace:'public/api'
+});
 
-// Initialize DataStore
+/**
+*	Specialized Plurals
+*/
+DS.RESTAdapter.configure("plurals", {
+	
+});
+
+/**
+*	Initialize Store
+*/
 App.store = DS.Store.create({
-	revision: 12,
-	adapter: DS.RESTAdapter.create({
-		bulkCommit: false,
-		url:'http://localhost/public/api',
-		// TODO: Find out if there is a better way to pluralize
-		serializer:DS.RESTSerializer.extend({
-			init:function() {
-				"use strict";
-				this._super();
-				this.configurations.set('plurals',{category:'categories'});
-			}
-		})
-	})
+	revision: 12
 });
 
 var JQ = JQ || {};
@@ -66404,6 +66454,9 @@ App.BaseArrayController = Ember.ArrayController.extend();
 App.BaseObjectController = Ember.ObjectController.extend();
 /**
 * @namespace Core
+* 
+* Mixin' to a to add property delegates for JQ.Transition
+*
 * @class BaseView
 */
 App.BaseView = Ember.View.extend(JQ.Transition, {
@@ -66458,9 +66511,7 @@ App.User = DS.Model.extend({
 * @namespace Controllers
 * @class AppController
 */
-App.AppController = Ember.ObjectController.extend({
-	content:null
-});
+App.AppController = Ember.ObjectController.extend();
 Ember.TEMPLATES["application"] = Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
 this.compilerInfo = [2,'>= 1.0.0-rc.3'];
 helpers = helpers || Ember.Handlebars.helpers; data = data || {};

@@ -6,5 +6,3 @@
 App.Router.map(function() {
 	"use strict";
 });
-
-App.AppRoute = Ember.Route.extend();

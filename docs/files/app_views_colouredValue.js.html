@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>app/views/colouredValue.js - Project Name</title>
+    <link rel="stylesheet" href="http://yui.yahooapis.com/3.9.1/build/cssgrids/cssgrids-min.css">
+    <link rel="stylesheet" href="../assets/vendor/prettify/prettify-min.css">
+    <link rel="stylesheet" href="../assets/css/main.css" id="site_styles">
+    <link rel="shortcut icon" type="image/png" href="../assets/favicon.png">
+    <script src="http://yui.yahooapis.com/combo?3.9.1/build/yui/yui-min.js"></script>
+</head>
+<body class="yui3-skin-sam">
+
+<div id="doc">
+    <div id="hd" class="yui3-g header">
+        <div class="yui3-u-3-4">
+            
+                <h1><img src="../assets/css/logo.png" title="Project Name"></h1>
+            
+        </div>
+        <div class="yui3-u-1-4 version">
+            <em>API Docs for: 1.0</em>
+        </div>
+    </div>
+    <div id="bd" class="yui3-g">
+
+        <div class="yui3-u-1-4">
+            <div id="docs-sidebar" class="sidebar apidocs">
+                <div id="api-list">
+    <h2 class="off-left">APIs</h2>
+    <div id="api-tabview" class="tabview">
+        <ul class="tabs">
+            <li><a href="#api-classes">Classes</a></li>
+            <li><a href="#api-modules">Modules</a></li>
+        </ul>
+
+        <div id="api-tabview-filter">
+            <input type="search" id="api-filter" placeholder="Type to filter APIs">
+        </div>
+
+        <div id="api-tabview-panel">
+            <ul id="api-classes" class="apis classes">
+            
+                <li><a href="../classes/Controllers.AppController.html">Controllers.AppController</a></li>
+            
+                <li><a href="../classes/Core.BaseArrayController.html">Core.BaseArrayController</a></li>
+            
+                <li><a href="../classes/Core.BaseModel.html">Core.BaseModel</a></li>
+            
+                <li><a href="../classes/Core.BaseObjectController.html">Core.BaseObjectController</a></li>
+            
+                <li><a href="../classes/Core.BaseView.html">Core.BaseView</a></li>
+            
+                <li><a href="../classes/Models.User.html">Models.User</a></li>
+            
+                <li><a href="../classes/Views.BackgroundColorView.html">Views.BackgroundColorView</a></li>
+            
+                <li><a href="../classes/Views.ColoredValueView.html">Views.ColoredValueView</a></li>
+            
+                <li><a href="../classes/Views.HighChartView.html">Views.HighChartView</a></li>
+            
+            </ul>
+
+            <ul id="api-modules" class="apis modules">
+            
+            </ul>
+        </div>
+    </div>
+</div>
+
+            </div>
+        </div>
+        <div class="yui3-u-3-4">
+                <div id="api-options">
+        Show:
+        <label for="api-show-inherited">
+            <input type="checkbox" id="api-show-inherited" checked>
+            Inherited
+        </label>
+
+        <label for="api-show-protected">
+            <input type="checkbox" id="api-show-protected">
+            Protected
+        </label>
+
+        <label for="api-show-private">
+            <input type="checkbox" id="api-show-private">
+            Private
+        </label>
+        <label for="api-show-deprecated">
+            <input type="checkbox" id="api-show-deprecated">
+            Deprecated
+        </label>
+
+    </div>
+
+
+            <div class="apidocs">
+                <div id="docs-main">
+                    <div class="content">
+                        <h1 class="file-heading">File: app/views/colouredValue.js</h1>
+
+<div class="file">
+    <pre class="code prettyprint linenums">
+/**
+* Formats value and  colors based on a supplied  truthValue.
+*
+* @namespace Views
+* @class ColoredValueView
+*/
+App.ColoredValueView = Ember.View.extend(JQ.Transition,{
+	template:Ember.Handlebars.compile(&#x27;{{view.formatValue}}&#x27;),
+	cssProperties:[&#x27;color&#x27;],
+
+	didInsertElement:function(){
+		&quot;use strict&quot;;
+		this._super();
+		this.colorObserver();
+	},
+	
+	/**
+	* Transition duration
+	* @property duration
+	* @type {Integer}
+	* @default 400
+	*/
+	duration:400,
+
+	/**
+	* Color to use when truthValue is true (hex etc)
+	* @property trueColor
+	* @type {String} 
+	* @default #8dc500
+	*/
+	trueColor:&#x27;#8dc500&#x27;,
+	
+	/**
+	* Color to use when truthValue is false (hex etc)
+	* @property falseColor
+	* @type {String} 
+	* @default #cc0000
+	*/	
+	falseColor:&#x27;#cc0000&#x27;,
+	
+	/**
+	* @property truthValue
+	* @type {Boolean} 
+	* @default true
+	*/
+	truthValue:true,
+	
+	/**
+	* Actual value to display (a string, number etc.)
+	* @property value
+	* @type {String}
+	* @default 0
+	*/
+	value:&#x27;0&#x27;,
+	
+	/**
+	* Reverse trueColor and falseColor
+	* @property swapColors
+	* @type {Boolean}
+	* @default false
+	*/	
+	swapColors:false,
+	
+	/**
+	* If set to true adds a dollar sign, and applicable commas
+	* @property isCurrency
+	* @type {Boolean}
+	* @default false
+	*/		
+	isCurrency:false,
+
+	/**
+	* Current value formatted with $ and commas 
+	*
+	* @property formatValue
+	* @type {String}
+	*/		
+	formatValue:function() {
+		&quot;use strict&quot;;
+		if(this.get(&#x27;isCurrency&#x27;)) {
+			return &#x27;$&#x27;+this.get(&#x27;value&#x27;).toString().replace(/\B(?=(\d{3})+(?!\d))/g,&quot;,&quot;);
+		}
+		return this.get(&#x27;value&#x27;);
+	}.property(&#x27;truthValue&#x27;,&#x27;trueColor&#x27;,&#x27;falseColor&#x27;,&#x27;value&#x27;,&#x27;swapColors&#x27;),
+
+	colorObserver:function() {
+		&quot;use strict&quot;;
+		var truthValue = this.get(&#x27;truthValue&#x27;);
+		if(this.get(&#x27;swapColors&#x27;)) {
+			truthValue = !truthValue;
+		}
+		var color = truthValue ? this.get(&#x27;trueColor&#x27;) : this.get(&#x27;falseColor&#x27;);
+		this.set(&#x27;color&#x27;,color);
+	}.observes(&#x27;truthValue&#x27;,&#x27;trueColor&#x27;,&#x27;falseColor&#x27;,&#x27;value&#x27;,&#x27;swapColors&#x27;)
+});
+
+    </pre>
+</div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="../assets/vendor/prettify/prettify-min.js"></script>
+<script>prettyPrint();</script>
+<script src="../assets/js/yui-prettify.js"></script>
+<script src="../assets/../api.js"></script>
+<script src="../assets/js/api-filter.js"></script>
+<script src="../assets/js/api-list.js"></script>
+<script src="../assets/js/api-search.js"></script>
+<script src="../assets/js/apidocs.js"></script>
+</body>
+</html>

@@ -197,7 +197,7 @@ module.exports = function(grunt) {
 						'app/core/models/',
 						'app/core/views/'
 					],
-					outdir: 'documentation/'
+					outdir: 'docs/'
 				}
 			}
 		},
@@ -217,7 +217,7 @@ module.exports = function(grunt) {
 			docs: {
 				options: {
 					port: 9093,
-					base:'documentation'
+					base:'docs'
 				}
 			}
 		}
