@@ -68,7 +68,7 @@ Qunit Tests via web browser can be found at **http://localhost:9091/**
 
 ## Documentaiton
 
-This project includes yuidoc, and will automatically check for the appropraite markup and compile api documentation. 
+This project includes yuidoc compilation, and will automatically check for the appropraite markup and compile api documentation. 
 
 Access the docs at at - **http://localhost:9093/**
 
