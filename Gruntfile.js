@@ -116,24 +116,24 @@ module.exports = function(grunt) {
 			development: {
 				options: {
 					paths: [
-						"app/css/imports",
-						"app/css/imports/**"
+						"app/less/imports",
+						"app/less/imports/**"
 					]
 				},
 				files: {
-					"debug/app.css": "app/css/style.less"
+					"debug/app.css": "app/less/style.less"
 				}
 			},
 			production: {
 				options: {
 					paths: [
-						"app/css/imports",
-						"app/css/imports/**"
+						"app/less/imports",
+						"app/less/imports/**"
 					],
 					yuicompress: true
 				},
 				files: {
-					"release/app.min.css": "app/css/style.less"
+					"release/app.min.css": "app/less/style.less"
 				}
 			}
 		},

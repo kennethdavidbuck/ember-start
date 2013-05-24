@@ -556,17 +556,8 @@ table {
 .pull-left {
   float: left;
 }
-.no-bottom-border {
-  border-bottom: none;
-}
 .clear {
   clear: both!important;
-}
-.padding-bottom-20 {
-  padding-bottom: 20px;
-}
-.padding-top-15 {
-  padding-top: 15px;
 }
 /* ==========================================================================
    Helper classes
