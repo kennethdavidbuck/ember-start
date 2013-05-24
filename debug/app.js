@@ -66257,6 +66257,8 @@ window.App = Ember.Application.create({
 */
 App.Router.map(function() {
 	"use strict";
+	
+	this.route('index',{ path:'/' });
 });
 
 /**
