@@ -66678,7 +66678,7 @@ App.HighChartView = App.BaseView.extend({
 */
 App.initializer({
 	//
-	name: 'bootstrap',
+	name: 'initializerName',
 	//
 	initialize: function(container) {
 		"use strict";
