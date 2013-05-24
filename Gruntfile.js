@@ -9,9 +9,10 @@ module.exports = function(grunt) {
 				'gruntfile.js',
 				'app/**/controllers/*.js',
 				'app/*.js',
-				'app/**/views/*.js',
-				'app/**/routes/*.js',
-				'app/**/models/*.js'
+				'app/**/views/**/*.js',
+				'app/**/routes/**/*.js',
+				'app/**/models/**/*.js',
+				'app/modules/**/*.js'
 			],
 			options: {
 				eqeqeq:true,
@@ -32,7 +33,6 @@ module.exports = function(grunt) {
 					$:true,
 					App:true,
 					JQ:true,
-					DRILL:true,
 					DS:true
 				}
 			}
@@ -133,7 +133,7 @@ module.exports = function(grunt) {
 					yuicompress: true
 				},
 				files: {
-					"release/app.css": "app/css/style.less"
+					"release/app.min.css": "app/css/style.less"
 				}
 			}
 		},
@@ -151,13 +151,6 @@ module.exports = function(grunt) {
 			build: {
 				src: 'debug/app.js',
 				dest:'release/app.min.js'
-			}
-		},
-		cssmin: {
-			compress: {
-				files: {
-					"release/app.min.css":["debug/app.css"]
-				}
 			}
 		},
 		watch: {
@@ -223,6 +216,12 @@ module.exports = function(grunt) {
 					port: 9093,
 					base:'docs'
 				}
+			},
+			release: {
+				options: {
+					port: 9094,
+					base:'release'
+				}
 			}
 		}
 	});
@@ -233,7 +232,6 @@ module.exports = function(grunt) {
 	grunt.loadNpmTasks('grunt-contrib-jshint');
 	grunt.loadNpmTasks('grunt-contrib-watch');
 	grunt.loadNpmTasks('grunt-contrib-less');
-	grunt.loadNpmTasks('grunt-contrib-cssmin');
 	grunt.loadNpmTasks('grunt-contrib-handlebars');
 	grunt.loadNpmTasks('grunt-ember-templates');
     grunt.loadNpmTasks('grunt-contrib-connect');
@@ -242,5 +240,5 @@ module.exports = function(grunt) {
     grunt.loadNpmTasks('grunt-contrib-copy');
 
 	grunt.registerTask('default', ['jshint','ember_templates','concat','less','clean','copy','connect','qunit','yuidoc','watch']);
-	grunt.registerTask('release', ['uglify','less','cssmin','clean','copy']);
+	grunt.registerTask('release', ['uglify','less','clean','copy']);
 };
