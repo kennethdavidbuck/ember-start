@@ -66520,7 +66520,7 @@ helpers = helpers || Ember.Handlebars.helpers; data = data || {};
   var buffer = '', hashTypes, escapeExpression=this.escapeExpression;
 
 
-  data.buffer.push("<h1>Welcome!</h1>\n\n");
+  data.buffer.push("<h1>Welcome to Ember Start!</h1>\n\n");
   hashTypes = {};
   data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "outlet", {hash:{},contexts:[depth0],types:["ID"],hashTypes:hashTypes,data:data})));
   return buffer;
@@ -66661,15 +66661,4 @@ App.HighChartView = App.BaseView.extend({
 		"use strict";
 		this.set('chart', new Highcharts.Chart(this.get('data')));
 	}.observes('data')
-});
-/*
-* Application Bootstrapping. Preload app data/do injections here. 
-*/
-App.initializer({
-	//
-	name: 'initializerName',
-	//
-	initialize: function(container) {
-		"use strict";
-	}
 });
