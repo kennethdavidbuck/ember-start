@@ -77,7 +77,7 @@ module.exports = function(grunt) {
 					'app/views/*.js',
 					
 					// Initializers
-					'app/initialize.js',
+					'app/initializers.js',
 					
 					// Modules
 					'app/modules/**/routes/*.js',
