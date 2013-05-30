@@ -1,6 +1,6 @@
 
-// Version: v1.0.0-rc.3-272-g4c74b2d
-// Last commit: 4c74b2d (2013-05-21 12:35:21 -0700)
+// Version: v1.0.0-rc.4-3-gbd1629e
+// Last commit: bd1629e (2013-05-28 10:37:17 -0500)
 
 
 (function() {
@@ -152,8 +152,8 @@ Ember.deprecateFunc = function(message, func) {
 
 })();
 
-// Version: v1.0.0-rc.4
-// Last commit: 1acec81 (2013-05-27 20:18:28 -0500)
+// Version: v1.0.0-rc.4-3-gbd1629e
+// Last commit: bd1629e (2013-05-28 10:37:17 -0500)
 
 
 (function() {
@@ -4631,7 +4631,7 @@ define("backburner",
           method = target[method];
         }
 
-        var stack = new Error().stack,
+        var stack = this.DEBUG ? new Error().stack : undefined,
             args = arguments.length > 3 ? slice.call(arguments, 3) : undefined;
         if (!this.currentInstance) { createAutorun(this); }
         return this.currentInstance.schedule(queueName, target, method, args, false, stack);
@@ -4647,7 +4647,7 @@ define("backburner",
           method = target[method];
         }
 
-        var stack = new Error().stack,
+        var stack = this.DEBUG ? new Error().stack : undefined,
             args = arguments.length > 3 ? slice.call(arguments, 3) : undefined;
         if (!this.currentInstance) { createAutorun(this); }
         return this.currentInstance.schedule(queueName, target, method, args, true, stack);
@@ -5005,7 +5005,6 @@ define("backburner/queue",
 
     __exports__.Queue = Queue;
   });
-
 })();
 
 
@@ -29914,8 +29913,8 @@ helper('wait', wait);
 
 
 })();
-// Version: v1.0.0-rc.4
-// Last commit: 1acec81 (2013-05-27 20:18:28 -0500)
+// Version: v1.0.0-rc.4-3-gbd1629e
+// Last commit: bd1629e (2013-05-28 10:37:17 -0500)
 
 
 (function() {

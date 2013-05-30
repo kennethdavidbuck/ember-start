@@ -1,5 +1,5 @@
 // Adds a dollar sign and appropriate commas to a provided number.
-Ember.Handlebars.registerBoundHelper('formatCurrency', function(value) {
+Em.Handlebars.registerBoundHelper('formatCurrency', function(value) {
 	value += '';
 	// do not format empty values.
 	if(!value) return '';
@@ -16,6 +16,6 @@ Ember.Handlebars.registerBoundHelper('formatCurrency', function(value) {
 });
 
 // Converts a given string to all upper case characters
-Ember.Handlebars.registerBoundHelper('toUpperCase', function(value) {
+Em.Handlebars.registerBoundHelper('toUpperCase', function(value) {
 	return String(value).toUpperCase();
 });
