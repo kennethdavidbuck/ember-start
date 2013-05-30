@@ -47,13 +47,11 @@ module.exports = function(grunt) {
 					'app/core/library/ember-rc4.js',
 					'app/core/library/ember-data-0.1.3.js',
 					'app/core/library/moment-2.0.0.js',
+					'app/core/library/jquery-ui-1.10.0/js/jquery-ui-1.10.0.js',
 					
 					// Vendor
 					'app/library/*.js',
-					'app/library/jquery-ui-1.10.0/js/jquery-ui-1.10.0.custom.js',
-					'app/library/highcharts/js/highcharts.js',
-					'app/library/highcharts/js/highcharts-more.js',
-
+					
 					// Mixins / Helpers
 					'app/mixins/*.js',
 					'app/helpers/*.js',
@@ -83,7 +81,6 @@ module.exports = function(grunt) {
 					'app/modules/**/routes/*.js',
 					'app/modules/**/models/*.js',
 					'app/modules/**/controllers/*.js',
-					'debug/module_templates.js',
 					'app/modules/**/views/*.js',
 					
 					//
