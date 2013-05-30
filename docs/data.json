@@ -28,39 +28,6 @@
                 "Models": 1
             }
         },
-        "app/views/backgroundColor.js": {
-            "name": "app/views/backgroundColor.js",
-            "modules": {},
-            "classes": {
-                "Views.BackgroundColorView": 1
-            },
-            "fors": {},
-            "namespaces": {
-                "Views": 1
-            }
-        },
-        "app/views/colouredValue.js": {
-            "name": "app/views/colouredValue.js",
-            "modules": {},
-            "classes": {
-                "Views.ColoredValueView": 1
-            },
-            "fors": {},
-            "namespaces": {
-                "Views": 1
-            }
-        },
-        "app/views/highChart.js": {
-            "name": "app/views/highChart.js",
-            "modules": {},
-            "classes": {
-                "Views.HighChartView": 1
-            },
-            "fors": {},
-            "namespaces": {
-                "Views": 1
-            }
-        },
         "app/core/controllers/baseArray.js": {
             "name": "app/core/controllers/baseArray.js",
             "modules": {},
@@ -132,44 +99,6 @@
             "line": 1,
             "description": "Basic User model"
         },
-        "Views.BackgroundColorView": {
-            "name": "Views.BackgroundColorView",
-            "shortname": "Views.BackgroundColorView",
-            "classitems": [],
-            "plugins": [],
-            "extensions": [],
-            "plugin_for": [],
-            "extension_for": [],
-            "namespace": "Views",
-            "file": "app/views/backgroundColor.js",
-            "line": 1
-        },
-        "Views.ColoredValueView": {
-            "name": "Views.ColoredValueView",
-            "shortname": "Views.ColoredValueView",
-            "classitems": [],
-            "plugins": [],
-            "extensions": [],
-            "plugin_for": [],
-            "extension_for": [],
-            "namespace": "Views",
-            "file": "app/views/colouredValue.js",
-            "line": 1,
-            "description": "Formats value and  colors based on a supplied  truthValue."
-        },
-        "Views.HighChartView": {
-            "name": "Views.HighChartView",
-            "shortname": "Views.HighChartView",
-            "classitems": [],
-            "plugins": [],
-            "extensions": [],
-            "plugin_for": [],
-            "extension_for": [],
-            "namespace": "Views",
-            "file": "app/views/highChart.js",
-            "line": 1,
-            "description": "Simple Wrapper View for HighChart"
-        },
         "Core.BaseArrayController": {
             "name": "Core.BaseArrayController",
             "shortname": "Core.BaseArrayController",
@@ -217,7 +146,8 @@
             "extension_for": [],
             "namespace": "Core",
             "file": "app/core/views/baseView.js",
-            "line": 1
+            "line": 1,
+            "description": "Mixin to add property delegates for JQ.Transition"
         }
     },
     "classitems": [
@@ -260,102 +190,6 @@
             "type": "{String}",
             "class": "Models.User",
             "namespace": "Models"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 17,
-            "description": "Transition duration",
-            "itemtype": "property",
-            "name": "duration",
-            "type": "{Integer}",
-            "default": "400",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 25,
-            "description": "Color to use when truthValue is true (hex etc)",
-            "itemtype": "property",
-            "name": "trueColor",
-            "type": "{String}",
-            "default": "#8dc500",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 33,
-            "description": "Color to use when truthValue is false (hex etc)",
-            "itemtype": "property",
-            "name": "falseColor",
-            "type": "{String}",
-            "default": "#cc0000",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 41,
-            "itemtype": "property",
-            "name": "truthValue",
-            "type": "{Boolean}",
-            "default": "true",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 48,
-            "description": "Actual value to display (a string, number etc.)",
-            "itemtype": "property",
-            "name": "value",
-            "type": "{String}",
-            "default": "0",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 56,
-            "description": "Reverse trueColor and falseColor",
-            "itemtype": "property",
-            "name": "swapColors",
-            "type": "{Boolean}",
-            "default": "false",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 64,
-            "description": "If set to true adds a dollar sign, and applicable commas",
-            "itemtype": "property",
-            "name": "isCurrency",
-            "type": "{Boolean}",
-            "default": "false",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/colouredValue.js",
-            "line": 72,
-            "description": "Current value formatted with $ and commas",
-            "itemtype": "property",
-            "name": "formatValue",
-            "type": "{String}",
-            "class": "Views.ColoredValueView",
-            "namespace": "Views"
-        },
-        {
-            "file": "app/views/highChart.js",
-            "line": 8,
-            "description": "A wrapped instance of HighChart",
-            "itemtype": "property",
-            "name": "chart",
-            "type": "{HighChart}",
-            "class": "Views.HighChartView",
-            "namespace": "Views"
         },
         {
             "file": "app/core/models/baseModel.js",

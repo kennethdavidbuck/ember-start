@@ -6,10 +6,7 @@ YUI.add("yuidoc-meta", function(Y) {
         "Core.BaseModel",
         "Core.BaseObjectController",
         "Core.BaseView",
-        "Models.User",
-        "Views.BackgroundColorView",
-        "Views.ColoredValueView",
-        "Views.HighChartView"
+        "Models.User"
     ],
     "modules": [],
     "allModules": []
