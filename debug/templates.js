@@ -18,6 +18,6 @@ helpers = helpers || Ember.Handlebars.helpers; data = data || {};
   
 
 
-  data.buffer.push("<p>This is the app index page</p>");
+  data.buffer.push("<p>This template is located in <code>app/templates/index.hbs</code></p>");
   
 });
