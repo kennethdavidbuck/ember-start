@@ -1,8 +1,8 @@
 /**
-* Mixin to add property delegates for JQ.Transition
+* Reopending of Em.View with JQ.Transition mixin added
 * @namespace Core
-* @class BaseView
+* @class View
 */
-App.BaseView = Ember.View.reopen(JQ.Transition, {
+App.BaseView = Em.View.reopen(JQ.Transition, {
 	duration: 200
 });

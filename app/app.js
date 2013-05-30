@@ -48,6 +48,6 @@
  */
 
 // Application
-window.App = Ember.Application.create({
+window.App = Em.Application.create({
 	LOG_TRANSITIONS: true
 });

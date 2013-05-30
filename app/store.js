@@ -8,13 +8,9 @@ DS.RESTAdapter.reopen({
 /**
 *	Specialized Plurals
 */
-DS.RESTAdapter.configure("plurals", {
-	
-});
+DS.RESTAdapter.configure("plurals",{});
 
 /**
 *	Initialize Store
 */
-App.store = DS.Store.create({
-	
-});
+App.store = DS.Store.create();

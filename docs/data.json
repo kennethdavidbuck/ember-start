@@ -32,7 +32,7 @@
             "name": "app/core/controllers/array.js",
             "modules": {},
             "classes": {
-                "Core.BaseArrayController": 1
+                "Core.ArrayController": 1
             },
             "fors": {},
             "namespaces": {
@@ -43,16 +43,18 @@
             "name": "app/core/controllers/object.js",
             "modules": {},
             "classes": {
-                "Core.BaseObjectController": 1
+                "Core.ObjectController": 1
             },
             "fors": {},
-            "namespaces": {}
+            "namespaces": {
+                "Core": 1
+            }
         },
         "app/core/models/model.js": {
             "name": "app/core/models/model.js",
             "modules": {},
             "classes": {
-                "Core.BaseModel": 1
+                "Core.Model": 1
             },
             "fors": {},
             "namespaces": {
@@ -63,7 +65,7 @@
             "name": "app/core/views/view.js",
             "modules": {},
             "classes": {
-                "Core.BaseView": 1
+                "Core.View": 1
             },
             "fors": {},
             "namespaces": {
@@ -99,9 +101,9 @@
             "line": 1,
             "description": "Basic User model"
         },
-        "Core.BaseArrayController": {
-            "name": "Core.BaseArrayController",
-            "shortname": "Core.BaseArrayController",
+        "Core.ArrayController": {
+            "name": "Core.ArrayController",
+            "shortname": "Core.ArrayController",
             "classitems": [],
             "plugins": [],
             "extensions": [],
@@ -110,11 +112,12 @@
             "namespace": "Core",
             "file": "app/core/controllers/array.js",
             "line": 1,
+            "description": "Reopening of Em.ArrayController",
             "is_constructor": 1
         },
-        "Core.BaseObjectController": {
-            "name": "Core.BaseObjectController",
-            "shortname": "BaseObjectController",
+        "Core.ObjectController": {
+            "name": "Core.ObjectController",
+            "shortname": "Core.ObjectController",
             "classitems": [],
             "plugins": [],
             "extensions": [],
@@ -122,11 +125,13 @@
             "extension_for": [],
             "namespace": "Core",
             "file": "app/core/controllers/object.js",
-            "line": 1
+            "line": 1,
+            "description": "Reopening of Em.ObjectController",
+            "is_constructor": 1
         },
-        "Core.BaseModel": {
-            "name": "Core.BaseModel",
-            "shortname": "Core.BaseModel",
+        "Core.Model": {
+            "name": "Core.Model",
+            "shortname": "Core.Model",
             "classitems": [],
             "plugins": [],
             "extensions": [],
@@ -134,11 +139,12 @@
             "extension_for": [],
             "namespace": "Core",
             "file": "app/core/models/model.js",
-            "line": 1
+            "line": 1,
+            "description": "Reopening of DS.Model"
         },
-        "Core.BaseView": {
-            "name": "Core.BaseView",
-            "shortname": "Core.BaseView",
+        "Core.View": {
+            "name": "Core.View",
+            "shortname": "Core.View",
             "classitems": [],
             "plugins": [],
             "extensions": [],
@@ -147,7 +153,7 @@
             "namespace": "Core",
             "file": "app/core/views/view.js",
             "line": 1,
-            "description": "Mixin to add property delegates for JQ.Transition"
+            "description": "Reopending of Em.View with JQ.Transition mixin added"
         }
     },
     "classitems": [
@@ -193,7 +199,7 @@
         },
         {
             "file": "app/core/models/model.js",
-            "line": 6,
+            "line": 7,
             "description": "Sums up all values from a given property in the model",
             "params": [
                 {
@@ -209,12 +215,12 @@
                 "description": "Resulting total after summing up all object",
                 "type": "Number"
             },
-            "class": "Core.BaseModel",
+            "class": "Core.Model",
             "namespace": "Core"
         },
         {
             "file": "app/core/models/model.js",
-            "line": 24,
+            "line": 25,
             "description": "Checks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
             "params": [
                 {
@@ -234,12 +240,12 @@
                 "description": "Sum of values where property of satisfied",
                 "type": "Number"
             },
-            "class": "Core.BaseModel",
+            "class": "Core.Model",
             "namespace": "Core"
         },
         {
             "file": "app/core/models/model.js",
-            "line": 46,
+            "line": 47,
             "description": "Checks if a given property results to true. If so a total is incremented",
             "params": [
                 {
@@ -255,22 +261,22 @@
                 "description": "Total count of objects satisfying all key requirements",
                 "type": "Number"
             },
-            "class": "Core.BaseModel",
+            "class": "Core.Model",
             "namespace": "Core"
         }
     ],
     "warnings": [
         {
             "message": "Missing item type\nSums up all values from a given property in the model",
-            "line": " app/core/models/model.js:6"
+            "line": " app/core/models/model.js:7"
         },
         {
             "message": "Missing item type\nChecks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
-            "line": " app/core/models/model.js:24"
+            "line": " app/core/models/model.js:25"
         },
         {
             "message": "Missing item type\nChecks if a given property results to true. If so a total is incremented",
-            "line": " app/core/models/model.js:46"
+            "line": " app/core/models/model.js:47"
         }
     ]
 }

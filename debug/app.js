@@ -50454,7 +50454,7 @@ Ember.Handlebars.registerBoundHelper('toUpperCase', function(value) {
  */
 
 // Application
-window.App = Ember.Application.create({
+window.App = Em.Application.create({
 	LOG_TRANSITIONS: true
 });
 /**
@@ -50478,16 +50478,12 @@ DS.RESTAdapter.reopen({
 /**
 *	Specialized Plurals
 */
-DS.RESTAdapter.configure("plurals", {
-	
-});
+DS.RESTAdapter.configure("plurals",{});
 
 /**
 *	Initialize Store
 */
-App.store = DS.Store.create({
-	
-});
+App.store = DS.Store.create();
 
 var JQ = JQ || {};
 
@@ -50695,8 +50691,9 @@ JQ.Transition = Ember.Mixin.create({
   }
 });
 /**
+* Reopening of DS.Model
 * @namespace Core
-* @class BaseModel
+* @class Model
 */
 DS.Model.reopen({
 	/**
@@ -50765,21 +50762,25 @@ DS.Model.reopen({
 	}
 });
 /**
+* Reopening of Em.ArrayController 
 * @namespace Core
-* @class BaseArrayController
+* @class ArrayController
 * @constructor
 */
 Ember.ArrayController.reopen();
 /**
-* @class BaseObjectController
+* Reopening of Em.ObjectController 
+* @namespace Core
+* @class ObjectController
+* @constructor
 */
 Em.ObjectController.reopen();
 /**
-* Mixin to add property delegates for JQ.Transition
+* Reopending of Em.View with JQ.Transition mixin added
 * @namespace Core
-* @class BaseView
+* @class View
 */
-App.BaseView = Ember.View.reopen(JQ.Transition, {
+App.BaseView = Em.View.reopen(JQ.Transition, {
 	duration: 200
 });
 /**
@@ -50827,7 +50828,7 @@ App.User = DS.Model.extend({
 * @namespace Controllers
 * @class AppController
 */
-App.AppController = Ember.ObjectController.extend();
+App.AppController = Em.ObjectController.extend();
 Ember.TEMPLATES["application"] = Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
 this.compilerInfo = [3,'>= 1.0.0-rc.4'];
 helpers = helpers || Ember.Handlebars.helpers; data = data || {};

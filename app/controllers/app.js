@@ -4,4 +4,4 @@
 * @namespace Controllers
 * @class AppController
 */
-App.AppController = Ember.ObjectController.extend();
+App.AppController = Em.ObjectController.extend();

@@ -1,6 +1,7 @@
 /**
+* Reopening of DS.Model
 * @namespace Core
-* @class BaseModel
+* @class Model
 */
 DS.Model.reopen({
 	/**

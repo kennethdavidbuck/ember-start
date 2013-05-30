@@ -1,6 +1,7 @@
 /**
+* Reopening of Em.ArrayController 
 * @namespace Core
-* @class BaseArrayController
+* @class ArrayController
 * @constructor
 */
 Ember.ArrayController.reopen();
