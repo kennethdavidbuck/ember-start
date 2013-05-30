@@ -1,10 +1,10 @@
 /**
-* Application Router
-*
-* @class Router
-*/
+ * Application Router
+ * @class Router
+ */
 App.Router.map(function() {
 	"use strict";
-	
-	this.route('index',{ path:'/' });
+	this.route('index', {
+		path: '/'
+	});
 });

@@ -50451,39 +50451,33 @@ Em.Handlebars.registerBoundHelper('toUpperCase', function(value) {
  * Use ember extension when its ready:
  * https://github.com/tildeio/ember-extension.git
  */
-
-// Application
 window.App = Em.Application.create({
 	LOG_TRANSITIONS: true
 });
 /**
-* Application Router
-*
-* @class Router
-*/
+ * Application Router
+ * @class Router
+ */
 App.Router.map(function() {
 	"use strict";
-	
-	this.route('index',{ path:'/' });
+	this.route('index', {
+		path: '/'
+	});
 });
-
 /**
-*	Define base api url
-*/
+ *	Define base api url
+ */
 DS.RESTAdapter.reopen({
-	namespace:'public/api'
+	namespace: 'public/api'
 });
-
 /**
-*	Specialized Plurals
-*/
-DS.RESTAdapter.configure("plurals",{});
-
+ *	Specialized Plurals
+ */
+DS.RESTAdapter.configure("plurals", {});
 /**
-*	Initialize Store
-*/
+ *	Initialize Store
+ */
 App.store = DS.Store.create();
-
 var JQ = JQ || {};
 
 // Create a new mixin for jQuery UI widgets using the Ember
@@ -50697,7 +50691,6 @@ JQ.Transition = Ember.Mixin.create({
 DS.Model.reopen({
 	/**
 	 * Sums up all values from a given property in the model
-	 *
 	 * @param property The a property (must be an array!) to iterate over
 	 * @param key The property being added to the total sum
 	 * @return {Number} Resulting total after summing up all object
@@ -50716,7 +50709,6 @@ DS.Model.reopen({
 	/**
 	 * Checks if a given property results to true. If so it includes a value
 	 * as produced by calling the given key on the object.
-	 *
 	 * @param property An array within the current model
 	 * @param key Used to check if a given property if true or false
 	 * @param value User to obtain property value to add to the total
@@ -50737,7 +50729,6 @@ DS.Model.reopen({
 
 	/**
 	 * Checks if a given property results to true. If so a total is incremented
-	 *
 	 * @param property An array within the current model
 	 * @param keys a single, or list of keys to check on the model (for a boolean value)
 	 * @return {Number} Total count of objects satisfying all key requirements
@@ -50761,79 +50752,73 @@ DS.Model.reopen({
 	}
 });
 /**
-* Reopening of Em.ArrayController 
-* @namespace Core
-* @class ArrayController
-* @constructor
-*/
+ * Reopening of Em.ArrayController
+ * @namespace Core
+ * @class ArrayController
+ * @constructor
+ */
 Ember.ArrayController.reopen();
 /**
-* Reopening of Em.ObjectController 
-* @namespace Core
-* @class ObjectController
-* @constructor
-*/
+ * Reopening of Em.ObjectController
+ * @namespace Core
+ * @class ObjectController
+ * @constructor
+ */
 Em.ObjectController.reopen();
 /**
-* Reopending of Em.View with JQ.Transition mixin added
-* @namespace Core
-* @class View
-*/
-App.BaseView = Em.View.reopen(JQ.Transition, {
-	duration: 200
-});
+ * Reopending of Em.View with JQ.Transition mixin added
+ * @namespace Core
+ * @class View
+ */
+App.BaseView = Em.View.reopen(JQ.Transition);
 /**
-* Basic User model
-*
-* @namespace Models
-* @class User
-*/
+ * Basic User model
+ *
+ * @namespace Models
+ * @class User
+ */
 App.User = DS.Model.extend({
 	/**
-	* Users Username 
-	* @property username
-	* @type {String} 
-	*/
+	 * Users Username
+	 * @property username
+	 * @type {String}
+	 */
 	username: DS.attr('string'),
-	
 	/**
-	* Users Email
-	* @property email
-	* @type {String} 
-	*/
+	 * Users Email
+	 * @property email
+	 * @type {String}
+	 */
 	email: DS.attr('string'),
-
 	/**
-	* Date user was created
-	* @property createdAt
-	* @type {String} 
-	*/
+	 * Date user was created
+	 * @property createdAt
+	 * @type {String}
+	 */
 	created_at: DS.attr('date'),
-	
 	/**
-	* Users Full Name (firstName LastName)
-	* @property fullName
-	* @type {String} 
-	*/	
+	 * Users Full Name (firstName LastName)
+	 * @property fullName
+	 * @type {String}
+	 */
 	full_name: function() {
 		"use strict";
 		return "%@ %@".fmt(this.get('first_name'), this.get('last_name'));
 	}.property('first_name', 'last_name')
-	
 });
 /**
-* Main Application controller
-*
-* @namespace Controllers
-* @class AppController
-*/
+ * Main Application controller
+ *
+ * @namespace Controllers
+ * @class AppController
+ */
 App.ApplicationController = Em.ObjectController.extend();
 /**
-* Application index controller
-*
-* @namespace Controllers
-* @class IndexController
-*/
+ * Application index controller
+ *
+ * @namespace Controllers
+ * @class IndexController
+ */
 App.IndexController = Em.ArrayController.extend();
 Ember.TEMPLATES["application"] = Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
 this.compilerInfo = [3,'>= 1.0.0-rc.4'];
@@ -50859,45 +50844,39 @@ helpers = helpers || Ember.Handlebars.helpers; data = data || {};
   
 });
 /*
-* Application Initialization 
-*/
+ * Application Initialization
+ */
 App.initializer({
-	//
 	name: 'initializerName',
-	//
 	initialize: function(container) {
 		"use strict";
 	}
 });
 App.ApplicationRoute = Em.Route.extend({
 	/**
-	* Executed upon entering the route
-	*/
-	activate:function() {
+	 * Executed upon entering the route
+	 */
+	activate: function() {
 		"use strict";
-		console.log('activate');
 	},
-	
 	/**
-	* Executed upone exiting the route
-	*/
-	deactivate:function() {
+	 * Executed upone exiting the route
+	 */
+	deactivate: function() {
 		"use strict";
-		console.log('deactivate');
 	}
 });
 App.IndexRoute = Em.Route.extend({
 	/**
-	* Executed upon entering the route
-	*/
-	activate:function() {
+	 * Executed upon entering the route
+	 */
+	activate: function() {
 		"use strict";
 	},
-	
 	/**
-	* Executed upone exiting the route
-	*/
-	deactivate:function() {
+	 * Executed upone exiting the route
+	 */
+	deactivate: function() {
 		"use strict";
 	}
 });

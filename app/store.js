@@ -1,16 +1,14 @@
 /**
-*	Define base api url
-*/
+ *	Define base api url
+ */
 DS.RESTAdapter.reopen({
-	namespace:'public/api'
+	namespace: 'public/api'
 });
-
 /**
-*	Specialized Plurals
-*/
-DS.RESTAdapter.configure("plurals",{});
-
+ *	Specialized Plurals
+ */
+DS.RESTAdapter.configure("plurals", {});
 /**
-*	Initialize Store
-*/
+ *	Initialize Store
+ */
 App.store = DS.Store.create();

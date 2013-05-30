@@ -207,7 +207,7 @@
         },
         {
             "file": "app/models/user.js",
-            "line": 15,
+            "line": 14,
             "description": "Users Email",
             "itemtype": "property",
             "name": "email",
@@ -217,7 +217,7 @@
         },
         {
             "file": "app/models/user.js",
-            "line": 22,
+            "line": 20,
             "description": "Date user was created",
             "itemtype": "property",
             "name": "createdAt",
@@ -227,7 +227,7 @@
         },
         {
             "file": "app/models/user.js",
-            "line": 29,
+            "line": 26,
             "description": "Users Full Name (firstName LastName)",
             "itemtype": "property",
             "name": "fullName",
@@ -244,7 +244,7 @@
         },
         {
             "file": "app/routes/application.js",
-            "line": 10,
+            "line": 8,
             "description": "Executed upone exiting the route",
             "class": "Core.ArrayController",
             "namespace": "Models"
@@ -258,7 +258,7 @@
         },
         {
             "file": "app/routes/index.js",
-            "line": 9,
+            "line": 8,
             "description": "Executed upone exiting the route",
             "class": "Core.ArrayController",
             "namespace": "Models"
@@ -286,7 +286,7 @@
         },
         {
             "file": "app/core/models/model.js",
-            "line": 25,
+            "line": 24,
             "description": "Checks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
             "params": [
                 {
@@ -311,7 +311,7 @@
         },
         {
             "file": "app/core/models/model.js",
-            "line": 47,
+            "line": 45,
             "description": "Checks if a given property results to true. If so a total is incremented",
             "params": [
                 {
@@ -338,7 +338,7 @@
         },
         {
             "message": "Missing item type\nExecuted upone exiting the route",
-            "line": " app/routes/application.js:10"
+            "line": " app/routes/application.js:8"
         },
         {
             "message": "Missing item type\nExecuted upon entering the route",
@@ -346,7 +346,7 @@
         },
         {
             "message": "Missing item type\nExecuted upone exiting the route",
-            "line": " app/routes/index.js:9"
+            "line": " app/routes/index.js:8"
         },
         {
             "message": "Missing item type\nSums up all values from a given property in the model",
@@ -354,11 +354,11 @@
         },
         {
             "message": "Missing item type\nChecks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
-            "line": " app/core/models/model.js:25"
+            "line": " app/core/models/model.js:24"
         },
         {
             "message": "Missing item type\nChecks if a given property results to true. If so a total is incremented",
-            "line": " app/core/models/model.js:47"
+            "line": " app/core/models/model.js:45"
         }
     ]
 }

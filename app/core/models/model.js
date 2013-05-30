@@ -6,7 +6,6 @@
 DS.Model.reopen({
 	/**
 	 * Sums up all values from a given property in the model
-	 *
 	 * @param property The a property (must be an array!) to iterate over
 	 * @param key The property being added to the total sum
 	 * @return {Number} Resulting total after summing up all object
@@ -25,7 +24,6 @@ DS.Model.reopen({
 	/**
 	 * Checks if a given property results to true. If so it includes a value
 	 * as produced by calling the given key on the object.
-	 *
 	 * @param property An array within the current model
 	 * @param key Used to check if a given property if true or false
 	 * @param value User to obtain property value to add to the total
@@ -46,7 +44,6 @@ DS.Model.reopen({
 
 	/**
 	 * Checks if a given property results to true. If so a total is incremented
-	 *
 	 * @param property An array within the current model
 	 * @param keys a single, or list of keys to check on the model (for a boolean value)
 	 * @return {Number} Total count of objects satisfying all key requirements

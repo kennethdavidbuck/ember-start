@@ -1,7 +1,7 @@
 /**
-* Application index controller
-*
-* @namespace Controllers
-* @class IndexController
-*/
+ * Application index controller
+ *
+ * @namespace Controllers
+ * @class IndexController
+ */
 App.IndexController = Em.ArrayController.extend();

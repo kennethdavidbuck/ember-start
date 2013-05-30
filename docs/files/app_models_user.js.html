@@ -99,43 +99,39 @@
 <div class="file">
     <pre class="code prettyprint linenums">
 /**
-* Basic User model
-*
-* @namespace Models
-* @class User
-*/
+ * Basic User model
+ *
+ * @namespace Models
+ * @class User
+ */
 App.User = DS.Model.extend({
 	/**
-	* Users Username 
-	* @property username
-	* @type {String} 
-	*/
+	 * Users Username
+	 * @property username
+	 * @type {String}
+	 */
 	username: DS.attr(&#x27;string&#x27;),
-	
 	/**
-	* Users Email
-	* @property email
-	* @type {String} 
-	*/
+	 * Users Email
+	 * @property email
+	 * @type {String}
+	 */
 	email: DS.attr(&#x27;string&#x27;),
-
 	/**
-	* Date user was created
-	* @property createdAt
-	* @type {String} 
-	*/
+	 * Date user was created
+	 * @property createdAt
+	 * @type {String}
+	 */
 	created_at: DS.attr(&#x27;date&#x27;),
-	
 	/**
-	* Users Full Name (firstName LastName)
-	* @property fullName
-	* @type {String} 
-	*/	
+	 * Users Full Name (firstName LastName)
+	 * @property fullName
+	 * @type {String}
+	 */
 	full_name: function() {
 		&quot;use strict&quot;;
 		return &quot;%@ %@&quot;.fmt(this.get(&#x27;first_name&#x27;), this.get(&#x27;last_name&#x27;));
 	}.property(&#x27;first_name&#x27;, &#x27;last_name&#x27;)
-	
 });
     </pre>
 </div>

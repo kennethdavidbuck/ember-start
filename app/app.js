@@ -46,8 +46,6 @@
  * Use ember extension when its ready:
  * https://github.com/tildeio/ember-extension.git
  */
-
-// Application
 window.App = Em.Application.create({
 	LOG_TRANSITIONS: true
 });

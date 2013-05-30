@@ -1,7 +1,7 @@
 /**
-* Main Application controller
-*
-* @namespace Controllers
-* @class AppController
-*/
+ * Main Application controller
+ *
+ * @namespace Controllers
+ * @class AppController
+ */
 App.ApplicationController = Em.ObjectController.extend();

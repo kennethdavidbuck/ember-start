@@ -1,1 +1,1 @@
-Put all of your Routes files here
+Route files go here
