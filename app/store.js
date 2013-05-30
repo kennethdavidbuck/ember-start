@@ -16,5 +16,5 @@ DS.RESTAdapter.configure("plurals", {
 *	Initialize Store
 */
 App.store = DS.Store.create({
-	revision: 12
+	
 });

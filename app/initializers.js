@@ -1,5 +1,5 @@
 /*
-* Application Bootstrapping. Preload app data/do injections here. 
+* Application Initialization 
 */
 App.initializer({
 	//

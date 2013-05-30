@@ -41,11 +41,11 @@ module.exports = function(grunt) {
 			dist: {
 				src:[
 					// Core Library
-					'app/core/library/jquery-1.9.1.js',
+					'app/core/library/jquery-1.10.0.js',
 					'app/core/library/jquery.transit.js',
-					'app/core/library/handlebars-rc3.js',
-					'app/core/library/ember-rc3.js',
-					'app/core/library/ember-data.js',
+					'app/core/library/handlebars-rc4.js',
+					'app/core/library/ember-rc4.js',
+					'app/core/library/ember-data-0.1.3.js',
 					'app/core/library/moment-2.0.0.js',
 					
 					// Vendor
@@ -96,7 +96,7 @@ module.exports = function(grunt) {
 				dest:'qunit/tests.js'
 			}
 		},
-		ember_templates: {
+		emberTemplates: {
 			compile: {
 				options: {
 					templateName: function(sourceFile) {
@@ -160,7 +160,7 @@ module.exports = function(grunt) {
 					'app/**/*.hbs',
 					'app/**/*.less'	
 				],
-				tasks: ['jshint','ember_templates','less','concat','qunit','yuidoc'],
+				tasks: ['jshint','emberTemplates','less','concat','qunit','yuidoc'],
 				options: {
 					debounceDelay:300
 				}
@@ -232,13 +232,12 @@ module.exports = function(grunt) {
 	grunt.loadNpmTasks('grunt-contrib-jshint');
 	grunt.loadNpmTasks('grunt-contrib-watch');
 	grunt.loadNpmTasks('grunt-contrib-less');
-	grunt.loadNpmTasks('grunt-contrib-handlebars');
 	grunt.loadNpmTasks('grunt-ember-templates');
     grunt.loadNpmTasks('grunt-contrib-connect');
     grunt.loadNpmTasks('grunt-contrib-qunit');
     grunt.loadNpmTasks('grunt-contrib-clean');
     grunt.loadNpmTasks('grunt-contrib-copy');
 
-	grunt.registerTask('default', ['jshint','ember_templates','concat','less','clean','copy','connect','qunit','yuidoc','watch']);
+	grunt.registerTask('default', ['jshint','emberTemplates','concat','less','clean','copy','connect','qunit','yuidoc','watch']);
 	grunt.registerTask('release', ['uglify','less','clean','copy']);
 };

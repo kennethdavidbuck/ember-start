@@ -1,15 +1,16 @@
+
 /*!
- * jQuery JavaScript Library v1.9.1
+ * jQuery JavaScript Library v1.10.0
  * http://jquery.com/
  *
  * Includes Sizzle.js
  * http://sizzlejs.com/
  *
- * Copyright 2005, 2012 jQuery Foundation, Inc. and other contributors
+ * Copyright 2005, 2013 jQuery Foundation, Inc. and other contributors
  * Released under the MIT license
  * http://jquery.org/license
  *
- * Date: 2013-2-4
+ * Date: 2013-05-24T18:39Z
  */
 (function( window, undefined ) {
 
@@ -25,13 +26,14 @@ var
 	// A central reference to the root jQuery(document)
 	rootjQuery,
 
-	// Support: IE<9
-	// For `typeof node.method` instead of `node.method !== undefined`
+	// Support: IE<10
+	// For `typeof xmlNode.method` instead of `xmlNode.method !== undefined`
 	core_strundefined = typeof undefined,
 
 	// Use the correct document accordingly with window argument (sandbox)
-	document = window.document,
 	location = window.location,
+	document = window.document,
+	docElem = document.documentElement,
 
 	// Map over jQuery in case of overwrite
 	_jQuery = window.jQuery,
@@ -45,7 +47,7 @@ var
 	// List of deleted data cache ids, so we can reuse them
 	core_deletedIds = [],
 
-	core_version = "1.9.1",
+	core_version = "1.10.0",
 
 	// Save a reference to some core methods
 	core_concat = core_deletedIds.concat,
@@ -74,7 +76,7 @@ var
 	// A simple way to check for HTML strings
 	// Prioritize #id over <tag> to avoid XSS via location.hash (#9521)
 	// Strict HTML recognition (#11290: must start with <)
-	rquickExpr = /^(?:(<[\w\W]+>)[^>]*|#([\w-]*))$/,
+	rquickExpr = /^(?:\s*(<[\w\W]+>)[^>]*|#([\w-]*))$/,
 
 	// Match a standalone tag
 	rsingleTag = /^<(\w+)\s*\/?>(?:<\/\1>|)$/,
@@ -227,11 +229,6 @@ jQuery.fn = jQuery.prototype = {
 	// The default length of a jQuery object is 0
 	length: 0,
 
-	// The number of elements contained in the matched element set
-	size: function() {
-		return this.length;
-	},
-
 	toArray: function() {
 		return core_slice.call( this );
 	},
@@ -380,6 +377,10 @@ jQuery.extend = jQuery.fn.extend = function() {
 };
 
 jQuery.extend({
+	// Unique for each copy of jQuery on the page
+	// Non-digits removed to match rinlinejQuery
+	expando: "jQuery" + ( core_version + Math.random() ).replace( /\D/g, "" ),
+
 	noConflict: function( deep ) {
 		if ( window.$ === jQuery ) {
 			window.$ = _$;
@@ -450,6 +451,7 @@ jQuery.extend({
 	},
 
 	isWindow: function( obj ) {
+		/* jshint eqeqeq: false */
 		return obj != null && obj == obj.window;
 	},
 
@@ -467,6 +469,8 @@ jQuery.extend({
 	},
 
 	isPlainObject: function( obj ) {
+		var key;
+
 		// Must be an Object.
 		// Because of IE, we also have to check the presence of the constructor property.
 		// Make sure that DOM nodes and window objects don't pass through, as well
@@ -486,10 +490,16 @@ jQuery.extend({
 			return false;
 		}
 
+		// Support: IE<9
+		// Handle iteration over inherited properties before own properties.
+		if ( jQuery.support.ownLast ) {
+			for ( key in obj ) {
+				return core_hasOwn.call( obj, key );
+			}
+		}
+
 		// Own properties are enumerated firstly, so to speed up,
 		// if last one is own, then all properties are own.
-
-		var key;
 		for ( key in obj ) {}
 
 		return key === undefined || core_hasOwn.call( obj, key );
@@ -879,6 +889,29 @@ jQuery.extend({
 
 	now: function() {
 		return ( new Date() ).getTime();
+	},
+
+	// A method for quickly swapping in/out CSS properties to get correct calculations.
+	// Note: this method belongs to the css module but it's needed here for the support module.
+	// If support gets modularized, this method should be moved back to the css module.
+	swap: function( elem, options, callback, args ) {
+		var ret, name,
+			old = {};
+
+		// Remember the old values, and insert the new ones
+		for ( name in options ) {
+			old[ name ] = elem.style[ name ];
+			elem.style[ name ] = options[ name ];
+		}
+
+		ret = callback.apply( elem, args || [] );
+
+		// Revert the old values
+		for ( name in options ) {
+			elem.style[ name ] = old[ name ];
+		}
+
+		return ret;
 	}
 });
 
@@ -967,6 +1000,2001 @@ function isArraylike( obj ) {
 
 // All jQuery objects should point back to these
 rootjQuery = jQuery(document);
+/*!
+ * Sizzle CSS Selector Engine v1.9.4-pre
+ * http://sizzlejs.com/
+ *
+ * Copyright 2013 jQuery Foundation, Inc. and other contributors
+ * Released under the MIT license
+ * http://jquery.org/license
+ *
+ * Date: 2013-05-15
+ */
+(function( window, undefined ) {
+
+var i,
+	support,
+	cachedruns,
+	Expr,
+	getText,
+	isXML,
+	compile,
+	outermostContext,
+	sortInput,
+
+	// Local document vars
+	setDocument,
+	document,
+	docElem,
+	documentIsHTML,
+	rbuggyQSA,
+	rbuggyMatches,
+	matches,
+	contains,
+
+	// Instance-specific data
+	expando = "sizzle" + -(new Date()),
+	preferredDoc = window.document,
+	dirruns = 0,
+	done = 0,
+	classCache = createCache(),
+	tokenCache = createCache(),
+	compilerCache = createCache(),
+	hasDuplicate = false,
+	sortOrder = function() { return 0; },
+
+	// General-purpose constants
+	strundefined = typeof undefined,
+	MAX_NEGATIVE = 1 << 31,
+
+	// Instance methods
+	hasOwn = ({}).hasOwnProperty,
+	arr = [],
+	pop = arr.pop,
+	push_native = arr.push,
+	push = arr.push,
+	slice = arr.slice,
+	// Use a stripped-down indexOf if we can't use a native one
+	indexOf = arr.indexOf || function( elem ) {
+		var i = 0,
+			len = this.length;
+		for ( ; i < len; i++ ) {
+			if ( this[i] === elem ) {
+				return i;
+			}
+		}
+		return -1;
+	},
+
+	booleans = "checked|selected|async|autofocus|autoplay|controls|defer|disabled|hidden|ismap|loop|multiple|open|readonly|required|scoped",
+
+	// Regular expressions
+
+	// Whitespace characters http://www.w3.org/TR/css3-selectors/#whitespace
+	whitespace = "[\\x20\\t\\r\\n\\f]",
+	// http://www.w3.org/TR/css3-syntax/#characters
+	characterEncoding = "(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+",
+
+	// Loosely modeled on CSS identifier characters
+	// An unquoted value should be a CSS identifier http://www.w3.org/TR/css3-selectors/#attribute-selectors
+	// Proper syntax: http://www.w3.org/TR/CSS21/syndata.html#value-def-identifier
+	identifier = characterEncoding.replace( "w", "w#" ),
+
+	// Acceptable operators http://www.w3.org/TR/selectors/#attribute-selectors
+	attributes = "\\[" + whitespace + "*(" + characterEncoding + ")" + whitespace +
+		"*(?:([*^$|!~]?=)" + whitespace + "*(?:(['\"])((?:\\\\.|[^\\\\])*?)\\3|(" + identifier + ")|)|)" + whitespace + "*\\]",
+
+	// Prefer arguments quoted,
+	//   then not containing pseudos/brackets,
+	//   then attribute selectors/non-parenthetical expressions,
+	//   then anything else
+	// These preferences are here to reduce the number of selectors
+	//   needing tokenize in the PSEUDO preFilter
+	pseudos = ":(" + characterEncoding + ")(?:\\(((['\"])((?:\\\\.|[^\\\\])*?)\\3|((?:\\\\.|[^\\\\()[\\]]|" + attributes.replace( 3, 8 ) + ")*)|.*)\\)|)",
+
+	// Leading and non-escaped trailing whitespace, capturing some non-whitespace characters preceding the latter
+	rtrim = new RegExp( "^" + whitespace + "+|((?:^|[^\\\\])(?:\\\\.)*)" + whitespace + "+$", "g" ),
+
+	rcomma = new RegExp( "^" + whitespace + "*," + whitespace + "*" ),
+	rcombinators = new RegExp( "^" + whitespace + "*([>+~]|" + whitespace + ")" + whitespace + "*" ),
+
+	rsibling = new RegExp( whitespace + "*[+~]" ),
+	rattributeQuotes = new RegExp( "=" + whitespace + "*([^\\]'\"]*)" + whitespace + "*\\]", "g" ),
+
+	rpseudo = new RegExp( pseudos ),
+	ridentifier = new RegExp( "^" + identifier + "$" ),
+
+	matchExpr = {
+		"ID": new RegExp( "^#(" + characterEncoding + ")" ),
+		"CLASS": new RegExp( "^\\.(" + characterEncoding + ")" ),
+		"TAG": new RegExp( "^(" + characterEncoding.replace( "w", "w*" ) + ")" ),
+		"ATTR": new RegExp( "^" + attributes ),
+		"PSEUDO": new RegExp( "^" + pseudos ),
+		"CHILD": new RegExp( "^:(only|first|last|nth|nth-last)-(child|of-type)(?:\\(" + whitespace +
+			"*(even|odd|(([+-]|)(\\d*)n|)" + whitespace + "*(?:([+-]|)" + whitespace +
+			"*(\\d+)|))" + whitespace + "*\\)|)", "i" ),
+		"bool": new RegExp( "^(?:" + booleans + ")$", "i" ),
+		// For use in libraries implementing .is()
+		// We use this for POS matching in `select`
+		"needsContext": new RegExp( "^" + whitespace + "*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(" +
+			whitespace + "*((?:-\\d)?\\d*)" + whitespace + "*\\)|)(?=[^-]|$)", "i" )
+	},
+
+	rnative = /^[^{]+\{\s*\[native \w/,
+
+	// Easily-parseable/retrievable ID or TAG or CLASS selectors
+	rquickExpr = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/,
+
+	rinputs = /^(?:input|select|textarea|button)$/i,
+	rheader = /^h\d$/i,
+
+	rescape = /'|\\/g,
+
+	// CSS escapes http://www.w3.org/TR/CSS21/syndata.html#escaped-characters
+	runescape = new RegExp( "\\\\([\\da-f]{1,6}" + whitespace + "?|(" + whitespace + ")|.)", "ig" ),
+	funescape = function( _, escaped, escapedWhitespace ) {
+		var high = "0x" + escaped - 0x10000;
+		// NaN means non-codepoint
+		// Support: Firefox
+		// Workaround erroneous numeric interpretation of +"0x"
+		return high !== high || escapedWhitespace ?
+			escaped :
+			// BMP codepoint
+			high < 0 ?
+				String.fromCharCode( high + 0x10000 ) :
+				// Supplemental Plane codepoint (surrogate pair)
+				String.fromCharCode( high >> 10 | 0xD800, high & 0x3FF | 0xDC00 );
+	};
+
+// Optimize for push.apply( _, NodeList )
+try {
+	push.apply(
+		(arr = slice.call( preferredDoc.childNodes )),
+		preferredDoc.childNodes
+	);
+	// Support: Android<4.0
+	// Detect silently failing push.apply
+	arr[ preferredDoc.childNodes.length ].nodeType;
+} catch ( e ) {
+	push = { apply: arr.length ?
+
+		// Leverage slice if possible
+		function( target, els ) {
+			push_native.apply( target, slice.call(els) );
+		} :
+
+		// Support: IE<9
+		// Otherwise append directly
+		function( target, els ) {
+			var j = target.length,
+				i = 0;
+			// Can't trust NodeList.length
+			while ( (target[j++] = els[i++]) ) {}
+			target.length = j - 1;
+		}
+	};
+}
+
+function Sizzle( selector, context, results, seed ) {
+	var match, elem, m, nodeType,
+		// QSA vars
+		i, groups, old, nid, newContext, newSelector;
+
+	if ( ( context ? context.ownerDocument || context : preferredDoc ) !== document ) {
+		setDocument( context );
+	}
+
+	context = context || document;
+	results = results || [];
+
+	if ( !selector || typeof selector !== "string" ) {
+		return results;
+	}
+
+	if ( (nodeType = context.nodeType) !== 1 && nodeType !== 9 ) {
+		return [];
+	}
+
+	if ( documentIsHTML && !seed ) {
+
+		// Shortcuts
+		if ( (match = rquickExpr.exec( selector )) ) {
+			// Speed-up: Sizzle("#ID")
+			if ( (m = match[1]) ) {
+				if ( nodeType === 9 ) {
+					elem = context.getElementById( m );
+					// Check parentNode to catch when Blackberry 4.6 returns
+					// nodes that are no longer in the document #6963
+					if ( elem && elem.parentNode ) {
+						// Handle the case where IE, Opera, and Webkit return items
+						// by name instead of ID
+						if ( elem.id === m ) {
+							results.push( elem );
+							return results;
+						}
+					} else {
+						return results;
+					}
+				} else {
+					// Context is not a document
+					if ( context.ownerDocument && (elem = context.ownerDocument.getElementById( m )) &&
+						contains( context, elem ) && elem.id === m ) {
+						results.push( elem );
+						return results;
+					}
+				}
+
+			// Speed-up: Sizzle("TAG")
+			} else if ( match[2] ) {
+				push.apply( results, context.getElementsByTagName( selector ) );
+				return results;
+
+			// Speed-up: Sizzle(".CLASS")
+			} else if ( (m = match[3]) && support.getElementsByClassName && context.getElementsByClassName ) {
+				push.apply( results, context.getElementsByClassName( m ) );
+				return results;
+			}
+		}
+
+		// QSA path
+		if ( support.qsa && (!rbuggyQSA || !rbuggyQSA.test( selector )) ) {
+			nid = old = expando;
+			newContext = context;
+			newSelector = nodeType === 9 && selector;
+
+			// qSA works strangely on Element-rooted queries
+			// We can work around this by specifying an extra ID on the root
+			// and working up from there (Thanks to Andrew Dupont for the technique)
+			// IE 8 doesn't work on object elements
+			if ( nodeType === 1 && context.nodeName.toLowerCase() !== "object" ) {
+				groups = tokenize( selector );
+
+				if ( (old = context.getAttribute("id")) ) {
+					nid = old.replace( rescape, "\\$&" );
+				} else {
+					context.setAttribute( "id", nid );
+				}
+				nid = "[id='" + nid + "'] ";
+
+				i = groups.length;
+				while ( i-- ) {
+					groups[i] = nid + toSelector( groups[i] );
+				}
+				newContext = rsibling.test( selector ) && context.parentNode || context;
+				newSelector = groups.join(",");
+			}
+
+			if ( newSelector ) {
+				try {
+					push.apply( results,
+						newContext.querySelectorAll( newSelector )
+					);
+					return results;
+				} catch(qsaError) {
+				} finally {
+					if ( !old ) {
+						context.removeAttribute("id");
+					}
+				}
+			}
+		}
+	}
+
+	// All others
+	return select( selector.replace( rtrim, "$1" ), context, results, seed );
+}
+
+/**
+ * For feature detection
+ * @param {Function} fn The function to test for native support
+ */
+function isNative( fn ) {
+	return rnative.test( fn + "" );
+}
+
+/**
+ * Create key-value caches of limited size
+ * @returns {Function(string, Object)} Returns the Object data after storing it on itself with
+ *	property name the (space-suffixed) string and (if the cache is larger than Expr.cacheLength)
+ *	deleting the oldest entry
+ */
+function createCache() {
+	var keys = [];
+
+	function cache( key, value ) {
+		// Use (key + " ") to avoid collision with native prototype properties (see Issue #157)
+		if ( keys.push( key += " " ) > Expr.cacheLength ) {
+			// Only keep the most recent entries
+			delete cache[ keys.shift() ];
+		}
+		return (cache[ key ] = value);
+	}
+	return cache;
+}
+
+/**
+ * Mark a function for special use by Sizzle
+ * @param {Function} fn The function to mark
+ */
+function markFunction( fn ) {
+	fn[ expando ] = true;
+	return fn;
+}
+
+/**
+ * Support testing using an element
+ * @param {Function} fn Passed the created div and expects a boolean result
+ */
+function assert( fn ) {
+	var div = document.createElement("div");
+
+	try {
+		return !!fn( div );
+	} catch (e) {
+		return false;
+	} finally {
+		// Remove from its parent by default
+		if ( div.parentNode ) {
+			div.parentNode.removeChild( div );
+		}
+		// release memory in IE
+		div = null;
+	}
+}
+
+/**
+ * Adds the same handler for all of the specified attrs
+ * @param {String} attrs Pipe-separated list of attributes
+ * @param {Function} handler The method that will be applied if the test fails
+ * @param {Boolean} test The result of a test. If true, null will be set as the handler in leiu of the specified handler
+ */
+function addHandle( attrs, handler, test ) {
+	attrs = attrs.split("|");
+	var current,
+		i = attrs.length,
+		setHandle = test ? null : handler;
+
+	while ( i-- ) {
+		// Don't override a user's handler
+		if ( !(current = Expr.attrHandle[ attrs[i] ]) || current === handler ) {
+			Expr.attrHandle[ attrs[i] ] = setHandle;
+		}
+	}
+}
+
+/**
+ * Fetches boolean attributes by node
+ * @param {Element} elem
+ * @param {String} name
+ */
+function boolHandler( elem, name ) {
+	// XML does not need to be checked as this will not be assigned for XML documents
+	var val = elem.getAttributeNode( name );
+	return val && val.specified ?
+		val.value :
+		elem[ name ] === true ? name.toLowerCase() : null;
+}
+
+/**
+ * Fetches attributes without interpolation
+ * http://msdn.microsoft.com/en-us/library/ms536429%28VS.85%29.aspx
+ * @param {Element} elem
+ * @param {String} name
+ */
+function interpolationHandler( elem, name ) {
+	// XML does not need to be checked as this will not be assigned for XML documents
+	return elem.getAttribute( name, name.toLowerCase() === "type" ? 1 : 2 );
+}
+
+/**
+ * Uses defaultValue to retrieve value in IE6/7
+ * @param {Element} elem
+ * @param {String} name
+ */
+function valueHandler( elem ) {
+	// Ignore the value *property* on inputs by using defaultValue
+	// Fallback to Sizzle.attr by returning undefined where appropriate
+	// XML does not need to be checked as this will not be assigned for XML documents
+	if ( elem.nodeName.toLowerCase() === "input" ) {
+		return elem.defaultValue;
+	}
+}
+
+/**
+ * Checks document order of two siblings
+ * @param {Element} a
+ * @param {Element} b
+ * @returns Returns -1 if a precedes b, 1 if a follows b
+ */
+function siblingCheck( a, b ) {
+	var cur = b && a,
+		diff = cur && a.nodeType === 1 && b.nodeType === 1 &&
+			( ~b.sourceIndex || MAX_NEGATIVE ) -
+			( ~a.sourceIndex || MAX_NEGATIVE );
+
+	// Use IE sourceIndex if available on both nodes
+	if ( diff ) {
+		return diff;
+	}
+
+	// Check if b follows a
+	if ( cur ) {
+		while ( (cur = cur.nextSibling) ) {
+			if ( cur === b ) {
+				return -1;
+			}
+		}
+	}
+
+	return a ? 1 : -1;
+}
+
+/**
+ * Returns a function to use in pseudos for input types
+ * @param {String} type
+ */
+function createInputPseudo( type ) {
+	return function( elem ) {
+		var name = elem.nodeName.toLowerCase();
+		return name === "input" && elem.type === type;
+	};
+}
+
+/**
+ * Returns a function to use in pseudos for buttons
+ * @param {String} type
+ */
+function createButtonPseudo( type ) {
+	return function( elem ) {
+		var name = elem.nodeName.toLowerCase();
+		return (name === "input" || name === "button") && elem.type === type;
+	};
+}
+
+/**
+ * Returns a function to use in pseudos for positionals
+ * @param {Function} fn
+ */
+function createPositionalPseudo( fn ) {
+	return markFunction(function( argument ) {
+		argument = +argument;
+		return markFunction(function( seed, matches ) {
+			var j,
+				matchIndexes = fn( [], seed.length, argument ),
+				i = matchIndexes.length;
+
+			// Match elements found at the specified indexes
+			while ( i-- ) {
+				if ( seed[ (j = matchIndexes[i]) ] ) {
+					seed[j] = !(matches[j] = seed[j]);
+				}
+			}
+		});
+	});
+}
+
+/**
+ * Detect xml
+ * @param {Element|Object} elem An element or a document
+ */
+isXML = Sizzle.isXML = function( elem ) {
+	// documentElement is verified for cases where it doesn't yet exist
+	// (such as loading iframes in IE - #4833)
+	var documentElement = elem && (elem.ownerDocument || elem).documentElement;
+	return documentElement ? documentElement.nodeName !== "HTML" : false;
+};
+
+// Expose support vars for convenience
+support = Sizzle.support = {};
+
+/**
+ * Sets document-related variables once based on the current document
+ * @param {Element|Object} [doc] An element or document object to use to set the document
+ * @returns {Object} Returns the current document
+ */
+setDocument = Sizzle.setDocument = function( node ) {
+	var doc = node ? node.ownerDocument || node : preferredDoc;
+
+	// If no document and documentElement is available, return
+	if ( doc === document || doc.nodeType !== 9 || !doc.documentElement ) {
+		return document;
+	}
+
+	// Set our document
+	document = doc;
+	docElem = doc.documentElement;
+
+	// Support tests
+	documentIsHTML = !isXML( doc );
+
+	/* Attributes
+	---------------------------------------------------------------------- */
+
+	// Support: IE<8
+	// Verify that getAttribute really returns attributes and not properties (excepting IE8 booleans)
+	support.attributes = assert(function( div ) {
+
+		// Support: IE<8
+		// Prevent attribute/property "interpolation"
+		div.innerHTML = "<a href='#'></a>";
+		addHandle( "type|href|height|width", interpolationHandler, div.firstChild.getAttribute("href") === "#" );
+
+		// Support: IE<9
+		// Use getAttributeNode to fetch booleans when getAttribute lies
+		addHandle( booleans, boolHandler, div.getAttribute("disabled") == null );
+
+		div.className = "i";
+		return !div.getAttribute("className");
+	});
+
+	// Support: IE<9
+	// Retrieving value should defer to defaultValue
+	support.input = assert(function( div ) {
+		div.innerHTML = "<input>";
+		div.firstChild.setAttribute( "value", "" );
+		return div.firstChild.getAttribute( "value" ) === "";
+	});
+
+	// IE6/7 still return empty string for value,
+	// but are actually retrieving the property
+	addHandle( "value", valueHandler, support.attributes && support.input );
+
+	/* getElement(s)By*
+	---------------------------------------------------------------------- */
+
+	// Check if getElementsByTagName("*") returns only elements
+	support.getElementsByTagName = assert(function( div ) {
+		div.appendChild( doc.createComment("") );
+		return !div.getElementsByTagName("*").length;
+	});
+
+	// Check if getElementsByClassName can be trusted
+	support.getElementsByClassName = assert(function( div ) {
+		div.innerHTML = "<div class='a'></div><div class='a i'></div>";
+
+		// Support: Safari<4
+		// Catch class over-caching
+		div.firstChild.className = "i";
+		// Support: Opera<10
+		// Catch gEBCN failure to find non-leading classes
+		return div.getElementsByClassName("i").length === 2;
+	});
+
+	// Support: IE<10
+	// Check if getElementById returns elements by name
+	// The broken getElementById methods don't pick up programatically-set names,
+	// so use a roundabout getElementsByName test
+	support.getById = assert(function( div ) {
+		docElem.appendChild( div ).id = expando;
+		return !doc.getElementsByName || !doc.getElementsByName( expando ).length;
+	});
+
+	// ID find and filter
+	if ( support.getById ) {
+		Expr.find["ID"] = function( id, context ) {
+			if ( typeof context.getElementById !== strundefined && documentIsHTML ) {
+				var m = context.getElementById( id );
+				// Check parentNode to catch when Blackberry 4.6 returns
+				// nodes that are no longer in the document #6963
+				return m && m.parentNode ? [m] : [];
+			}
+		};
+		Expr.filter["ID"] = function( id ) {
+			var attrId = id.replace( runescape, funescape );
+			return function( elem ) {
+				return elem.getAttribute("id") === attrId;
+			};
+		};
+	} else {
+		// Support: IE6/7
+		// getElementById is not reliable as a find shortcut
+		delete Expr.find["ID"];
+
+		Expr.filter["ID"] =  function( id ) {
+			var attrId = id.replace( runescape, funescape );
+			return function( elem ) {
+				var node = typeof elem.getAttributeNode !== strundefined && elem.getAttributeNode("id");
+				return node && node.value === attrId;
+			};
+		};
+	}
+
+	// Tag
+	Expr.find["TAG"] = support.getElementsByTagName ?
+		function( tag, context ) {
+			if ( typeof context.getElementsByTagName !== strundefined ) {
+				return context.getElementsByTagName( tag );
+			}
+		} :
+		function( tag, context ) {
+			var elem,
+				tmp = [],
+				i = 0,
+				results = context.getElementsByTagName( tag );
+
+			// Filter out possible comments
+			if ( tag === "*" ) {
+				while ( (elem = results[i++]) ) {
+					if ( elem.nodeType === 1 ) {
+						tmp.push( elem );
+					}
+				}
+
+				return tmp;
+			}
+			return results;
+		};
+
+	// Class
+	Expr.find["CLASS"] = support.getElementsByClassName && function( className, context ) {
+		if ( typeof context.getElementsByClassName !== strundefined && documentIsHTML ) {
+			return context.getElementsByClassName( className );
+		}
+	};
+
+	/* QSA/matchesSelector
+	---------------------------------------------------------------------- */
+
+	// QSA and matchesSelector support
+
+	// matchesSelector(:active) reports false when true (IE9/Opera 11.5)
+	rbuggyMatches = [];
+
+	// qSa(:focus) reports false when true (Chrome 21)
+	// We allow this because of a bug in IE8/9 that throws an error
+	// whenever `document.activeElement` is accessed on an iframe
+	// So, we allow :focus to pass through QSA all the time to avoid the IE error
+	// See http://bugs.jquery.com/ticket/13378
+	rbuggyQSA = [];
+
+	if ( (support.qsa = isNative(doc.querySelectorAll)) ) {
+		// Build QSA regex
+		// Regex strategy adopted from Diego Perini
+		assert(function( div ) {
+			// Select is set to empty string on purpose
+			// This is to test IE's treatment of not explicitly
+			// setting a boolean content attribute,
+			// since its presence should be enough
+			// http://bugs.jquery.com/ticket/12359
+			div.innerHTML = "<select><option selected=''></option></select>";
+
+			// Support: IE8
+			// Boolean attributes and "value" are not treated correctly
+			if ( !div.querySelectorAll("[selected]").length ) {
+				rbuggyQSA.push( "\\[" + whitespace + "*(?:value|" + booleans + ")" );
+			}
+
+			// Webkit/Opera - :checked should return selected option elements
+			// http://www.w3.org/TR/2011/REC-css3-selectors-20110929/#checked
+			// IE8 throws error here and will not see later tests
+			if ( !div.querySelectorAll(":checked").length ) {
+				rbuggyQSA.push(":checked");
+			}
+		});
+
+		assert(function( div ) {
+
+			// Support: Opera 10-12/IE8
+			// ^= $= *= and empty values
+			// Should not select anything
+			// Support: Windows 8 Native Apps
+			// The type attribute is restricted during .innerHTML assignment
+			var input = doc.createElement("input");
+			input.setAttribute( "type", "hidden" );
+			div.appendChild( input ).setAttribute( "t", "" );
+
+			if ( div.querySelectorAll("[t^='']").length ) {
+				rbuggyQSA.push( "[*^$]=" + whitespace + "*(?:''|\"\")" );
+			}
+
+			// FF 3.5 - :enabled/:disabled and hidden elements (hidden elements are still enabled)
+			// IE8 throws error here and will not see later tests
+			if ( !div.querySelectorAll(":enabled").length ) {
+				rbuggyQSA.push( ":enabled", ":disabled" );
+			}
+
+			// Opera 10-11 does not throw on post-comma invalid pseudos
+			div.querySelectorAll("*,:x");
+			rbuggyQSA.push(",.*:");
+		});
+	}
+
+	if ( (support.matchesSelector = isNative( (matches = docElem.webkitMatchesSelector ||
+		docElem.mozMatchesSelector ||
+		docElem.oMatchesSelector ||
+		docElem.msMatchesSelector) )) ) {
+
+		assert(function( div ) {
+			// Check to see if it's possible to do matchesSelector
+			// on a disconnected node (IE 9)
+			support.disconnectedMatch = matches.call( div, "div" );
+
+			// This should fail with an exception
+			// Gecko does not error, returns false instead
+			matches.call( div, "[s!='']:x" );
+			rbuggyMatches.push( "!=", pseudos );
+		});
+	}
+
+	rbuggyQSA = rbuggyQSA.length && new RegExp( rbuggyQSA.join("|") );
+	rbuggyMatches = rbuggyMatches.length && new RegExp( rbuggyMatches.join("|") );
+
+	/* Contains
+	---------------------------------------------------------------------- */
+
+	// Element contains another
+	// Purposefully does not implement inclusive descendent
+	// As in, an element does not contain itself
+	contains = isNative(docElem.contains) || docElem.compareDocumentPosition ?
+		function( a, b ) {
+			var adown = a.nodeType === 9 ? a.documentElement : a,
+				bup = b && b.parentNode;
+			return a === bup || !!( bup && bup.nodeType === 1 && (
+				adown.contains ?
+					adown.contains( bup ) :
+					a.compareDocumentPosition && a.compareDocumentPosition( bup ) & 16
+			));
+		} :
+		function( a, b ) {
+			if ( b ) {
+				while ( (b = b.parentNode) ) {
+					if ( b === a ) {
+						return true;
+					}
+				}
+			}
+			return false;
+		};
+
+	/* Sorting
+	---------------------------------------------------------------------- */
+
+	// Support: Webkit<537.32 - Safari 6.0.3/Chrome 25 (fixed in Chrome 27)
+	// Detached nodes confoundingly follow *each other*
+	support.sortDetached = assert(function( div1 ) {
+		// Should return 1, but returns 4 (following)
+		return div1.compareDocumentPosition( doc.createElement("div") ) & 1;
+	});
+
+	// Document order sorting
+	sortOrder = docElem.compareDocumentPosition ?
+	function( a, b ) {
+
+		// Flag for duplicate removal
+		if ( a === b ) {
+			hasDuplicate = true;
+			return 0;
+		}
+
+		var compare = b.compareDocumentPosition && a.compareDocumentPosition && a.compareDocumentPosition( b );
+
+		if ( compare ) {
+			// Disconnected nodes
+			if ( compare & 1 ||
+				(!support.sortDetached && b.compareDocumentPosition( a ) === compare) ) {
+
+				// Choose the first element that is related to our preferred document
+				if ( a === doc || contains(preferredDoc, a) ) {
+					return -1;
+				}
+				if ( b === doc || contains(preferredDoc, b) ) {
+					return 1;
+				}
+
+				// Maintain original order
+				return sortInput ?
+					( indexOf.call( sortInput, a ) - indexOf.call( sortInput, b ) ) :
+					0;
+			}
+
+			return compare & 4 ? -1 : 1;
+		}
+
+		// Not directly comparable, sort on existence of method
+		return a.compareDocumentPosition ? -1 : 1;
+	} :
+	function( a, b ) {
+		var cur,
+			i = 0,
+			aup = a.parentNode,
+			bup = b.parentNode,
+			ap = [ a ],
+			bp = [ b ];
+
+		// Exit early if the nodes are identical
+		if ( a === b ) {
+			hasDuplicate = true;
+			return 0;
+
+		// Parentless nodes are either documents or disconnected
+		} else if ( !aup || !bup ) {
+			return a === doc ? -1 :
+				b === doc ? 1 :
+				aup ? -1 :
+				bup ? 1 :
+				sortInput ?
+				( indexOf.call( sortInput, a ) - indexOf.call( sortInput, b ) ) :
+				0;
+
+		// If the nodes are siblings, we can do a quick check
+		} else if ( aup === bup ) {
+			return siblingCheck( a, b );
+		}
+
+		// Otherwise we need full lists of their ancestors for comparison
+		cur = a;
+		while ( (cur = cur.parentNode) ) {
+			ap.unshift( cur );
+		}
+		cur = b;
+		while ( (cur = cur.parentNode) ) {
+			bp.unshift( cur );
+		}
+
+		// Walk down the tree looking for a discrepancy
+		while ( ap[i] === bp[i] ) {
+			i++;
+		}
+
+		return i ?
+			// Do a sibling check if the nodes have a common ancestor
+			siblingCheck( ap[i], bp[i] ) :
+
+			// Otherwise nodes in our document sort first
+			ap[i] === preferredDoc ? -1 :
+			bp[i] === preferredDoc ? 1 :
+			0;
+	};
+
+	return doc;
+};
+
+Sizzle.matches = function( expr, elements ) {
+	return Sizzle( expr, null, null, elements );
+};
+
+Sizzle.matchesSelector = function( elem, expr ) {
+	// Set document vars if needed
+	if ( ( elem.ownerDocument || elem ) !== document ) {
+		setDocument( elem );
+	}
+
+	// Make sure that attribute selectors are quoted
+	expr = expr.replace( rattributeQuotes, "='$1']" );
+
+	if ( support.matchesSelector && documentIsHTML &&
+		( !rbuggyMatches || !rbuggyMatches.test( expr ) ) &&
+		( !rbuggyQSA     || !rbuggyQSA.test( expr ) ) ) {
+
+		try {
+			var ret = matches.call( elem, expr );
+
+			// IE 9's matchesSelector returns false on disconnected nodes
+			if ( ret || support.disconnectedMatch ||
+					// As well, disconnected nodes are said to be in a document
+					// fragment in IE 9
+					elem.document && elem.document.nodeType !== 11 ) {
+				return ret;
+			}
+		} catch(e) {}
+	}
+
+	return Sizzle( expr, document, null, [elem] ).length > 0;
+};
+
+Sizzle.contains = function( context, elem ) {
+	// Set document vars if needed
+	if ( ( context.ownerDocument || context ) !== document ) {
+		setDocument( context );
+	}
+	return contains( context, elem );
+};
+
+Sizzle.attr = function( elem, name ) {
+	// Set document vars if needed
+	if ( ( elem.ownerDocument || elem ) !== document ) {
+		setDocument( elem );
+	}
+
+	var fn = Expr.attrHandle[ name.toLowerCase() ],
+		// Don't get fooled by Object.prototype properties (jQuery #13807)
+		val = ( fn && hasOwn.call( Expr.attrHandle, name.toLowerCase() ) ?
+			fn( elem, name, !documentIsHTML ) :
+			undefined );
+
+	return val === undefined ?
+		support.attributes || !documentIsHTML ?
+			elem.getAttribute( name ) :
+			(val = elem.getAttributeNode(name)) && val.specified ?
+				val.value :
+				null :
+		val;
+};
+
+Sizzle.error = function( msg ) {
+	throw new Error( "Syntax error, unrecognized expression: " + msg );
+};
+
+/**
+ * Document sorting and removing duplicates
+ * @param {ArrayLike} results
+ */
+Sizzle.uniqueSort = function( results ) {
+	var elem,
+		duplicates = [],
+		j = 0,
+		i = 0;
+
+	// Unless we *know* we can detect duplicates, assume their presence
+	hasDuplicate = !support.detectDuplicates;
+	sortInput = !support.sortStable && results.slice( 0 );
+	results.sort( sortOrder );
+
+	if ( hasDuplicate ) {
+		while ( (elem = results[i++]) ) {
+			if ( elem === results[ i ] ) {
+				j = duplicates.push( i );
+			}
+		}
+		while ( j-- ) {
+			results.splice( duplicates[ j ], 1 );
+		}
+	}
+
+	return results;
+};
+
+/**
+ * Utility function for retrieving the text value of an array of DOM nodes
+ * @param {Array|Element} elem
+ */
+getText = Sizzle.getText = function( elem ) {
+	var node,
+		ret = "",
+		i = 0,
+		nodeType = elem.nodeType;
+
+	if ( !nodeType ) {
+		// If no nodeType, this is expected to be an array
+		for ( ; (node = elem[i]); i++ ) {
+			// Do not traverse comment nodes
+			ret += getText( node );
+		}
+	} else if ( nodeType === 1 || nodeType === 9 || nodeType === 11 ) {
+		// Use textContent for elements
+		// innerText usage removed for consistency of new lines (see #11153)
+		if ( typeof elem.textContent === "string" ) {
+			return elem.textContent;
+		} else {
+			// Traverse its children
+			for ( elem = elem.firstChild; elem; elem = elem.nextSibling ) {
+				ret += getText( elem );
+			}
+		}
+	} else if ( nodeType === 3 || nodeType === 4 ) {
+		return elem.nodeValue;
+	}
+	// Do not include comment or processing instruction nodes
+
+	return ret;
+};
+
+Expr = Sizzle.selectors = {
+
+	// Can be adjusted by the user
+	cacheLength: 50,
+
+	createPseudo: markFunction,
+
+	match: matchExpr,
+
+	attrHandle: {},
+
+	find: {},
+
+	relative: {
+		">": { dir: "parentNode", first: true },
+		" ": { dir: "parentNode" },
+		"+": { dir: "previousSibling", first: true },
+		"~": { dir: "previousSibling" }
+	},
+
+	preFilter: {
+		"ATTR": function( match ) {
+			match[1] = match[1].replace( runescape, funescape );
+
+			// Move the given value to match[3] whether quoted or unquoted
+			match[3] = ( match[4] || match[5] || "" ).replace( runescape, funescape );
+
+			if ( match[2] === "~=" ) {
+				match[3] = " " + match[3] + " ";
+			}
+
+			return match.slice( 0, 4 );
+		},
+
+		"CHILD": function( match ) {
+			/* matches from matchExpr["CHILD"]
+				1 type (only|nth|...)
+				2 what (child|of-type)
+				3 argument (even|odd|\d*|\d*n([+-]\d+)?|...)
+				4 xn-component of xn+y argument ([+-]?\d*n|)
+				5 sign of xn-component
+				6 x of xn-component
+				7 sign of y-component
+				8 y of y-component
+			*/
+			match[1] = match[1].toLowerCase();
+
+			if ( match[1].slice( 0, 3 ) === "nth" ) {
+				// nth-* requires argument
+				if ( !match[3] ) {
+					Sizzle.error( match[0] );
+				}
+
+				// numeric x and y parameters for Expr.filter.CHILD
+				// remember that false/true cast respectively to 0/1
+				match[4] = +( match[4] ? match[5] + (match[6] || 1) : 2 * ( match[3] === "even" || match[3] === "odd" ) );
+				match[5] = +( ( match[7] + match[8] ) || match[3] === "odd" );
+
+			// other types prohibit arguments
+			} else if ( match[3] ) {
+				Sizzle.error( match[0] );
+			}
+
+			return match;
+		},
+
+		"PSEUDO": function( match ) {
+			var excess,
+				unquoted = !match[5] && match[2];
+
+			if ( matchExpr["CHILD"].test( match[0] ) ) {
+				return null;
+			}
+
+			// Accept quoted arguments as-is
+			if ( match[3] && match[4] !== undefined ) {
+				match[2] = match[4];
+
+			// Strip excess characters from unquoted arguments
+			} else if ( unquoted && rpseudo.test( unquoted ) &&
+				// Get excess from tokenize (recursively)
+				(excess = tokenize( unquoted, true )) &&
+				// advance to the next closing parenthesis
+				(excess = unquoted.indexOf( ")", unquoted.length - excess ) - unquoted.length) ) {
+
+				// excess is a negative index
+				match[0] = match[0].slice( 0, excess );
+				match[2] = unquoted.slice( 0, excess );
+			}
+
+			// Return only captures needed by the pseudo filter method (type and argument)
+			return match.slice( 0, 3 );
+		}
+	},
+
+	filter: {
+
+		"TAG": function( nodeNameSelector ) {
+			var nodeName = nodeNameSelector.replace( runescape, funescape ).toLowerCase();
+			return nodeNameSelector === "*" ?
+				function() { return true; } :
+				function( elem ) {
+					return elem.nodeName && elem.nodeName.toLowerCase() === nodeName;
+				};
+		},
+
+		"CLASS": function( className ) {
+			var pattern = classCache[ className + " " ];
+
+			return pattern ||
+				(pattern = new RegExp( "(^|" + whitespace + ")" + className + "(" + whitespace + "|$)" )) &&
+				classCache( className, function( elem ) {
+					return pattern.test( typeof elem.className === "string" && elem.className || typeof elem.getAttribute !== strundefined && elem.getAttribute("class") || "" );
+				});
+		},
+
+		"ATTR": function( name, operator, check ) {
+			return function( elem ) {
+				var result = Sizzle.attr( elem, name );
+
+				if ( result == null ) {
+					return operator === "!=";
+				}
+				if ( !operator ) {
+					return true;
+				}
+
+				result += "";
+
+				return operator === "=" ? result === check :
+					operator === "!=" ? result !== check :
+					operator === "^=" ? check && result.indexOf( check ) === 0 :
+					operator === "*=" ? check && result.indexOf( check ) > -1 :
+					operator === "$=" ? check && result.slice( -check.length ) === check :
+					operator === "~=" ? ( " " + result + " " ).indexOf( check ) > -1 :
+					operator === "|=" ? result === check || result.slice( 0, check.length + 1 ) === check + "-" :
+					false;
+			};
+		},
+
+		"CHILD": function( type, what, argument, first, last ) {
+			var simple = type.slice( 0, 3 ) !== "nth",
+				forward = type.slice( -4 ) !== "last",
+				ofType = what === "of-type";
+
+			return first === 1 && last === 0 ?
+
+				// Shortcut for :nth-*(n)
+				function( elem ) {
+					return !!elem.parentNode;
+				} :
+
+				function( elem, context, xml ) {
+					var cache, outerCache, node, diff, nodeIndex, start,
+						dir = simple !== forward ? "nextSibling" : "previousSibling",
+						parent = elem.parentNode,
+						name = ofType && elem.nodeName.toLowerCase(),
+						useCache = !xml && !ofType;
+
+					if ( parent ) {
+
+						// :(first|last|only)-(child|of-type)
+						if ( simple ) {
+							while ( dir ) {
+								node = elem;
+								while ( (node = node[ dir ]) ) {
+									if ( ofType ? node.nodeName.toLowerCase() === name : node.nodeType === 1 ) {
+										return false;
+									}
+								}
+								// Reverse direction for :only-* (if we haven't yet done so)
+								start = dir = type === "only" && !start && "nextSibling";
+							}
+							return true;
+						}
+
+						start = [ forward ? parent.firstChild : parent.lastChild ];
+
+						// non-xml :nth-child(...) stores cache data on `parent`
+						if ( forward && useCache ) {
+							// Seek `elem` from a previously-cached index
+							outerCache = parent[ expando ] || (parent[ expando ] = {});
+							cache = outerCache[ type ] || [];
+							nodeIndex = cache[0] === dirruns && cache[1];
+							diff = cache[0] === dirruns && cache[2];
+							node = nodeIndex && parent.childNodes[ nodeIndex ];
+
+							while ( (node = ++nodeIndex && node && node[ dir ] ||
+
+								// Fallback to seeking `elem` from the start
+								(diff = nodeIndex = 0) || start.pop()) ) {
+
+								// When found, cache indexes on `parent` and break
+								if ( node.nodeType === 1 && ++diff && node === elem ) {
+									outerCache[ type ] = [ dirruns, nodeIndex, diff ];
+									break;
+								}
+							}
+
+						// Use previously-cached element index if available
+						} else if ( useCache && (cache = (elem[ expando ] || (elem[ expando ] = {}))[ type ]) && cache[0] === dirruns ) {
+							diff = cache[1];
+
+						// xml :nth-child(...) or :nth-last-child(...) or :nth(-last)?-of-type(...)
+						} else {
+							// Use the same loop as above to seek `elem` from the start
+							while ( (node = ++nodeIndex && node && node[ dir ] ||
+								(diff = nodeIndex = 0) || start.pop()) ) {
+
+								if ( ( ofType ? node.nodeName.toLowerCase() === name : node.nodeType === 1 ) && ++diff ) {
+									// Cache the index of each encountered element
+									if ( useCache ) {
+										(node[ expando ] || (node[ expando ] = {}))[ type ] = [ dirruns, diff ];
+									}
+
+									if ( node === elem ) {
+										break;
+									}
+								}
+							}
+						}
+
+						// Incorporate the offset, then check against cycle size
+						diff -= last;
+						return diff === first || ( diff % first === 0 && diff / first >= 0 );
+					}
+				};
+		},
+
+		"PSEUDO": function( pseudo, argument ) {
+			// pseudo-class names are case-insensitive
+			// http://www.w3.org/TR/selectors/#pseudo-classes
+			// Prioritize by case sensitivity in case custom pseudos are added with uppercase letters
+			// Remember that setFilters inherits from pseudos
+			var args,
+				fn = Expr.pseudos[ pseudo ] || Expr.setFilters[ pseudo.toLowerCase() ] ||
+					Sizzle.error( "unsupported pseudo: " + pseudo );
+
+			// The user may use createPseudo to indicate that
+			// arguments are needed to create the filter function
+			// just as Sizzle does
+			if ( fn[ expando ] ) {
+				return fn( argument );
+			}
+
+			// But maintain support for old signatures
+			if ( fn.length > 1 ) {
+				args = [ pseudo, pseudo, "", argument ];
+				return Expr.setFilters.hasOwnProperty( pseudo.toLowerCase() ) ?
+					markFunction(function( seed, matches ) {
+						var idx,
+							matched = fn( seed, argument ),
+							i = matched.length;
+						while ( i-- ) {
+							idx = indexOf.call( seed, matched[i] );
+							seed[ idx ] = !( matches[ idx ] = matched[i] );
+						}
+					}) :
+					function( elem ) {
+						return fn( elem, 0, args );
+					};
+			}
+
+			return fn;
+		}
+	},
+
+	pseudos: {
+		// Potentially complex pseudos
+		"not": markFunction(function( selector ) {
+			// Trim the selector passed to compile
+			// to avoid treating leading and trailing
+			// spaces as combinators
+			var input = [],
+				results = [],
+				matcher = compile( selector.replace( rtrim, "$1" ) );
+
+			return matcher[ expando ] ?
+				markFunction(function( seed, matches, context, xml ) {
+					var elem,
+						unmatched = matcher( seed, null, xml, [] ),
+						i = seed.length;
+
+					// Match elements unmatched by `matcher`
+					while ( i-- ) {
+						if ( (elem = unmatched[i]) ) {
+							seed[i] = !(matches[i] = elem);
+						}
+					}
+				}) :
+				function( elem, context, xml ) {
+					input[0] = elem;
+					matcher( input, null, xml, results );
+					return !results.pop();
+				};
+		}),
+
+		"has": markFunction(function( selector ) {
+			return function( elem ) {
+				return Sizzle( selector, elem ).length > 0;
+			};
+		}),
+
+		"contains": markFunction(function( text ) {
+			return function( elem ) {
+				return ( elem.textContent || elem.innerText || getText( elem ) ).indexOf( text ) > -1;
+			};
+		}),
+
+		// "Whether an element is represented by a :lang() selector
+		// is based solely on the element's language value
+		// being equal to the identifier C,
+		// or beginning with the identifier C immediately followed by "-".
+		// The matching of C against the element's language value is performed case-insensitively.
+		// The identifier C does not have to be a valid language name."
+		// http://www.w3.org/TR/selectors/#lang-pseudo
+		"lang": markFunction( function( lang ) {
+			// lang value must be a valid identifier
+			if ( !ridentifier.test(lang || "") ) {
+				Sizzle.error( "unsupported lang: " + lang );
+			}
+			lang = lang.replace( runescape, funescape ).toLowerCase();
+			return function( elem ) {
+				var elemLang;
+				do {
+					if ( (elemLang = documentIsHTML ?
+						elem.lang :
+						elem.getAttribute("xml:lang") || elem.getAttribute("lang")) ) {
+
+						elemLang = elemLang.toLowerCase();
+						return elemLang === lang || elemLang.indexOf( lang + "-" ) === 0;
+					}
+				} while ( (elem = elem.parentNode) && elem.nodeType === 1 );
+				return false;
+			};
+		}),
+
+		// Miscellaneous
+		"target": function( elem ) {
+			var hash = window.location && window.location.hash;
+			return hash && hash.slice( 1 ) === elem.id;
+		},
+
+		"root": function( elem ) {
+			return elem === docElem;
+		},
+
+		"focus": function( elem ) {
+			return elem === document.activeElement && (!document.hasFocus || document.hasFocus()) && !!(elem.type || elem.href || ~elem.tabIndex);
+		},
+
+		// Boolean properties
+		"enabled": function( elem ) {
+			return elem.disabled === false;
+		},
+
+		"disabled": function( elem ) {
+			return elem.disabled === true;
+		},
+
+		"checked": function( elem ) {
+			// In CSS3, :checked should return both checked and selected elements
+			// http://www.w3.org/TR/2011/REC-css3-selectors-20110929/#checked
+			var nodeName = elem.nodeName.toLowerCase();
+			return (nodeName === "input" && !!elem.checked) || (nodeName === "option" && !!elem.selected);
+		},
+
+		"selected": function( elem ) {
+			// Accessing this property makes selected-by-default
+			// options in Safari work properly
+			if ( elem.parentNode ) {
+				elem.parentNode.selectedIndex;
+			}
+
+			return elem.selected === true;
+		},
+
+		// Contents
+		"empty": function( elem ) {
+			// http://www.w3.org/TR/selectors/#empty-pseudo
+			// :empty is only affected by element nodes and content nodes(including text(3), cdata(4)),
+			//   not comment, processing instructions, or others
+			// Thanks to Diego Perini for the nodeName shortcut
+			//   Greater than "@" means alpha characters (specifically not starting with "#" or "?")
+			for ( elem = elem.firstChild; elem; elem = elem.nextSibling ) {
+				if ( elem.nodeName > "@" || elem.nodeType === 3 || elem.nodeType === 4 ) {
+					return false;
+				}
+			}
+			return true;
+		},
+
+		"parent": function( elem ) {
+			return !Expr.pseudos["empty"]( elem );
+		},
+
+		// Element/input types
+		"header": function( elem ) {
+			return rheader.test( elem.nodeName );
+		},
+
+		"input": function( elem ) {
+			return rinputs.test( elem.nodeName );
+		},
+
+		"button": function( elem ) {
+			var name = elem.nodeName.toLowerCase();
+			return name === "input" && elem.type === "button" || name === "button";
+		},
+
+		"text": function( elem ) {
+			var attr;
+			// IE6 and 7 will map elem.type to 'text' for new HTML5 types (search, etc)
+			// use getAttribute instead to test this case
+			return elem.nodeName.toLowerCase() === "input" &&
+				elem.type === "text" &&
+				( (attr = elem.getAttribute("type")) == null || attr.toLowerCase() === elem.type );
+		},
+
+		// Position-in-collection
+		"first": createPositionalPseudo(function() {
+			return [ 0 ];
+		}),
+
+		"last": createPositionalPseudo(function( matchIndexes, length ) {
+			return [ length - 1 ];
+		}),
+
+		"eq": createPositionalPseudo(function( matchIndexes, length, argument ) {
+			return [ argument < 0 ? argument + length : argument ];
+		}),
+
+		"even": createPositionalPseudo(function( matchIndexes, length ) {
+			var i = 0;
+			for ( ; i < length; i += 2 ) {
+				matchIndexes.push( i );
+			}
+			return matchIndexes;
+		}),
+
+		"odd": createPositionalPseudo(function( matchIndexes, length ) {
+			var i = 1;
+			for ( ; i < length; i += 2 ) {
+				matchIndexes.push( i );
+			}
+			return matchIndexes;
+		}),
+
+		"lt": createPositionalPseudo(function( matchIndexes, length, argument ) {
+			var i = argument < 0 ? argument + length : argument;
+			for ( ; --i >= 0; ) {
+				matchIndexes.push( i );
+			}
+			return matchIndexes;
+		}),
+
+		"gt": createPositionalPseudo(function( matchIndexes, length, argument ) {
+			var i = argument < 0 ? argument + length : argument;
+			for ( ; ++i < length; ) {
+				matchIndexes.push( i );
+			}
+			return matchIndexes;
+		})
+	}
+};
+
+// Add button/input type pseudos
+for ( i in { radio: true, checkbox: true, file: true, password: true, image: true } ) {
+	Expr.pseudos[ i ] = createInputPseudo( i );
+}
+for ( i in { submit: true, reset: true } ) {
+	Expr.pseudos[ i ] = createButtonPseudo( i );
+}
+
+function tokenize( selector, parseOnly ) {
+	var matched, match, tokens, type,
+		soFar, groups, preFilters,
+		cached = tokenCache[ selector + " " ];
+
+	if ( cached ) {
+		return parseOnly ? 0 : cached.slice( 0 );
+	}
+
+	soFar = selector;
+	groups = [];
+	preFilters = Expr.preFilter;
+
+	while ( soFar ) {
+
+		// Comma and first run
+		if ( !matched || (match = rcomma.exec( soFar )) ) {
+			if ( match ) {
+				// Don't consume trailing commas as valid
+				soFar = soFar.slice( match[0].length ) || soFar;
+			}
+			groups.push( tokens = [] );
+		}
+
+		matched = false;
+
+		// Combinators
+		if ( (match = rcombinators.exec( soFar )) ) {
+			matched = match.shift();
+			tokens.push({
+				value: matched,
+				// Cast descendant combinators to space
+				type: match[0].replace( rtrim, " " )
+			});
+			soFar = soFar.slice( matched.length );
+		}
+
+		// Filters
+		for ( type in Expr.filter ) {
+			if ( (match = matchExpr[ type ].exec( soFar )) && (!preFilters[ type ] ||
+				(match = preFilters[ type ]( match ))) ) {
+				matched = match.shift();
+				tokens.push({
+					value: matched,
+					type: type,
+					matches: match
+				});
+				soFar = soFar.slice( matched.length );
+			}
+		}
+
+		if ( !matched ) {
+			break;
+		}
+	}
+
+	// Return the length of the invalid excess
+	// if we're just parsing
+	// Otherwise, throw an error or return tokens
+	return parseOnly ?
+		soFar.length :
+		soFar ?
+			Sizzle.error( selector ) :
+			// Cache the tokens
+			tokenCache( selector, groups ).slice( 0 );
+}
+
+function toSelector( tokens ) {
+	var i = 0,
+		len = tokens.length,
+		selector = "";
+	for ( ; i < len; i++ ) {
+		selector += tokens[i].value;
+	}
+	return selector;
+}
+
+function addCombinator( matcher, combinator, base ) {
+	var dir = combinator.dir,
+		checkNonElements = base && dir === "parentNode",
+		doneName = done++;
+
+	return combinator.first ?
+		// Check against closest ancestor/preceding element
+		function( elem, context, xml ) {
+			while ( (elem = elem[ dir ]) ) {
+				if ( elem.nodeType === 1 || checkNonElements ) {
+					return matcher( elem, context, xml );
+				}
+			}
+		} :
+
+		// Check against all ancestor/preceding elements
+		function( elem, context, xml ) {
+			var data, cache, outerCache,
+				dirkey = dirruns + " " + doneName;
+
+			// We can't set arbitrary data on XML nodes, so they don't benefit from dir caching
+			if ( xml ) {
+				while ( (elem = elem[ dir ]) ) {
+					if ( elem.nodeType === 1 || checkNonElements ) {
+						if ( matcher( elem, context, xml ) ) {
+							return true;
+						}
+					}
+				}
+			} else {
+				while ( (elem = elem[ dir ]) ) {
+					if ( elem.nodeType === 1 || checkNonElements ) {
+						outerCache = elem[ expando ] || (elem[ expando ] = {});
+						if ( (cache = outerCache[ dir ]) && cache[0] === dirkey ) {
+							if ( (data = cache[1]) === true || data === cachedruns ) {
+								return data === true;
+							}
+						} else {
+							cache = outerCache[ dir ] = [ dirkey ];
+							cache[1] = matcher( elem, context, xml ) || cachedruns;
+							if ( cache[1] === true ) {
+								return true;
+							}
+						}
+					}
+				}
+			}
+		};
+}
+
+function elementMatcher( matchers ) {
+	return matchers.length > 1 ?
+		function( elem, context, xml ) {
+			var i = matchers.length;
+			while ( i-- ) {
+				if ( !matchers[i]( elem, context, xml ) ) {
+					return false;
+				}
+			}
+			return true;
+		} :
+		matchers[0];
+}
+
+function condense( unmatched, map, filter, context, xml ) {
+	var elem,
+		newUnmatched = [],
+		i = 0,
+		len = unmatched.length,
+		mapped = map != null;
+
+	for ( ; i < len; i++ ) {
+		if ( (elem = unmatched[i]) ) {
+			if ( !filter || filter( elem, context, xml ) ) {
+				newUnmatched.push( elem );
+				if ( mapped ) {
+					map.push( i );
+				}
+			}
+		}
+	}
+
+	return newUnmatched;
+}
+
+function setMatcher( preFilter, selector, matcher, postFilter, postFinder, postSelector ) {
+	if ( postFilter && !postFilter[ expando ] ) {
+		postFilter = setMatcher( postFilter );
+	}
+	if ( postFinder && !postFinder[ expando ] ) {
+		postFinder = setMatcher( postFinder, postSelector );
+	}
+	return markFunction(function( seed, results, context, xml ) {
+		var temp, i, elem,
+			preMap = [],
+			postMap = [],
+			preexisting = results.length,
+
+			// Get initial elements from seed or context
+			elems = seed || multipleContexts( selector || "*", context.nodeType ? [ context ] : context, [] ),
+
+			// Prefilter to get matcher input, preserving a map for seed-results synchronization
+			matcherIn = preFilter && ( seed || !selector ) ?
+				condense( elems, preMap, preFilter, context, xml ) :
+				elems,
+
+			matcherOut = matcher ?
+				// If we have a postFinder, or filtered seed, or non-seed postFilter or preexisting results,
+				postFinder || ( seed ? preFilter : preexisting || postFilter ) ?
+
+					// ...intermediate processing is necessary
+					[] :
+
+					// ...otherwise use results directly
+					results :
+				matcherIn;
+
+		// Find primary matches
+		if ( matcher ) {
+			matcher( matcherIn, matcherOut, context, xml );
+		}
+
+		// Apply postFilter
+		if ( postFilter ) {
+			temp = condense( matcherOut, postMap );
+			postFilter( temp, [], context, xml );
+
+			// Un-match failing elements by moving them back to matcherIn
+			i = temp.length;
+			while ( i-- ) {
+				if ( (elem = temp[i]) ) {
+					matcherOut[ postMap[i] ] = !(matcherIn[ postMap[i] ] = elem);
+				}
+			}
+		}
+
+		if ( seed ) {
+			if ( postFinder || preFilter ) {
+				if ( postFinder ) {
+					// Get the final matcherOut by condensing this intermediate into postFinder contexts
+					temp = [];
+					i = matcherOut.length;
+					while ( i-- ) {
+						if ( (elem = matcherOut[i]) ) {
+							// Restore matcherIn since elem is not yet a final match
+							temp.push( (matcherIn[i] = elem) );
+						}
+					}
+					postFinder( null, (matcherOut = []), temp, xml );
+				}
+
+				// Move matched elements from seed to results to keep them synchronized
+				i = matcherOut.length;
+				while ( i-- ) {
+					if ( (elem = matcherOut[i]) &&
+						(temp = postFinder ? indexOf.call( seed, elem ) : preMap[i]) > -1 ) {
+
+						seed[temp] = !(results[temp] = elem);
+					}
+				}
+			}
+
+		// Add elements to results, through postFinder if defined
+		} else {
+			matcherOut = condense(
+				matcherOut === results ?
+					matcherOut.splice( preexisting, matcherOut.length ) :
+					matcherOut
+			);
+			if ( postFinder ) {
+				postFinder( null, results, matcherOut, xml );
+			} else {
+				push.apply( results, matcherOut );
+			}
+		}
+	});
+}
+
+function matcherFromTokens( tokens ) {
+	var checkContext, matcher, j,
+		len = tokens.length,
+		leadingRelative = Expr.relative[ tokens[0].type ],
+		implicitRelative = leadingRelative || Expr.relative[" "],
+		i = leadingRelative ? 1 : 0,
+
+		// The foundational matcher ensures that elements are reachable from top-level context(s)
+		matchContext = addCombinator( function( elem ) {
+			return elem === checkContext;
+		}, implicitRelative, true ),
+		matchAnyContext = addCombinator( function( elem ) {
+			return indexOf.call( checkContext, elem ) > -1;
+		}, implicitRelative, true ),
+		matchers = [ function( elem, context, xml ) {
+			return ( !leadingRelative && ( xml || context !== outermostContext ) ) || (
+				(checkContext = context).nodeType ?
+					matchContext( elem, context, xml ) :
+					matchAnyContext( elem, context, xml ) );
+		} ];
+
+	for ( ; i < len; i++ ) {
+		if ( (matcher = Expr.relative[ tokens[i].type ]) ) {
+			matchers = [ addCombinator(elementMatcher( matchers ), matcher) ];
+		} else {
+			matcher = Expr.filter[ tokens[i].type ].apply( null, tokens[i].matches );
+
+			// Return special upon seeing a positional matcher
+			if ( matcher[ expando ] ) {
+				// Find the next relative operator (if any) for proper handling
+				j = ++i;
+				for ( ; j < len; j++ ) {
+					if ( Expr.relative[ tokens[j].type ] ) {
+						break;
+					}
+				}
+				return setMatcher(
+					i > 1 && elementMatcher( matchers ),
+					i > 1 && toSelector(
+						// If the preceding token was a descendant combinator, insert an implicit any-element `*`
+						tokens.slice( 0, i - 1 ).concat({ value: tokens[ i - 2 ].type === " " ? "*" : "" })
+					).replace( rtrim, "$1" ),
+					matcher,
+					i < j && matcherFromTokens( tokens.slice( i, j ) ),
+					j < len && matcherFromTokens( (tokens = tokens.slice( j )) ),
+					j < len && toSelector( tokens )
+				);
+			}
+			matchers.push( matcher );
+		}
+	}
+
+	return elementMatcher( matchers );
+}
+
+function matcherFromGroupMatchers( elementMatchers, setMatchers ) {
+	// A counter to specify which element is currently being matched
+	var matcherCachedRuns = 0,
+		bySet = setMatchers.length > 0,
+		byElement = elementMatchers.length > 0,
+		superMatcher = function( seed, context, xml, results, expandContext ) {
+			var elem, j, matcher,
+				setMatched = [],
+				matchedCount = 0,
+				i = "0",
+				unmatched = seed && [],
+				outermost = expandContext != null,
+				contextBackup = outermostContext,
+				// We must always have either seed elements or context
+				elems = seed || byElement && Expr.find["TAG"]( "*", expandContext && context.parentNode || context ),
+				// Use integer dirruns iff this is the outermost matcher
+				dirrunsUnique = (dirruns += contextBackup == null ? 1 : Math.random() || 0.1);
+
+			if ( outermost ) {
+				outermostContext = context !== document && context;
+				cachedruns = matcherCachedRuns;
+			}
+
+			// Add elements passing elementMatchers directly to results
+			// Keep `i` a string if there are no elements so `matchedCount` will be "00" below
+			for ( ; (elem = elems[i]) != null; i++ ) {
+				if ( byElement && elem ) {
+					j = 0;
+					while ( (matcher = elementMatchers[j++]) ) {
+						if ( matcher( elem, context, xml ) ) {
+							results.push( elem );
+							break;
+						}
+					}
+					if ( outermost ) {
+						dirruns = dirrunsUnique;
+						cachedruns = ++matcherCachedRuns;
+					}
+				}
+
+				// Track unmatched elements for set filters
+				if ( bySet ) {
+					// They will have gone through all possible matchers
+					if ( (elem = !matcher && elem) ) {
+						matchedCount--;
+					}
+
+					// Lengthen the array for every element, matched or not
+					if ( seed ) {
+						unmatched.push( elem );
+					}
+				}
+			}
+
+			// Apply set filters to unmatched elements
+			matchedCount += i;
+			if ( bySet && i !== matchedCount ) {
+				j = 0;
+				while ( (matcher = setMatchers[j++]) ) {
+					matcher( unmatched, setMatched, context, xml );
+				}
+
+				if ( seed ) {
+					// Reintegrate element matches to eliminate the need for sorting
+					if ( matchedCount > 0 ) {
+						while ( i-- ) {
+							if ( !(unmatched[i] || setMatched[i]) ) {
+								setMatched[i] = pop.call( results );
+							}
+						}
+					}
+
+					// Discard index placeholder values to get only actual matches
+					setMatched = condense( setMatched );
+				}
+
+				// Add matches to results
+				push.apply( results, setMatched );
+
+				// Seedless set matches succeeding multiple successful matchers stipulate sorting
+				if ( outermost && !seed && setMatched.length > 0 &&
+					( matchedCount + setMatchers.length ) > 1 ) {
+
+					Sizzle.uniqueSort( results );
+				}
+			}
+
+			// Override manipulation of globals by nested matchers
+			if ( outermost ) {
+				dirruns = dirrunsUnique;
+				outermostContext = contextBackup;
+			}
+
+			return unmatched;
+		};
+
+	return bySet ?
+		markFunction( superMatcher ) :
+		superMatcher;
+}
+
+compile = Sizzle.compile = function( selector, group /* Internal Use Only */ ) {
+	var i,
+		setMatchers = [],
+		elementMatchers = [],
+		cached = compilerCache[ selector + " " ];
+
+	if ( !cached ) {
+		// Generate a function of recursive functions that can be used to check each element
+		if ( !group ) {
+			group = tokenize( selector );
+		}
+		i = group.length;
+		while ( i-- ) {
+			cached = matcherFromTokens( group[i] );
+			if ( cached[ expando ] ) {
+				setMatchers.push( cached );
+			} else {
+				elementMatchers.push( cached );
+			}
+		}
+
+		// Cache the compiled function
+		cached = compilerCache( selector, matcherFromGroupMatchers( elementMatchers, setMatchers ) );
+	}
+	return cached;
+};
+
+function multipleContexts( selector, contexts, results ) {
+	var i = 0,
+		len = contexts.length;
+	for ( ; i < len; i++ ) {
+		Sizzle( selector, contexts[i], results );
+	}
+	return results;
+}
+
+function select( selector, context, results, seed ) {
+	var i, tokens, token, type, find,
+		match = tokenize( selector );
+
+	if ( !seed ) {
+		// Try to minimize operations if there is only one group
+		if ( match.length === 1 ) {
+
+			// Take a shortcut and set the context if the root selector is an ID
+			tokens = match[0] = match[0].slice( 0 );
+			if ( tokens.length > 2 && (token = tokens[0]).type === "ID" &&
+					support.getById && context.nodeType === 9 && documentIsHTML &&
+					Expr.relative[ tokens[1].type ] ) {
+
+				context = ( Expr.find["ID"]( token.matches[0].replace(runescape, funescape), context ) || [] )[0];
+				if ( !context ) {
+					return results;
+				}
+				selector = selector.slice( tokens.shift().value.length );
+			}
+
+			// Fetch a seed set for right-to-left matching
+			i = matchExpr["needsContext"].test( selector ) ? 0 : tokens.length;
+			while ( i-- ) {
+				token = tokens[i];
+
+				// Abort if we hit a combinator
+				if ( Expr.relative[ (type = token.type) ] ) {
+					break;
+				}
+				if ( (find = Expr.find[ type ]) ) {
+					// Search, expanding context for leading sibling combinators
+					if ( (seed = find(
+						token.matches[0].replace( runescape, funescape ),
+						rsibling.test( tokens[0].type ) && context.parentNode || context
+					)) ) {
+
+						// If seed is empty or no tokens remain, we can return early
+						tokens.splice( i, 1 );
+						selector = seed.length && toSelector( tokens );
+						if ( !selector ) {
+							push.apply( results, seed );
+							return results;
+						}
+
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	// Compile and execute a filtering function
+	// Provide `match` to avoid retokenization if we modified the selector above
+	compile( selector, match )(
+		seed,
+		context,
+		!documentIsHTML,
+		results,
+		rsibling.test( selector )
+	);
+	return results;
+}
+
+// Deprecated
+Expr.pseudos["nth"] = Expr.pseudos["eq"];
+
+// Easy API for creating new setFilters
+function setFilters() {}
+setFilters.prototype = Expr.filters = Expr.pseudos;
+Expr.setFilters = new setFilters();
+
+// One-time assignments
+
+// Sort stability
+support.sortStable = expando.split("").sort( sortOrder ).join("") === expando;
+
+// Initialize against the default document
+setDocument();
+
+// Support: Chrome<<14
+// Always assume duplicates if they aren't passed to the comparison function
+[0, 0].sort( sortOrder );
+support.detectDuplicates = hasDuplicate;
+
+jQuery.find = Sizzle;
+jQuery.expr = Sizzle.selectors;
+jQuery.expr[":"] = jQuery.expr.pseudos;
+jQuery.unique = Sizzle.uniqueSort;
+jQuery.text = Sizzle.getText;
+jQuery.isXMLDoc = Sizzle.isXML;
+jQuery.contains = Sizzle.contains;
+
+
+})( window );
 // String to Object options format cache
 var optionsCache = {};
 
@@ -1114,6 +3142,7 @@ jQuery.Callbacks = function( options ) {
 			// Remove all callbacks from the list
 			empty: function() {
 				list = [];
+				firingLength = 0;
 				return this;
 			},
 			// Have the list do nothing anymore
@@ -1304,22 +3333,20 @@ jQuery.extend({
 		return deferred.promise();
 	}
 });
-jQuery.support = (function() {
+jQuery.support = (function( support ) {
 
-	var support, all, a,
-		input, select, fragment,
-		opt, eventName, isSupported, i,
+	var all, a, input, select, fragment, opt, eventName, isSupported, i,
 		div = document.createElement("div");
 
 	// Setup
 	div.setAttribute( "className", "t" );
 	div.innerHTML = "  <link/><table></table><a href='/a'>a</a><input type='checkbox'/>";
 
-	// Support tests won't run in some limited or non-browser environments
-	all = div.getElementsByTagName("*");
+	// Finish early in limited (non-browser) environments
+	all = div.getElementsByTagName("*") || [];
 	a = div.getElementsByTagName("a")[ 0 ];
-	if ( !all || !a || !all.length ) {
-		return {};
+	if ( !a || !a.style || !all.length ) {
+		return support;
 	}
 
 	// First batch of tests
@@ -1328,64 +3355,60 @@ jQuery.support = (function() {
 	input = div.getElementsByTagName("input")[ 0 ];
 
 	a.style.cssText = "top:1px;float:left;opacity:.5";
-	support = {
-		// Test setAttribute on camelCase class. If it works, we need attrFixes when doing get/setAttribute (ie6/7)
-		getSetAttribute: div.className !== "t",
 
-		// IE strips leading whitespace when .innerHTML is used
-		leadingWhitespace: div.firstChild.nodeType === 3,
+	// Test setAttribute on camelCase class. If it works, we need attrFixes when doing get/setAttribute (ie6/7)
+	support.getSetAttribute = div.className !== "t";
 
-		// Make sure that tbody elements aren't automatically inserted
-		// IE will insert them into empty tables
-		tbody: !div.getElementsByTagName("tbody").length,
+	// IE strips leading whitespace when .innerHTML is used
+	support.leadingWhitespace = div.firstChild.nodeType === 3;
 
-		// Make sure that link elements get serialized correctly by innerHTML
-		// This requires a wrapper element in IE
-		htmlSerialize: !!div.getElementsByTagName("link").length,
+	// Make sure that tbody elements aren't automatically inserted
+	// IE will insert them into empty tables
+	support.tbody = !div.getElementsByTagName("tbody").length;
 
-		// Get the style information from getAttribute
-		// (IE uses .cssText instead)
-		style: /top/.test( a.getAttribute("style") ),
+	// Make sure that link elements get serialized correctly by innerHTML
+	// This requires a wrapper element in IE
+	support.htmlSerialize = !!div.getElementsByTagName("link").length;
 
-		// Make sure that URLs aren't manipulated
-		// (IE normalizes it by default)
-		hrefNormalized: a.getAttribute("href") === "/a",
+	// Get the style information from getAttribute
+	// (IE uses .cssText instead)
+	support.style = /top/.test( a.getAttribute("style") );
 
-		// Make sure that element opacity exists
-		// (IE uses filter instead)
-		// Use a regex to work around a WebKit issue. See #5145
-		opacity: /^0.5/.test( a.style.opacity ),
+	// Make sure that URLs aren't manipulated
+	// (IE normalizes it by default)
+	support.hrefNormalized = a.getAttribute("href") === "/a";
 
-		// Verify style float existence
-		// (IE uses styleFloat instead of cssFloat)
-		cssFloat: !!a.style.cssFloat,
+	// Make sure that element opacity exists
+	// (IE uses filter instead)
+	// Use a regex to work around a WebKit issue. See #5145
+	support.opacity = /^0.5/.test( a.style.opacity );
 
-		// Check the default checkbox/radio value ("" on WebKit; "on" elsewhere)
-		checkOn: !!input.value,
+	// Verify style float existence
+	// (IE uses styleFloat instead of cssFloat)
+	support.cssFloat = !!a.style.cssFloat;
 
-		// Make sure that a selected-by-default option has a working selected property.
-		// (WebKit defaults to false instead of true, IE too, if it's in an optgroup)
-		optSelected: opt.selected,
+	// Check the default checkbox/radio value ("" on WebKit; "on" elsewhere)
+	support.checkOn = !!input.value;
 
-		// Tests for enctype support on a form (#6743)
-		enctype: !!document.createElement("form").enctype,
+	// Make sure that a selected-by-default option has a working selected property.
+	// (WebKit defaults to false instead of true, IE too, if it's in an optgroup)
+	support.optSelected = opt.selected;
 
-		// Makes sure cloning an html5 element does not cause problems
-		// Where outerHTML is undefined, this still works
-		html5Clone: document.createElement("nav").cloneNode( true ).outerHTML !== "<:nav></:nav>",
+	// Tests for enctype support on a form (#6743)
+	support.enctype = !!document.createElement("form").enctype;
 
-		// jQuery.support.boxModel DEPRECATED in 1.8 since we don't support Quirks Mode
-		boxModel: document.compatMode === "CSS1Compat",
+	// Makes sure cloning an html5 element does not cause problems
+	// Where outerHTML is undefined, this still works
+	support.html5Clone = document.createElement("nav").cloneNode( true ).outerHTML !== "<:nav></:nav>";
 
-		// Will be defined later
-		deleteExpando: true,
-		noCloneEvent: true,
-		inlineBlockNeedsLayout: false,
-		shrinkWrapBlocks: false,
-		reliableMarginRight: true,
-		boxSizingReliable: true,
-		pixelPosition: false
-	};
+	// Will be defined later
+	support.inlineBlockNeedsLayout = false;
+	support.shrinkWrapBlocks = false;
+	support.pixelPosition = false;
+	support.deleteExpando = true;
+	support.noCloneEvent = true;
+	support.reliableMarginRight = true;
+	support.boxSizingReliable = true;
 
 	// Make sure checked status is properly cloned
 	input.checked = true;
@@ -1439,7 +3462,7 @@ jQuery.support = (function() {
 	}
 
 	// Support: IE<9 (lack submit/change bubble), Firefox 17+ (lack focusin event)
-	// Beware of CSP restrictions (https://developer.mozilla.org/en/Security/CSP), test/csp.php
+	// Beware of CSP restrictions (https://developer.mozilla.org/en/Security/CSP)
 	for ( i in { submit: true, change: true, focusin: true }) {
 		div.setAttribute( eventName = "on" + i, "t" );
 
@@ -1449,6 +3472,13 @@ jQuery.support = (function() {
 	div.style.backgroundClip = "content-box";
 	div.cloneNode( true ).style.backgroundClip = "";
 	support.clearCloneStyle = div.style.backgroundClip === "content-box";
+
+	// Support: IE<9
+	// Iteration over object's inherited properties before its own.
+	for ( i in jQuery( support ) ) {
+		break;
+	}
+	support.ownLast = i !== "0";
 
 	// Run tests that need a body at doc ready
 	jQuery(function() {
@@ -1485,11 +3515,15 @@ jQuery.support = (function() {
 		// Check if empty table cells still have offsetWidth/Height
 		support.reliableHiddenOffsets = isSupported && ( tds[ 0 ].offsetHeight === 0 );
 
-		// Check box-sizing and margin behavior
+		// Check box-sizing and margin behavior.
 		div.innerHTML = "";
 		div.style.cssText = "box-sizing:border-box;-moz-box-sizing:border-box;-webkit-box-sizing:border-box;padding:1px;border:1px;display:block;width:4px;margin-top:1%;position:absolute;top:1%;";
-		support.boxSizing = ( div.offsetWidth === 4 );
-		support.doesNotIncludeMarginInBodyOffset = ( body.offsetTop !== 1 );
+
+		// Workaround failing boxSizing test due to offsetWidth returning wrong value
+		// with some non-1 values of body zoom, ticket #13543
+		jQuery.swap( body, body.style.zoom != null ? { zoom: 1 } : {}, function() {
+			support.boxSizing = div.offsetWidth === 4;
+		});
 
 		// Use window.getComputedStyle because jsdom on node.js will break without it.
 		if ( window.getComputedStyle ) {
@@ -1543,7 +3577,7 @@ jQuery.support = (function() {
 	all = select = fragment = opt = a = input = null;
 
 	return support;
-})();
+})({});
 
 var rbrace = /(?:\{[\s\S]*\}|\[[\s\S]*\])$/,
 	rmultiDash = /([A-Z])/g;
@@ -1553,9 +3587,8 @@ function internalData( elem, name, data, pvt /* Internal Use Only */ ){
 		return;
 	}
 
-	var thisCache, ret,
+	var ret, thisCache,
 		internalKey = jQuery.expando,
-		getByName = typeof name === "string",
 
 		// We have to handle DOM nodes and JS objects differently because IE6-7
 		// can't GC object references properly across the DOM-JS boundary
@@ -1571,7 +3604,7 @@ function internalData( elem, name, data, pvt /* Internal Use Only */ ){
 
 	// Avoid doing any more work than we need to when trying to get data on an
 	// object that has no data at all
-	if ( (!id || !cache[id] || (!pvt && !cache[id].data)) && getByName && data === undefined ) {
+	if ( (!id || !cache[id] || (!pvt && !cache[id].data)) && data === undefined && typeof name === "string" ) {
 		return;
 	}
 
@@ -1579,20 +3612,16 @@ function internalData( elem, name, data, pvt /* Internal Use Only */ ){
 		// Only DOM nodes need a new unique ID for each element since their data
 		// ends up in the global cache
 		if ( isNode ) {
-			elem[ internalKey ] = id = core_deletedIds.pop() || jQuery.guid++;
+			id = elem[ internalKey ] = core_deletedIds.pop() || jQuery.guid++;
 		} else {
 			id = internalKey;
 		}
 	}
 
 	if ( !cache[ id ] ) {
-		cache[ id ] = {};
-
-		// Avoids exposing jQuery metadata on plain JS objects when the object
+		// Avoid exposing jQuery metadata on plain JS objects when the object
 		// is serialized using JSON.stringify
-		if ( !isNode ) {
-			cache[ id ].toJSON = jQuery.noop;
-		}
+		cache[ id ] = isNode ? {} : { toJSON: jQuery.noop };
 	}
 
 	// An object can be passed to jQuery.data instead of a key/value pair; this gets
@@ -1624,7 +3653,7 @@ function internalData( elem, name, data, pvt /* Internal Use Only */ ){
 
 	// Check for both converted-to-camel and non-converted data property names
 	// If a data property was specified
-	if ( getByName ) {
+	if ( typeof name === "string" ) {
 
 		// First Try to find as-is property data
 		ret = thisCache[ name ];
@@ -1647,7 +3676,7 @@ function internalRemoveData( elem, name, pvt ) {
 		return;
 	}
 
-	var i, l, thisCache,
+	var thisCache, i,
 		isNode = elem.nodeType,
 
 		// See jQuery.data for more information
@@ -1692,13 +3721,14 @@ function internalRemoveData( elem, name, pvt ) {
 				name = name.concat( jQuery.map( name, jQuery.camelCase ) );
 			}
 
-			for ( i = 0, l = name.length; i < l; i++ ) {
+			i = name.length;
+			while ( i-- ) {
 				delete thisCache[ name[i] ];
 			}
 
 			// If there is no data left in the cache, we want to continue
 			// and let the cache object itself get destroyed
-			if ( !( pvt ? isEmptyDataObject : jQuery.isEmptyObject )( thisCache ) ) {
+			if ( pvt ? !isEmptyDataObject(thisCache) : !jQuery.isEmptyObject(thisCache) ) {
 				return;
 			}
 		}
@@ -1720,7 +3750,9 @@ function internalRemoveData( elem, name, pvt ) {
 		jQuery.cleanData( [ elem ], true );
 
 	// Use delete when supported for expandos or `cache` is not a window per isWindow (#10080)
+	/* jshint eqeqeq: false */
 	} else if ( jQuery.support.deleteExpando || cache != cache.window ) {
+		/* jshint eqeqeq: true */
 		delete cache[ id ];
 
 	// When all else fails, null
@@ -1732,17 +3764,13 @@ function internalRemoveData( elem, name, pvt ) {
 jQuery.extend({
 	cache: {},
 
-	// Unique for each copy of jQuery on the page
-	// Non-digits removed to match rinlinejQuery
-	expando: "jQuery" + ( core_version + Math.random() ).replace( /\D/g, "" ),
-
 	// The following elements throw uncatchable exceptions if you
 	// attempt to add expando properties to them.
 	noData: {
+		"applet": true,
 		"embed": true,
 		// Ban all objects except for Flash (which handle expandos)
-		"object": "clsid:D27CDB6E-AE6D-11cf-96B8-444553540000",
-		"applet": true
+		"object": "clsid:D27CDB6E-AE6D-11cf-96B8-444553540000"
 	},
 
 	hasData: function( elem ) {
@@ -1784,9 +3812,12 @@ jQuery.extend({
 jQuery.fn.extend({
 	data: function( key, value ) {
 		var attrs, name,
-			elem = this[0],
+			data = null,
 			i = 0,
-			data = null;
+			elem = this[0];
+
+		// Special expections of .data basically thwart jQuery.access,
+		// so implement the relevant behavior ourselves
 
 		// Gets all values
 		if ( key === undefined ) {
@@ -1798,7 +3829,7 @@ jQuery.fn.extend({
 					for ( ; i < attrs.length; i++ ) {
 						name = attrs[i].name;
 
-						if ( !name.indexOf( "data-" ) ) {
+						if ( name.indexOf("data-") === 0 ) {
 							name = jQuery.camelCase( name.slice(5) );
 
 							dataAttr( elem, name, data[ name ] );
@@ -1818,17 +3849,16 @@ jQuery.fn.extend({
 			});
 		}
 
-		return jQuery.access( this, function( value ) {
+		return arguments.length > 1 ?
 
-			if ( value === undefined ) {
-				// Try to fetch any internally stored data first
-				return elem ? dataAttr( elem, key, jQuery.data( elem, key ) ) : null;
-			}
-
+			// Sets one value
 			this.each(function() {
 				jQuery.data( this, key, value );
-			});
-		}, null, value, arguments.length > 1, null, true );
+			}) :
+
+			// Gets one value
+			// Try to fetch any internally stored data first
+			elem ? dataAttr( elem, key, jQuery.data( elem, key ) ) : null;
 	},
 
 	removeData: function( key ) {
@@ -2033,11 +4063,10 @@ jQuery.fn.extend({
 	}
 });
 var nodeHook, boolHook,
-	rclass = /[\t\r\n]/g,
+	rclass = /[\t\r\n\f]/g,
 	rreturn = /\r/g,
 	rfocusable = /^(?:input|select|textarea|button|object)$/i,
 	rclickable = /^(?:a|area)$/i,
-	rboolean = /^(?:checked|selected|autofocus|autoplay|async|controls|defer|disabled|hidden|loop|multiple|open|readonly|required|scoped)$/i,
 	ruseDefault = /^(?:checked|selected)$/i,
 	getSetAttribute = jQuery.support.getSetAttribute,
 	getSetInput = jQuery.support.input;
@@ -2226,15 +4255,14 @@ jQuery.fn.extend({
 		isFunction = jQuery.isFunction( value );
 
 		return this.each(function( i ) {
-			var val,
-				self = jQuery(this);
+			var val;
 
 			if ( this.nodeType !== 1 ) {
 				return;
 			}
 
 			if ( isFunction ) {
-				val = value.call( this, i, self.val() );
+				val = value.call( this, i, jQuery( this ).val() );
 			} else {
 				val = value;
 			}
@@ -2264,10 +4292,11 @@ jQuery.extend({
 	valHooks: {
 		option: {
 			get: function( elem ) {
-				// attributes.value is undefined in Blackberry 4.7 but
-				// uses .value. See #6932
-				var val = elem.attributes.value;
-				return !val || val.specified ? elem.value : elem.text;
+				// Use proper attribute retrieval(#6932, #12072)
+				var val = jQuery.find.attr( elem, "value" );
+				return val != null ?
+					val :
+					elem.text;
 			}
 		},
 		select: {
@@ -2309,13 +4338,20 @@ jQuery.extend({
 			},
 
 			set: function( elem, value ) {
-				var values = jQuery.makeArray( value );
+				var optionSet, option,
+					options = elem.options,
+					values = jQuery.makeArray( value ),
+					i = options.length;
 
-				jQuery(elem).find("option").each(function() {
-					this.selected = jQuery.inArray( jQuery(this).val(), values ) >= 0;
-				});
+				while ( i-- ) {
+					option = options[ i ];
+					if ( (option.selected = jQuery.inArray( jQuery(option).val(), values ) >= 0) ) {
+						optionSet = true;
+					}
+				}
 
-				if ( !values.length ) {
+				// force browsers to behave consistently when non-matching value is set
+				if ( !optionSet ) {
 					elem.selectedIndex = -1;
 				}
 				return values;
@@ -2324,7 +4360,7 @@ jQuery.extend({
 	},
 
 	attr: function( elem, name, value ) {
-		var hooks, notxml, ret,
+		var hooks, ret,
 			nType = elem.nodeType;
 
 		// don't get/set attributes on text, comment and attribute nodes
@@ -2337,13 +4373,12 @@ jQuery.extend({
 			return jQuery.prop( elem, name, value );
 		}
 
-		notxml = nType !== 1 || !jQuery.isXMLDoc( elem );
-
 		// All attributes are lowercase
 		// Grab necessary hook if one is defined
-		if ( notxml ) {
+		if ( nType !== 1 || !jQuery.isXMLDoc( elem ) ) {
 			name = name.toLowerCase();
-			hooks = jQuery.attrHooks[ name ] || ( rboolean.test( name ) ? boolHook : nodeHook );
+			hooks = jQuery.attrHooks[ name ] ||
+				( jQuery.expr.match.bool.test( name ) ? boolHook : nodeHook );
 		}
 
 		if ( value !== undefined ) {
@@ -2351,7 +4386,7 @@ jQuery.extend({
 			if ( value === null ) {
 				jQuery.removeAttr( elem, name );
 
-			} else if ( hooks && notxml && "set" in hooks && (ret = hooks.set( elem, value, name )) !== undefined ) {
+			} else if ( hooks && "set" in hooks && (ret = hooks.set( elem, value, name )) !== undefined ) {
 				return ret;
 
 			} else {
@@ -2359,16 +4394,11 @@ jQuery.extend({
 				return value;
 			}
 
-		} else if ( hooks && notxml && "get" in hooks && (ret = hooks.get( elem, name )) !== null ) {
+		} else if ( hooks && "get" in hooks && (ret = hooks.get( elem, name )) !== null ) {
 			return ret;
 
 		} else {
-
-			// In IE9+, Flash objects don't have .getAttribute (#12945)
-			// Support: IE9+
-			if ( typeof elem.getAttribute !== core_strundefined ) {
-				ret =  elem.getAttribute( name );
-			}
+			ret = jQuery.find.attr( elem, name );
 
 			// Non-existent attributes return null, we normalize to undefined
 			return ret == null ?
@@ -2387,14 +4417,15 @@ jQuery.extend({
 				propName = jQuery.propFix[ name ] || name;
 
 				// Boolean attributes get special treatment (#10870)
-				if ( rboolean.test( name ) ) {
-					// Set corresponding property to false for boolean attributes
-					// Also clear defaultChecked/defaultSelected (if appropriate) for IE<8
-					if ( !getSetAttribute && ruseDefault.test( name ) ) {
+				if ( jQuery.expr.match.bool.test( name ) ) {
+					// Set corresponding property to false
+					if ( getSetInput && getSetAttribute || !ruseDefault.test( name ) ) {
+						elem[ propName ] = false;
+					// Support: IE<9
+					// Also clear defaultChecked/defaultSelected (if appropriate)
+					} else {
 						elem[ jQuery.camelCase( "default-" + name ) ] =
 							elem[ propName ] = false;
-					} else {
-						elem[ propName ] = false;
 					}
 
 				// See #9699 for explanation of this approach (setting first, then removal)
@@ -2425,18 +4456,8 @@ jQuery.extend({
 	},
 
 	propFix: {
-		tabindex: "tabIndex",
-		readonly: "readOnly",
 		"for": "htmlFor",
-		"class": "className",
-		maxlength: "maxLength",
-		cellspacing: "cellSpacing",
-		cellpadding: "cellPadding",
-		rowspan: "rowSpan",
-		colspan: "colSpan",
-		usemap: "useMap",
-		frameborder: "frameBorder",
-		contenteditable: "contentEditable"
+		"class": "className"
 	},
 
 	prop: function( elem, name, value ) {
@@ -2457,20 +4478,14 @@ jQuery.extend({
 		}
 
 		if ( value !== undefined ) {
-			if ( hooks && "set" in hooks && (ret = hooks.set( elem, value, name )) !== undefined ) {
-				return ret;
-
-			} else {
-				return ( elem[ name ] = value );
-			}
+			return hooks && "set" in hooks && (ret = hooks.set( elem, value, name )) !== undefined ?
+				ret :
+				( elem[ name ] = value );
 
 		} else {
-			if ( hooks && "get" in hooks && (ret = hooks.get( elem, name )) !== null ) {
-				return ret;
-
-			} else {
-				return elem[ name ];
-			}
+			return hooks && "get" in hooks && (ret = hooks.get( elem, name )) !== null ?
+				ret :
+				elem[ name ];
 		}
 	},
 
@@ -2479,44 +4494,21 @@ jQuery.extend({
 			get: function( elem ) {
 				// elem.tabIndex doesn't always return the correct value when it hasn't been explicitly set
 				// http://fluidproject.org/blog/2008/01/09/getting-setting-and-removing-tabindex-values-with-javascript/
-				var attributeNode = elem.getAttributeNode("tabindex");
+				// Use proper attribute retrieval(#12072)
+				var tabindex = jQuery.find.attr( elem, "tabindex" );
 
-				return attributeNode && attributeNode.specified ?
-					parseInt( attributeNode.value, 10 ) :
+				return tabindex ?
+					parseInt( tabindex, 10 ) :
 					rfocusable.test( elem.nodeName ) || rclickable.test( elem.nodeName ) && elem.href ?
 						0 :
-						undefined;
+						-1;
 			}
 		}
 	}
 });
 
-// Hook for boolean attributes
+// Hooks for boolean attributes
 boolHook = {
-	get: function( elem, name ) {
-		var
-			// Use .prop to determine if this attribute is understood as boolean
-			prop = jQuery.prop( elem, name ),
-
-			// Fetch it accordingly
-			attr = typeof prop === "boolean" && elem.getAttribute( name ),
-			detail = typeof prop === "boolean" ?
-
-				getSetInput && getSetAttribute ?
-					attr != null :
-					// oldIE fabricates an empty string for missing boolean attributes
-					// and conflates checked/selected into attroperties
-					ruseDefault.test( name ) ?
-						elem[ jQuery.camelCase( "default-" + name ) ] :
-						!!attr :
-
-				// fetch an attribute node for properties not recognized as boolean
-				elem.getAttributeNode( name );
-
-		return detail && detail.value !== false ?
-			name.toLowerCase() :
-			undefined;
-	},
 	set: function( elem, value, name ) {
 		if ( value === false ) {
 			// Remove boolean attributes when set to false
@@ -2533,19 +4525,35 @@ boolHook = {
 		return name;
 	}
 };
+jQuery.each( jQuery.expr.match.bool.source.match( /\w+/g ), function( i, name ) {
+	var getter = jQuery.expr.attrHandle[ name ] || jQuery.find.attr;
 
-// fix oldIE value attroperty
+	jQuery.expr.attrHandle[ name ] = getSetInput && getSetAttribute || !ruseDefault.test( name ) ?
+		function( elem, name, isXML ) {
+			var fn = jQuery.expr.attrHandle[ name ],
+				ret = isXML ?
+					undefined :
+					/* jshint eqeqeq: false */
+					(jQuery.expr.attrHandle[ name ] = undefined) !=
+						getter( elem, name, isXML ) ?
+
+						name.toLowerCase() :
+						null;
+			jQuery.expr.attrHandle[ name ] = fn;
+			return ret;
+		} :
+		function( elem, name, isXML ) {
+			return isXML ?
+				undefined :
+				elem[ jQuery.camelCase( "default-" + name ) ] ?
+					name.toLowerCase() :
+					null;
+		};
+});
+
+// fix oldIE attroperties
 if ( !getSetInput || !getSetAttribute ) {
 	jQuery.attrHooks.value = {
-		get: function( elem, name ) {
-			var ret = elem.getAttributeNode( name );
-			return jQuery.nodeName( elem, "input" ) ?
-
-				// Ignore the value *property* by using defaultValue
-				elem.defaultValue :
-
-				ret && ret.specified ? ret.value : undefined;
-		},
 		set: function( elem, value, name ) {
 			if ( jQuery.nodeName( elem, "input" ) ) {
 				// Does not return so that setAttribute is also used
@@ -2563,13 +4571,7 @@ if ( !getSetAttribute ) {
 
 	// Use this for any attribute in IE6/7
 	// This fixes almost every IE6/7 issue
-	nodeHook = jQuery.valHooks.button = {
-		get: function( elem, name ) {
-			var ret = elem.getAttributeNode( name );
-			return ret && ( name === "id" || name === "name" || name === "coords" ? ret.value !== "" : ret.specified ) ?
-				ret.value :
-				undefined;
-		},
+	nodeHook = {
 		set: function( elem, value, name ) {
 			// Set the existing or create a new attribute node
 			var ret = elem.getAttributeNode( name );
@@ -2587,11 +4589,29 @@ if ( !getSetAttribute ) {
 				undefined;
 		}
 	};
+	jQuery.expr.attrHandle.id = jQuery.expr.attrHandle.name = jQuery.expr.attrHandle.coords =
+		// Some attributes are constructed with empty-string values when not defined
+		function( elem, name, isXML ) {
+			var ret;
+			return isXML ?
+				undefined :
+				(ret = elem.getAttributeNode( name )) && ret.value !== "" ?
+					ret.value :
+					null;
+		};
+	jQuery.valHooks.button = {
+		get: function( elem, name ) {
+			var ret = elem.getAttributeNode( name );
+			return ret && ret.specified ?
+				ret.value :
+				undefined;
+		},
+		set: nodeHook.set
+	};
 
 	// Set contenteditable to false on removals(#10429)
 	// Setting to empty string throws an error as an invalid value
 	jQuery.attrHooks.contenteditable = {
-		get: nodeHook.get,
 		set: function( elem, value, name ) {
 			nodeHook.set( elem, value === "" ? false : value, name );
 		}
@@ -2600,14 +4620,14 @@ if ( !getSetAttribute ) {
 	// Set width and height to auto instead of 0 on empty string( Bug #8150 )
 	// This is for removals
 	jQuery.each([ "width", "height" ], function( i, name ) {
-		jQuery.attrHooks[ name ] = jQuery.extend( jQuery.attrHooks[ name ], {
+		jQuery.attrHooks[ name ] = {
 			set: function( elem, value ) {
 				if ( value === "" ) {
 					elem.setAttribute( name, "auto" );
 					return value;
 				}
 			}
-		});
+		};
 	});
 }
 
@@ -2615,15 +4635,6 @@ if ( !getSetAttribute ) {
 // Some attributes require a special call on IE
 // http://msdn.microsoft.com/en-us/library/ms536429%28VS.85%29.aspx
 if ( !jQuery.support.hrefNormalized ) {
-	jQuery.each([ "href", "src", "width", "height" ], function( i, name ) {
-		jQuery.attrHooks[ name ] = jQuery.extend( jQuery.attrHooks[ name ], {
-			get: function( elem ) {
-				var ret = elem.getAttribute( name, 2 );
-				return ret == null ? undefined : ret;
-			}
-		});
-	});
-
 	// href/src property should get the full normalized URL (#10299/#12915)
 	jQuery.each([ "href", "src" ], function( i, name ) {
 		jQuery.propHooks[ name ] = {
@@ -2651,7 +4662,7 @@ if ( !jQuery.support.style ) {
 // Safari mis-reports the default selected property of an option
 // Accessing the parent's selectedIndex property fixes it
 if ( !jQuery.support.optSelected ) {
-	jQuery.propHooks.selected = jQuery.extend( jQuery.propHooks.selected, {
+	jQuery.propHooks.selected = {
 		get: function( elem ) {
 			var parent = elem.parentNode;
 
@@ -2665,8 +4676,23 @@ if ( !jQuery.support.optSelected ) {
 			}
 			return null;
 		}
-	});
+	};
 }
+
+jQuery.each([
+	"tabIndex",
+	"readOnly",
+	"maxLength",
+	"cellSpacing",
+	"cellPadding",
+	"rowSpan",
+	"colSpan",
+	"useMap",
+	"frameBorder",
+	"contentEditable"
+], function() {
+	jQuery.propFix[ this.toLowerCase() ] = this;
+});
 
 // IE6/7 call enctype encoding
 if ( !jQuery.support.enctype ) {
@@ -2674,24 +4700,21 @@ if ( !jQuery.support.enctype ) {
 }
 
 // Radios and checkboxes getter/setter
-if ( !jQuery.support.checkOn ) {
-	jQuery.each([ "radio", "checkbox" ], function() {
-		jQuery.valHooks[ this ] = {
-			get: function( elem ) {
-				// Handle the case where in Webkit "" is returned instead of "on" if a value isn't specified
-				return elem.getAttribute("value") === null ? "on" : elem.value;
-			}
-		};
-	});
-}
 jQuery.each([ "radio", "checkbox" ], function() {
-	jQuery.valHooks[ this ] = jQuery.extend( jQuery.valHooks[ this ], {
+	jQuery.valHooks[ this ] = {
 		set: function( elem, value ) {
 			if ( jQuery.isArray( value ) ) {
 				return ( elem.checked = jQuery.inArray( jQuery(elem).val(), value ) >= 0 );
 			}
 		}
-	});
+	};
+	if ( !jQuery.support.checkOn ) {
+		jQuery.valHooks[ this ].get = function( elem ) {
+			// Support: Webkit
+			// "" is returned instead of "on" if a value isn't specified
+			return elem.getAttribute("value") === null ? "on" : elem.value;
+		};
+	}
 });
 var rformElems = /^(?:input|select|textarea)$/i,
 	rkeyEvent = /^key/,
@@ -2705,6 +4728,12 @@ function returnTrue() {
 
 function returnFalse() {
 	return false;
+}
+
+function safeActiveElement() {
+	try {
+		return document.activeElement;
+	} catch ( err ) { }
 }
 
 /*
@@ -2755,13 +4784,17 @@ jQuery.event = {
 		}
 
 		// Handle multiple events separated by a space
-		// jQuery(...).bind("mouseover mouseout", fn);
 		types = ( types || "" ).match( core_rnotwhite ) || [""];
 		t = types.length;
 		while ( t-- ) {
 			tmp = rtypenamespace.exec( types[t] ) || [];
 			type = origType = tmp[1];
 			namespaces = ( tmp[2] || "" ).split( "." ).sort();
+
+			// There *must* be a type, no attaching namespace-only handlers
+			if ( !type ) {
+				continue;
+			}
 
 			// If event changes its type, use the special event handlers for the changed type
 			special = jQuery.event.special[ type ] || {};
@@ -2930,7 +4963,8 @@ jQuery.event = {
 			event :
 			new jQuery.Event( type, typeof event === "object" && event );
 
-		event.isTrigger = true;
+		// Trigger bitmask: & 1 for native handlers; & 2 for jQuery (always true)
+		event.isTrigger = onlyHandlers ? 2 : 3;
 		event.namespace = namespaces.join(".");
 		event.namespace_re = event.namespace ?
 			new RegExp( "(^|\\.)" + namespaces.join("\\.(?:.*\\.|)") + "(\\.|$)" ) :
@@ -2997,8 +5031,8 @@ jQuery.event = {
 		// If nobody prevented the default action, do it now
 		if ( !onlyHandlers && !event.isDefaultPrevented() ) {
 
-			if ( (!special._default || special._default.apply( elem.ownerDocument, data ) === false) &&
-				!(type === "click" && jQuery.nodeName( elem, "a" )) && jQuery.acceptData( elem ) ) {
+			if ( (!special._default || special._default.apply( eventPath.pop(), data ) === false) &&
+				jQuery.acceptData( elem ) ) {
 
 				// Call a native DOM method on the target with the same name name as the event.
 				// Can't use an .isFunction() check here because IE6/7 fails that test.
@@ -3102,7 +5136,9 @@ jQuery.event = {
 		// Avoid non-left-click bubbling in Firefox (#3861)
 		if ( delegateCount && cur.nodeType && (!event.button || event.type !== "click") ) {
 
+			/* jshint eqeqeq: false */
 			for ( ; cur != this; cur = cur.parentNode || this ) {
+				/* jshint eqeqeq: true */
 
 				// Don't check non-elements (#13208)
 				// Don't process clicks on disabled elements (#6911, #8165, #11382, #11764)
@@ -3239,19 +5275,10 @@ jQuery.event = {
 			// Prevent triggered image.load events from bubbling to window.load
 			noBubble: true
 		},
-		click: {
-			// For checkbox, fire native event so checked state will be right
-			trigger: function() {
-				if ( jQuery.nodeName( this, "input" ) && this.type === "checkbox" && this.click ) {
-					this.click();
-					return false;
-				}
-			}
-		},
 		focus: {
 			// Fire native event if possible so blur/focus sequence is correct
 			trigger: function() {
-				if ( this !== document.activeElement && this.focus ) {
+				if ( this !== safeActiveElement() && this.focus ) {
 					try {
 						this.focus();
 						return false;
@@ -3266,12 +5293,26 @@ jQuery.event = {
 		},
 		blur: {
 			trigger: function() {
-				if ( this === document.activeElement && this.blur ) {
+				if ( this === safeActiveElement() && this.blur ) {
 					this.blur();
 					return false;
 				}
 			},
 			delegateType: "focusout"
+		},
+		click: {
+			// For checkbox, fire native event so checked state will be right
+			trigger: function() {
+				if ( jQuery.nodeName( this, "input" ) && this.type === "checkbox" && this.click ) {
+					this.click();
+					return false;
+				}
+			},
+
+			// For cross-browser consistency, don't fire native .click() on links
+			_default: function( event ) {
+				return jQuery.nodeName( event.target, "a" );
+			}
 		},
 
 		beforeunload: {
@@ -3292,7 +5333,8 @@ jQuery.event = {
 		var e = jQuery.extend(
 			new jQuery.Event(),
 			event,
-			{ type: type,
+			{
+				type: type,
 				isSimulated: true,
 				originalEvent: {}
 			}
@@ -3657,21 +5699,6 @@ jQuery.fn.extend({
 		});
 	},
 
-	bind: function( types, data, fn ) {
-		return this.on( types, null, data, fn );
-	},
-	unbind: function( types, fn ) {
-		return this.off( types, null, fn );
-	},
-
-	delegate: function( selector, types, data, fn ) {
-		return this.on( types, selector, data, fn );
-	},
-	undelegate: function( selector, types, fn ) {
-		// ( namespace ) or ( selector, types [, fn] )
-		return arguments.length === 1 ? this.off( selector, "**" ) : this.off( types, selector || "**", fn );
-	},
-
 	trigger: function( type, data ) {
 		return this.each(function() {
 			jQuery.event.trigger( type, data, this );
@@ -3684,1868 +5711,8 @@ jQuery.fn.extend({
 		}
 	}
 });
-/*!
- * Sizzle CSS Selector Engine
- * Copyright 2012 jQuery Foundation and other contributors
- * Released under the MIT license
- * http://sizzlejs.com/
- */
-(function( window, undefined ) {
-
-var i,
-	cachedruns,
-	Expr,
-	getText,
-	isXML,
-	compile,
-	hasDuplicate,
-	outermostContext,
-
-	// Local document vars
-	setDocument,
-	document,
-	docElem,
-	documentIsXML,
-	rbuggyQSA,
-	rbuggyMatches,
-	matches,
-	contains,
-	sortOrder,
-
-	// Instance-specific data
-	expando = "sizzle" + -(new Date()),
-	preferredDoc = window.document,
-	support = {},
-	dirruns = 0,
-	done = 0,
-	classCache = createCache(),
-	tokenCache = createCache(),
-	compilerCache = createCache(),
-
-	// General-purpose constants
-	strundefined = typeof undefined,
-	MAX_NEGATIVE = 1 << 31,
-
-	// Array methods
-	arr = [],
-	pop = arr.pop,
-	push = arr.push,
-	slice = arr.slice,
-	// Use a stripped-down indexOf if we can't use a native one
-	indexOf = arr.indexOf || function( elem ) {
-		var i = 0,
-			len = this.length;
-		for ( ; i < len; i++ ) {
-			if ( this[i] === elem ) {
-				return i;
-			}
-		}
-		return -1;
-	},
-
-
-	// Regular expressions
-
-	// Whitespace characters http://www.w3.org/TR/css3-selectors/#whitespace
-	whitespace = "[\\x20\\t\\r\\n\\f]",
-	// http://www.w3.org/TR/css3-syntax/#characters
-	characterEncoding = "(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+",
-
-	// Loosely modeled on CSS identifier characters
-	// An unquoted value should be a CSS identifier http://www.w3.org/TR/css3-selectors/#attribute-selectors
-	// Proper syntax: http://www.w3.org/TR/CSS21/syndata.html#value-def-identifier
-	identifier = characterEncoding.replace( "w", "w#" ),
-
-	// Acceptable operators http://www.w3.org/TR/selectors/#attribute-selectors
-	operators = "([*^$|!~]?=)",
-	attributes = "\\[" + whitespace + "*(" + characterEncoding + ")" + whitespace +
-		"*(?:" + operators + whitespace + "*(?:(['\"])((?:\\\\.|[^\\\\])*?)\\3|(" + identifier + ")|)|)" + whitespace + "*\\]",
-
-	// Prefer arguments quoted,
-	//   then not containing pseudos/brackets,
-	//   then attribute selectors/non-parenthetical expressions,
-	//   then anything else
-	// These preferences are here to reduce the number of selectors
-	//   needing tokenize in the PSEUDO preFilter
-	pseudos = ":(" + characterEncoding + ")(?:\\(((['\"])((?:\\\\.|[^\\\\])*?)\\3|((?:\\\\.|[^\\\\()[\\]]|" + attributes.replace( 3, 8 ) + ")*)|.*)\\)|)",
-
-	// Leading and non-escaped trailing whitespace, capturing some non-whitespace characters preceding the latter
-	rtrim = new RegExp( "^" + whitespace + "+|((?:^|[^\\\\])(?:\\\\.)*)" + whitespace + "+$", "g" ),
-
-	rcomma = new RegExp( "^" + whitespace + "*," + whitespace + "*" ),
-	rcombinators = new RegExp( "^" + whitespace + "*([\\x20\\t\\r\\n\\f>+~])" + whitespace + "*" ),
-	rpseudo = new RegExp( pseudos ),
-	ridentifier = new RegExp( "^" + identifier + "$" ),
-
-	matchExpr = {
-		"ID": new RegExp( "^#(" + characterEncoding + ")" ),
-		"CLASS": new RegExp( "^\\.(" + characterEncoding + ")" ),
-		"NAME": new RegExp( "^\\[name=['\"]?(" + characterEncoding + ")['\"]?\\]" ),
-		"TAG": new RegExp( "^(" + characterEncoding.replace( "w", "w*" ) + ")" ),
-		"ATTR": new RegExp( "^" + attributes ),
-		"PSEUDO": new RegExp( "^" + pseudos ),
-		"CHILD": new RegExp( "^:(only|first|last|nth|nth-last)-(child|of-type)(?:\\(" + whitespace +
-			"*(even|odd|(([+-]|)(\\d*)n|)" + whitespace + "*(?:([+-]|)" + whitespace +
-			"*(\\d+)|))" + whitespace + "*\\)|)", "i" ),
-		// For use in libraries implementing .is()
-		// We use this for POS matching in `select`
-		"needsContext": new RegExp( "^" + whitespace + "*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(" +
-			whitespace + "*((?:-\\d)?\\d*)" + whitespace + "*\\)|)(?=[^-]|$)", "i" )
-	},
-
-	rsibling = /[\x20\t\r\n\f]*[+~]/,
-
-	rnative = /^[^{]+\{\s*\[native code/,
-
-	// Easily-parseable/retrievable ID or TAG or CLASS selectors
-	rquickExpr = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/,
-
-	rinputs = /^(?:input|select|textarea|button)$/i,
-	rheader = /^h\d$/i,
-
-	rescape = /'|\\/g,
-	rattributeQuotes = /\=[\x20\t\r\n\f]*([^'"\]]*)[\x20\t\r\n\f]*\]/g,
-
-	// CSS escapes http://www.w3.org/TR/CSS21/syndata.html#escaped-characters
-	runescape = /\\([\da-fA-F]{1,6}[\x20\t\r\n\f]?|.)/g,
-	funescape = function( _, escaped ) {
-		var high = "0x" + escaped - 0x10000;
-		// NaN means non-codepoint
-		return high !== high ?
-			escaped :
-			// BMP codepoint
-			high < 0 ?
-				String.fromCharCode( high + 0x10000 ) :
-				// Supplemental Plane codepoint (surrogate pair)
-				String.fromCharCode( high >> 10 | 0xD800, high & 0x3FF | 0xDC00 );
-	};
-
-// Use a stripped-down slice if we can't use a native one
-try {
-	slice.call( preferredDoc.documentElement.childNodes, 0 )[0].nodeType;
-} catch ( e ) {
-	slice = function( i ) {
-		var elem,
-			results = [];
-		while ( (elem = this[i++]) ) {
-			results.push( elem );
-		}
-		return results;
-	};
-}
-
-/**
- * For feature detection
- * @param {Function} fn The function to test for native support
- */
-function isNative( fn ) {
-	return rnative.test( fn + "" );
-}
-
-/**
- * Create key-value caches of limited size
- * @returns {Function(string, Object)} Returns the Object data after storing it on itself with
- *	property name the (space-suffixed) string and (if the cache is larger than Expr.cacheLength)
- *	deleting the oldest entry
- */
-function createCache() {
-	var cache,
-		keys = [];
-
-	return (cache = function( key, value ) {
-		// Use (key + " ") to avoid collision with native prototype properties (see Issue #157)
-		if ( keys.push( key += " " ) > Expr.cacheLength ) {
-			// Only keep the most recent entries
-			delete cache[ keys.shift() ];
-		}
-		return (cache[ key ] = value);
-	});
-}
-
-/**
- * Mark a function for special use by Sizzle
- * @param {Function} fn The function to mark
- */
-function markFunction( fn ) {
-	fn[ expando ] = true;
-	return fn;
-}
-
-/**
- * Support testing using an element
- * @param {Function} fn Passed the created div and expects a boolean result
- */
-function assert( fn ) {
-	var div = document.createElement("div");
-
-	try {
-		return fn( div );
-	} catch (e) {
-		return false;
-	} finally {
-		// release memory in IE
-		div = null;
-	}
-}
-
-function Sizzle( selector, context, results, seed ) {
-	var match, elem, m, nodeType,
-		// QSA vars
-		i, groups, old, nid, newContext, newSelector;
-
-	if ( ( context ? context.ownerDocument || context : preferredDoc ) !== document ) {
-		setDocument( context );
-	}
-
-	context = context || document;
-	results = results || [];
-
-	if ( !selector || typeof selector !== "string" ) {
-		return results;
-	}
-
-	if ( (nodeType = context.nodeType) !== 1 && nodeType !== 9 ) {
-		return [];
-	}
-
-	if ( !documentIsXML && !seed ) {
-
-		// Shortcuts
-		if ( (match = rquickExpr.exec( selector )) ) {
-			// Speed-up: Sizzle("#ID")
-			if ( (m = match[1]) ) {
-				if ( nodeType === 9 ) {
-					elem = context.getElementById( m );
-					// Check parentNode to catch when Blackberry 4.6 returns
-					// nodes that are no longer in the document #6963
-					if ( elem && elem.parentNode ) {
-						// Handle the case where IE, Opera, and Webkit return items
-						// by name instead of ID
-						if ( elem.id === m ) {
-							results.push( elem );
-							return results;
-						}
-					} else {
-						return results;
-					}
-				} else {
-					// Context is not a document
-					if ( context.ownerDocument && (elem = context.ownerDocument.getElementById( m )) &&
-						contains( context, elem ) && elem.id === m ) {
-						results.push( elem );
-						return results;
-					}
-				}
-
-			// Speed-up: Sizzle("TAG")
-			} else if ( match[2] ) {
-				push.apply( results, slice.call(context.getElementsByTagName( selector ), 0) );
-				return results;
-
-			// Speed-up: Sizzle(".CLASS")
-			} else if ( (m = match[3]) && support.getByClassName && context.getElementsByClassName ) {
-				push.apply( results, slice.call(context.getElementsByClassName( m ), 0) );
-				return results;
-			}
-		}
-
-		// QSA path
-		if ( support.qsa && !rbuggyQSA.test(selector) ) {
-			old = true;
-			nid = expando;
-			newContext = context;
-			newSelector = nodeType === 9 && selector;
-
-			// qSA works strangely on Element-rooted queries
-			// We can work around this by specifying an extra ID on the root
-			// and working up from there (Thanks to Andrew Dupont for the technique)
-			// IE 8 doesn't work on object elements
-			if ( nodeType === 1 && context.nodeName.toLowerCase() !== "object" ) {
-				groups = tokenize( selector );
-
-				if ( (old = context.getAttribute("id")) ) {
-					nid = old.replace( rescape, "\\$&" );
-				} else {
-					context.setAttribute( "id", nid );
-				}
-				nid = "[id='" + nid + "'] ";
-
-				i = groups.length;
-				while ( i-- ) {
-					groups[i] = nid + toSelector( groups[i] );
-				}
-				newContext = rsibling.test( selector ) && context.parentNode || context;
-				newSelector = groups.join(",");
-			}
-
-			if ( newSelector ) {
-				try {
-					push.apply( results, slice.call( newContext.querySelectorAll(
-						newSelector
-					), 0 ) );
-					return results;
-				} catch(qsaError) {
-				} finally {
-					if ( !old ) {
-						context.removeAttribute("id");
-					}
-				}
-			}
-		}
-	}
-
-	// All others
-	return select( selector.replace( rtrim, "$1" ), context, results, seed );
-}
-
-/**
- * Detect xml
- * @param {Element|Object} elem An element or a document
- */
-isXML = Sizzle.isXML = function( elem ) {
-	// documentElement is verified for cases where it doesn't yet exist
-	// (such as loading iframes in IE - #4833)
-	var documentElement = elem && (elem.ownerDocument || elem).documentElement;
-	return documentElement ? documentElement.nodeName !== "HTML" : false;
-};
-
-/**
- * Sets document-related variables once based on the current document
- * @param {Element|Object} [doc] An element or document object to use to set the document
- * @returns {Object} Returns the current document
- */
-setDocument = Sizzle.setDocument = function( node ) {
-	var doc = node ? node.ownerDocument || node : preferredDoc;
-
-	// If no document and documentElement is available, return
-	if ( doc === document || doc.nodeType !== 9 || !doc.documentElement ) {
-		return document;
-	}
-
-	// Set our document
-	document = doc;
-	docElem = doc.documentElement;
-
-	// Support tests
-	documentIsXML = isXML( doc );
-
-	// Check if getElementsByTagName("*") returns only elements
-	support.tagNameNoComments = assert(function( div ) {
-		div.appendChild( doc.createComment("") );
-		return !div.getElementsByTagName("*").length;
-	});
-
-	// Check if attributes should be retrieved by attribute nodes
-	support.attributes = assert(function( div ) {
-		div.innerHTML = "<select></select>";
-		var type = typeof div.lastChild.getAttribute("multiple");
-		// IE8 returns a string for some attributes even when not present
-		return type !== "boolean" && type !== "string";
-	});
-
-	// Check if getElementsByClassName can be trusted
-	support.getByClassName = assert(function( div ) {
-		// Opera can't find a second classname (in 9.6)
-		div.innerHTML = "<div class='hidden e'></div><div class='hidden'></div>";
-		if ( !div.getElementsByClassName || !div.getElementsByClassName("e").length ) {
-			return false;
-		}
-
-		// Safari 3.2 caches class attributes and doesn't catch changes
-		div.lastChild.className = "e";
-		return div.getElementsByClassName("e").length === 2;
-	});
-
-	// Check if getElementById returns elements by name
-	// Check if getElementsByName privileges form controls or returns elements by ID
-	support.getByName = assert(function( div ) {
-		// Inject content
-		div.id = expando + 0;
-		div.innerHTML = "<a name='" + expando + "'></a><div name='" + expando + "'></div>";
-		docElem.insertBefore( div, docElem.firstChild );
-
-		// Test
-		var pass = doc.getElementsByName &&
-			// buggy browsers will return fewer than the correct 2
-			doc.getElementsByName( expando ).length === 2 +
-			// buggy browsers will return more than the correct 0
-			doc.getElementsByName( expando + 0 ).length;
-		support.getIdNotName = !doc.getElementById( expando );
-
-		// Cleanup
-		docElem.removeChild( div );
-
-		return pass;
-	});
-
-	// IE6/7 return modified attributes
-	Expr.attrHandle = assert(function( div ) {
-		div.innerHTML = "<a href='#'></a>";
-		return div.firstChild && typeof div.firstChild.getAttribute !== strundefined &&
-			div.firstChild.getAttribute("href") === "#";
-	}) ?
-		{} :
-		{
-			"href": function( elem ) {
-				return elem.getAttribute( "href", 2 );
-			},
-			"type": function( elem ) {
-				return elem.getAttribute("type");
-			}
-		};
-
-	// ID find and filter
-	if ( support.getIdNotName ) {
-		Expr.find["ID"] = function( id, context ) {
-			if ( typeof context.getElementById !== strundefined && !documentIsXML ) {
-				var m = context.getElementById( id );
-				// Check parentNode to catch when Blackberry 4.6 returns
-				// nodes that are no longer in the document #6963
-				return m && m.parentNode ? [m] : [];
-			}
-		};
-		Expr.filter["ID"] = function( id ) {
-			var attrId = id.replace( runescape, funescape );
-			return function( elem ) {
-				return elem.getAttribute("id") === attrId;
-			};
-		};
-	} else {
-		Expr.find["ID"] = function( id, context ) {
-			if ( typeof context.getElementById !== strundefined && !documentIsXML ) {
-				var m = context.getElementById( id );
-
-				return m ?
-					m.id === id || typeof m.getAttributeNode !== strundefined && m.getAttributeNode("id").value === id ?
-						[m] :
-						undefined :
-					[];
-			}
-		};
-		Expr.filter["ID"] =  function( id ) {
-			var attrId = id.replace( runescape, funescape );
-			return function( elem ) {
-				var node = typeof elem.getAttributeNode !== strundefined && elem.getAttributeNode("id");
-				return node && node.value === attrId;
-			};
-		};
-	}
-
-	// Tag
-	Expr.find["TAG"] = support.tagNameNoComments ?
-		function( tag, context ) {
-			if ( typeof context.getElementsByTagName !== strundefined ) {
-				return context.getElementsByTagName( tag );
-			}
-		} :
-		function( tag, context ) {
-			var elem,
-				tmp = [],
-				i = 0,
-				results = context.getElementsByTagName( tag );
-
-			// Filter out possible comments
-			if ( tag === "*" ) {
-				while ( (elem = results[i++]) ) {
-					if ( elem.nodeType === 1 ) {
-						tmp.push( elem );
-					}
-				}
-
-				return tmp;
-			}
-			return results;
-		};
-
-	// Name
-	Expr.find["NAME"] = support.getByName && function( tag, context ) {
-		if ( typeof context.getElementsByName !== strundefined ) {
-			return context.getElementsByName( name );
-		}
-	};
-
-	// Class
-	Expr.find["CLASS"] = support.getByClassName && function( className, context ) {
-		if ( typeof context.getElementsByClassName !== strundefined && !documentIsXML ) {
-			return context.getElementsByClassName( className );
-		}
-	};
-
-	// QSA and matchesSelector support
-
-	// matchesSelector(:active) reports false when true (IE9/Opera 11.5)
-	rbuggyMatches = [];
-
-	// qSa(:focus) reports false when true (Chrome 21),
-	// no need to also add to buggyMatches since matches checks buggyQSA
-	// A support test would require too much code (would include document ready)
-	rbuggyQSA = [ ":focus" ];
-
-	if ( (support.qsa = isNative(doc.querySelectorAll)) ) {
-		// Build QSA regex
-		// Regex strategy adopted from Diego Perini
-		assert(function( div ) {
-			// Select is set to empty string on purpose
-			// This is to test IE's treatment of not explictly
-			// setting a boolean content attribute,
-			// since its presence should be enough
-			// http://bugs.jquery.com/ticket/12359
-			div.innerHTML = "<select><option selected=''></option></select>";
-
-			// IE8 - Some boolean attributes are not treated correctly
-			if ( !div.querySelectorAll("[selected]").length ) {
-				rbuggyQSA.push( "\\[" + whitespace + "*(?:checked|disabled|ismap|multiple|readonly|selected|value)" );
-			}
-
-			// Webkit/Opera - :checked should return selected option elements
-			// http://www.w3.org/TR/2011/REC-css3-selectors-20110929/#checked
-			// IE8 throws error here and will not see later tests
-			if ( !div.querySelectorAll(":checked").length ) {
-				rbuggyQSA.push(":checked");
-			}
-		});
-
-		assert(function( div ) {
-
-			// Opera 10-12/IE8 - ^= $= *= and empty values
-			// Should not select anything
-			div.innerHTML = "<input type='hidden' i=''/>";
-			if ( div.querySelectorAll("[i^='']").length ) {
-				rbuggyQSA.push( "[*^$]=" + whitespace + "*(?:\"\"|'')" );
-			}
-
-			// FF 3.5 - :enabled/:disabled and hidden elements (hidden elements are still enabled)
-			// IE8 throws error here and will not see later tests
-			if ( !div.querySelectorAll(":enabled").length ) {
-				rbuggyQSA.push( ":enabled", ":disabled" );
-			}
-
-			// Opera 10-11 does not throw on post-comma invalid pseudos
-			div.querySelectorAll("*,:x");
-			rbuggyQSA.push(",.*:");
-		});
-	}
-
-	if ( (support.matchesSelector = isNative( (matches = docElem.matchesSelector ||
-		docElem.mozMatchesSelector ||
-		docElem.webkitMatchesSelector ||
-		docElem.oMatchesSelector ||
-		docElem.msMatchesSelector) )) ) {
-
-		assert(function( div ) {
-			// Check to see if it's possible to do matchesSelector
-			// on a disconnected node (IE 9)
-			support.disconnectedMatch = matches.call( div, "div" );
-
-			// This should fail with an exception
-			// Gecko does not error, returns false instead
-			matches.call( div, "[s!='']:x" );
-			rbuggyMatches.push( "!=", pseudos );
-		});
-	}
-
-	rbuggyQSA = new RegExp( rbuggyQSA.join("|") );
-	rbuggyMatches = new RegExp( rbuggyMatches.join("|") );
-
-	// Element contains another
-	// Purposefully does not implement inclusive descendent
-	// As in, an element does not contain itself
-	contains = isNative(docElem.contains) || docElem.compareDocumentPosition ?
-		function( a, b ) {
-			var adown = a.nodeType === 9 ? a.documentElement : a,
-				bup = b && b.parentNode;
-			return a === bup || !!( bup && bup.nodeType === 1 && (
-				adown.contains ?
-					adown.contains( bup ) :
-					a.compareDocumentPosition && a.compareDocumentPosition( bup ) & 16
-			));
-		} :
-		function( a, b ) {
-			if ( b ) {
-				while ( (b = b.parentNode) ) {
-					if ( b === a ) {
-						return true;
-					}
-				}
-			}
-			return false;
-		};
-
-	// Document order sorting
-	sortOrder = docElem.compareDocumentPosition ?
-	function( a, b ) {
-		var compare;
-
-		if ( a === b ) {
-			hasDuplicate = true;
-			return 0;
-		}
-
-		if ( (compare = b.compareDocumentPosition && a.compareDocumentPosition && a.compareDocumentPosition( b )) ) {
-			if ( compare & 1 || a.parentNode && a.parentNode.nodeType === 11 ) {
-				if ( a === doc || contains( preferredDoc, a ) ) {
-					return -1;
-				}
-				if ( b === doc || contains( preferredDoc, b ) ) {
-					return 1;
-				}
-				return 0;
-			}
-			return compare & 4 ? -1 : 1;
-		}
-
-		return a.compareDocumentPosition ? -1 : 1;
-	} :
-	function( a, b ) {
-		var cur,
-			i = 0,
-			aup = a.parentNode,
-			bup = b.parentNode,
-			ap = [ a ],
-			bp = [ b ];
-
-		// Exit early if the nodes are identical
-		if ( a === b ) {
-			hasDuplicate = true;
-			return 0;
-
-		// Parentless nodes are either documents or disconnected
-		} else if ( !aup || !bup ) {
-			return a === doc ? -1 :
-				b === doc ? 1 :
-				aup ? -1 :
-				bup ? 1 :
-				0;
-
-		// If the nodes are siblings, we can do a quick check
-		} else if ( aup === bup ) {
-			return siblingCheck( a, b );
-		}
-
-		// Otherwise we need full lists of their ancestors for comparison
-		cur = a;
-		while ( (cur = cur.parentNode) ) {
-			ap.unshift( cur );
-		}
-		cur = b;
-		while ( (cur = cur.parentNode) ) {
-			bp.unshift( cur );
-		}
-
-		// Walk down the tree looking for a discrepancy
-		while ( ap[i] === bp[i] ) {
-			i++;
-		}
-
-		return i ?
-			// Do a sibling check if the nodes have a common ancestor
-			siblingCheck( ap[i], bp[i] ) :
-
-			// Otherwise nodes in our document sort first
-			ap[i] === preferredDoc ? -1 :
-			bp[i] === preferredDoc ? 1 :
-			0;
-	};
-
-	// Always assume the presence of duplicates if sort doesn't
-	// pass them to our comparison function (as in Google Chrome).
-	hasDuplicate = false;
-	[0, 0].sort( sortOrder );
-	support.detectDuplicates = hasDuplicate;
-
-	return document;
-};
-
-Sizzle.matches = function( expr, elements ) {
-	return Sizzle( expr, null, null, elements );
-};
-
-Sizzle.matchesSelector = function( elem, expr ) {
-	// Set document vars if needed
-	if ( ( elem.ownerDocument || elem ) !== document ) {
-		setDocument( elem );
-	}
-
-	// Make sure that attribute selectors are quoted
-	expr = expr.replace( rattributeQuotes, "='$1']" );
-
-	// rbuggyQSA always contains :focus, so no need for an existence check
-	if ( support.matchesSelector && !documentIsXML && (!rbuggyMatches || !rbuggyMatches.test(expr)) && !rbuggyQSA.test(expr) ) {
-		try {
-			var ret = matches.call( elem, expr );
-
-			// IE 9's matchesSelector returns false on disconnected nodes
-			if ( ret || support.disconnectedMatch ||
-					// As well, disconnected nodes are said to be in a document
-					// fragment in IE 9
-					elem.document && elem.document.nodeType !== 11 ) {
-				return ret;
-			}
-		} catch(e) {}
-	}
-
-	return Sizzle( expr, document, null, [elem] ).length > 0;
-};
-
-Sizzle.contains = function( context, elem ) {
-	// Set document vars if needed
-	if ( ( context.ownerDocument || context ) !== document ) {
-		setDocument( context );
-	}
-	return contains( context, elem );
-};
-
-Sizzle.attr = function( elem, name ) {
-	var val;
-
-	// Set document vars if needed
-	if ( ( elem.ownerDocument || elem ) !== document ) {
-		setDocument( elem );
-	}
-
-	if ( !documentIsXML ) {
-		name = name.toLowerCase();
-	}
-	if ( (val = Expr.attrHandle[ name ]) ) {
-		return val( elem );
-	}
-	if ( documentIsXML || support.attributes ) {
-		return elem.getAttribute( name );
-	}
-	return ( (val = elem.getAttributeNode( name )) || elem.getAttribute( name ) ) && elem[ name ] === true ?
-		name :
-		val && val.specified ? val.value : null;
-};
-
-Sizzle.error = function( msg ) {
-	throw new Error( "Syntax error, unrecognized expression: " + msg );
-};
-
-// Document sorting and removing duplicates
-Sizzle.uniqueSort = function( results ) {
-	var elem,
-		duplicates = [],
-		i = 1,
-		j = 0;
-
-	// Unless we *know* we can detect duplicates, assume their presence
-	hasDuplicate = !support.detectDuplicates;
-	results.sort( sortOrder );
-
-	if ( hasDuplicate ) {
-		for ( ; (elem = results[i]); i++ ) {
-			if ( elem === results[ i - 1 ] ) {
-				j = duplicates.push( i );
-			}
-		}
-		while ( j-- ) {
-			results.splice( duplicates[ j ], 1 );
-		}
-	}
-
-	return results;
-};
-
-function siblingCheck( a, b ) {
-	var cur = b && a,
-		diff = cur && ( ~b.sourceIndex || MAX_NEGATIVE ) - ( ~a.sourceIndex || MAX_NEGATIVE );
-
-	// Use IE sourceIndex if available on both nodes
-	if ( diff ) {
-		return diff;
-	}
-
-	// Check if b follows a
-	if ( cur ) {
-		while ( (cur = cur.nextSibling) ) {
-			if ( cur === b ) {
-				return -1;
-			}
-		}
-	}
-
-	return a ? 1 : -1;
-}
-
-// Returns a function to use in pseudos for input types
-function createInputPseudo( type ) {
-	return function( elem ) {
-		var name = elem.nodeName.toLowerCase();
-		return name === "input" && elem.type === type;
-	};
-}
-
-// Returns a function to use in pseudos for buttons
-function createButtonPseudo( type ) {
-	return function( elem ) {
-		var name = elem.nodeName.toLowerCase();
-		return (name === "input" || name === "button") && elem.type === type;
-	};
-}
-
-// Returns a function to use in pseudos for positionals
-function createPositionalPseudo( fn ) {
-	return markFunction(function( argument ) {
-		argument = +argument;
-		return markFunction(function( seed, matches ) {
-			var j,
-				matchIndexes = fn( [], seed.length, argument ),
-				i = matchIndexes.length;
-
-			// Match elements found at the specified indexes
-			while ( i-- ) {
-				if ( seed[ (j = matchIndexes[i]) ] ) {
-					seed[j] = !(matches[j] = seed[j]);
-				}
-			}
-		});
-	});
-}
-
-/**
- * Utility function for retrieving the text value of an array of DOM nodes
- * @param {Array|Element} elem
- */
-getText = Sizzle.getText = function( elem ) {
-	var node,
-		ret = "",
-		i = 0,
-		nodeType = elem.nodeType;
-
-	if ( !nodeType ) {
-		// If no nodeType, this is expected to be an array
-		for ( ; (node = elem[i]); i++ ) {
-			// Do not traverse comment nodes
-			ret += getText( node );
-		}
-	} else if ( nodeType === 1 || nodeType === 9 || nodeType === 11 ) {
-		// Use textContent for elements
-		// innerText usage removed for consistency of new lines (see #11153)
-		if ( typeof elem.textContent === "string" ) {
-			return elem.textContent;
-		} else {
-			// Traverse its children
-			for ( elem = elem.firstChild; elem; elem = elem.nextSibling ) {
-				ret += getText( elem );
-			}
-		}
-	} else if ( nodeType === 3 || nodeType === 4 ) {
-		return elem.nodeValue;
-	}
-	// Do not include comment or processing instruction nodes
-
-	return ret;
-};
-
-Expr = Sizzle.selectors = {
-
-	// Can be adjusted by the user
-	cacheLength: 50,
-
-	createPseudo: markFunction,
-
-	match: matchExpr,
-
-	find: {},
-
-	relative: {
-		">": { dir: "parentNode", first: true },
-		" ": { dir: "parentNode" },
-		"+": { dir: "previousSibling", first: true },
-		"~": { dir: "previousSibling" }
-	},
-
-	preFilter: {
-		"ATTR": function( match ) {
-			match[1] = match[1].replace( runescape, funescape );
-
-			// Move the given value to match[3] whether quoted or unquoted
-			match[3] = ( match[4] || match[5] || "" ).replace( runescape, funescape );
-
-			if ( match[2] === "~=" ) {
-				match[3] = " " + match[3] + " ";
-			}
-
-			return match.slice( 0, 4 );
-		},
-
-		"CHILD": function( match ) {
-			/* matches from matchExpr["CHILD"]
-				1 type (only|nth|...)
-				2 what (child|of-type)
-				3 argument (even|odd|\d*|\d*n([+-]\d+)?|...)
-				4 xn-component of xn+y argument ([+-]?\d*n|)
-				5 sign of xn-component
-				6 x of xn-component
-				7 sign of y-component
-				8 y of y-component
-			*/
-			match[1] = match[1].toLowerCase();
-
-			if ( match[1].slice( 0, 3 ) === "nth" ) {
-				// nth-* requires argument
-				if ( !match[3] ) {
-					Sizzle.error( match[0] );
-				}
-
-				// numeric x and y parameters for Expr.filter.CHILD
-				// remember that false/true cast respectively to 0/1
-				match[4] = +( match[4] ? match[5] + (match[6] || 1) : 2 * ( match[3] === "even" || match[3] === "odd" ) );
-				match[5] = +( ( match[7] + match[8] ) || match[3] === "odd" );
-
-			// other types prohibit arguments
-			} else if ( match[3] ) {
-				Sizzle.error( match[0] );
-			}
-
-			return match;
-		},
-
-		"PSEUDO": function( match ) {
-			var excess,
-				unquoted = !match[5] && match[2];
-
-			if ( matchExpr["CHILD"].test( match[0] ) ) {
-				return null;
-			}
-
-			// Accept quoted arguments as-is
-			if ( match[4] ) {
-				match[2] = match[4];
-
-			// Strip excess characters from unquoted arguments
-			} else if ( unquoted && rpseudo.test( unquoted ) &&
-				// Get excess from tokenize (recursively)
-				(excess = tokenize( unquoted, true )) &&
-				// advance to the next closing parenthesis
-				(excess = unquoted.indexOf( ")", unquoted.length - excess ) - unquoted.length) ) {
-
-				// excess is a negative index
-				match[0] = match[0].slice( 0, excess );
-				match[2] = unquoted.slice( 0, excess );
-			}
-
-			// Return only captures needed by the pseudo filter method (type and argument)
-			return match.slice( 0, 3 );
-		}
-	},
-
-	filter: {
-
-		"TAG": function( nodeName ) {
-			if ( nodeName === "*" ) {
-				return function() { return true; };
-			}
-
-			nodeName = nodeName.replace( runescape, funescape ).toLowerCase();
-			return function( elem ) {
-				return elem.nodeName && elem.nodeName.toLowerCase() === nodeName;
-			};
-		},
-
-		"CLASS": function( className ) {
-			var pattern = classCache[ className + " " ];
-
-			return pattern ||
-				(pattern = new RegExp( "(^|" + whitespace + ")" + className + "(" + whitespace + "|$)" )) &&
-				classCache( className, function( elem ) {
-					return pattern.test( elem.className || (typeof elem.getAttribute !== strundefined && elem.getAttribute("class")) || "" );
-				});
-		},
-
-		"ATTR": function( name, operator, check ) {
-			return function( elem ) {
-				var result = Sizzle.attr( elem, name );
-
-				if ( result == null ) {
-					return operator === "!=";
-				}
-				if ( !operator ) {
-					return true;
-				}
-
-				result += "";
-
-				return operator === "=" ? result === check :
-					operator === "!=" ? result !== check :
-					operator === "^=" ? check && result.indexOf( check ) === 0 :
-					operator === "*=" ? check && result.indexOf( check ) > -1 :
-					operator === "$=" ? check && result.slice( -check.length ) === check :
-					operator === "~=" ? ( " " + result + " " ).indexOf( check ) > -1 :
-					operator === "|=" ? result === check || result.slice( 0, check.length + 1 ) === check + "-" :
-					false;
-			};
-		},
-
-		"CHILD": function( type, what, argument, first, last ) {
-			var simple = type.slice( 0, 3 ) !== "nth",
-				forward = type.slice( -4 ) !== "last",
-				ofType = what === "of-type";
-
-			return first === 1 && last === 0 ?
-
-				// Shortcut for :nth-*(n)
-				function( elem ) {
-					return !!elem.parentNode;
-				} :
-
-				function( elem, context, xml ) {
-					var cache, outerCache, node, diff, nodeIndex, start,
-						dir = simple !== forward ? "nextSibling" : "previousSibling",
-						parent = elem.parentNode,
-						name = ofType && elem.nodeName.toLowerCase(),
-						useCache = !xml && !ofType;
-
-					if ( parent ) {
-
-						// :(first|last|only)-(child|of-type)
-						if ( simple ) {
-							while ( dir ) {
-								node = elem;
-								while ( (node = node[ dir ]) ) {
-									if ( ofType ? node.nodeName.toLowerCase() === name : node.nodeType === 1 ) {
-										return false;
-									}
-								}
-								// Reverse direction for :only-* (if we haven't yet done so)
-								start = dir = type === "only" && !start && "nextSibling";
-							}
-							return true;
-						}
-
-						start = [ forward ? parent.firstChild : parent.lastChild ];
-
-						// non-xml :nth-child(...) stores cache data on `parent`
-						if ( forward && useCache ) {
-							// Seek `elem` from a previously-cached index
-							outerCache = parent[ expando ] || (parent[ expando ] = {});
-							cache = outerCache[ type ] || [];
-							nodeIndex = cache[0] === dirruns && cache[1];
-							diff = cache[0] === dirruns && cache[2];
-							node = nodeIndex && parent.childNodes[ nodeIndex ];
-
-							while ( (node = ++nodeIndex && node && node[ dir ] ||
-
-								// Fallback to seeking `elem` from the start
-								(diff = nodeIndex = 0) || start.pop()) ) {
-
-								// When found, cache indexes on `parent` and break
-								if ( node.nodeType === 1 && ++diff && node === elem ) {
-									outerCache[ type ] = [ dirruns, nodeIndex, diff ];
-									break;
-								}
-							}
-
-						// Use previously-cached element index if available
-						} else if ( useCache && (cache = (elem[ expando ] || (elem[ expando ] = {}))[ type ]) && cache[0] === dirruns ) {
-							diff = cache[1];
-
-						// xml :nth-child(...) or :nth-last-child(...) or :nth(-last)?-of-type(...)
-						} else {
-							// Use the same loop as above to seek `elem` from the start
-							while ( (node = ++nodeIndex && node && node[ dir ] ||
-								(diff = nodeIndex = 0) || start.pop()) ) {
-
-								if ( ( ofType ? node.nodeName.toLowerCase() === name : node.nodeType === 1 ) && ++diff ) {
-									// Cache the index of each encountered element
-									if ( useCache ) {
-										(node[ expando ] || (node[ expando ] = {}))[ type ] = [ dirruns, diff ];
-									}
-
-									if ( node === elem ) {
-										break;
-									}
-								}
-							}
-						}
-
-						// Incorporate the offset, then check against cycle size
-						diff -= last;
-						return diff === first || ( diff % first === 0 && diff / first >= 0 );
-					}
-				};
-		},
-
-		"PSEUDO": function( pseudo, argument ) {
-			// pseudo-class names are case-insensitive
-			// http://www.w3.org/TR/selectors/#pseudo-classes
-			// Prioritize by case sensitivity in case custom pseudos are added with uppercase letters
-			// Remember that setFilters inherits from pseudos
-			var args,
-				fn = Expr.pseudos[ pseudo ] || Expr.setFilters[ pseudo.toLowerCase() ] ||
-					Sizzle.error( "unsupported pseudo: " + pseudo );
-
-			// The user may use createPseudo to indicate that
-			// arguments are needed to create the filter function
-			// just as Sizzle does
-			if ( fn[ expando ] ) {
-				return fn( argument );
-			}
-
-			// But maintain support for old signatures
-			if ( fn.length > 1 ) {
-				args = [ pseudo, pseudo, "", argument ];
-				return Expr.setFilters.hasOwnProperty( pseudo.toLowerCase() ) ?
-					markFunction(function( seed, matches ) {
-						var idx,
-							matched = fn( seed, argument ),
-							i = matched.length;
-						while ( i-- ) {
-							idx = indexOf.call( seed, matched[i] );
-							seed[ idx ] = !( matches[ idx ] = matched[i] );
-						}
-					}) :
-					function( elem ) {
-						return fn( elem, 0, args );
-					};
-			}
-
-			return fn;
-		}
-	},
-
-	pseudos: {
-		// Potentially complex pseudos
-		"not": markFunction(function( selector ) {
-			// Trim the selector passed to compile
-			// to avoid treating leading and trailing
-			// spaces as combinators
-			var input = [],
-				results = [],
-				matcher = compile( selector.replace( rtrim, "$1" ) );
-
-			return matcher[ expando ] ?
-				markFunction(function( seed, matches, context, xml ) {
-					var elem,
-						unmatched = matcher( seed, null, xml, [] ),
-						i = seed.length;
-
-					// Match elements unmatched by `matcher`
-					while ( i-- ) {
-						if ( (elem = unmatched[i]) ) {
-							seed[i] = !(matches[i] = elem);
-						}
-					}
-				}) :
-				function( elem, context, xml ) {
-					input[0] = elem;
-					matcher( input, null, xml, results );
-					return !results.pop();
-				};
-		}),
-
-		"has": markFunction(function( selector ) {
-			return function( elem ) {
-				return Sizzle( selector, elem ).length > 0;
-			};
-		}),
-
-		"contains": markFunction(function( text ) {
-			return function( elem ) {
-				return ( elem.textContent || elem.innerText || getText( elem ) ).indexOf( text ) > -1;
-			};
-		}),
-
-		// "Whether an element is represented by a :lang() selector
-		// is based solely on the element's language value
-		// being equal to the identifier C,
-		// or beginning with the identifier C immediately followed by "-".
-		// The matching of C against the element's language value is performed case-insensitively.
-		// The identifier C does not have to be a valid language name."
-		// http://www.w3.org/TR/selectors/#lang-pseudo
-		"lang": markFunction( function( lang ) {
-			// lang value must be a valid identifider
-			if ( !ridentifier.test(lang || "") ) {
-				Sizzle.error( "unsupported lang: " + lang );
-			}
-			lang = lang.replace( runescape, funescape ).toLowerCase();
-			return function( elem ) {
-				var elemLang;
-				do {
-					if ( (elemLang = documentIsXML ?
-						elem.getAttribute("xml:lang") || elem.getAttribute("lang") :
-						elem.lang) ) {
-
-						elemLang = elemLang.toLowerCase();
-						return elemLang === lang || elemLang.indexOf( lang + "-" ) === 0;
-					}
-				} while ( (elem = elem.parentNode) && elem.nodeType === 1 );
-				return false;
-			};
-		}),
-
-		// Miscellaneous
-		"target": function( elem ) {
-			var hash = window.location && window.location.hash;
-			return hash && hash.slice( 1 ) === elem.id;
-		},
-
-		"root": function( elem ) {
-			return elem === docElem;
-		},
-
-		"focus": function( elem ) {
-			return elem === document.activeElement && (!document.hasFocus || document.hasFocus()) && !!(elem.type || elem.href || ~elem.tabIndex);
-		},
-
-		// Boolean properties
-		"enabled": function( elem ) {
-			return elem.disabled === false;
-		},
-
-		"disabled": function( elem ) {
-			return elem.disabled === true;
-		},
-
-		"checked": function( elem ) {
-			// In CSS3, :checked should return both checked and selected elements
-			// http://www.w3.org/TR/2011/REC-css3-selectors-20110929/#checked
-			var nodeName = elem.nodeName.toLowerCase();
-			return (nodeName === "input" && !!elem.checked) || (nodeName === "option" && !!elem.selected);
-		},
-
-		"selected": function( elem ) {
-			// Accessing this property makes selected-by-default
-			// options in Safari work properly
-			if ( elem.parentNode ) {
-				elem.parentNode.selectedIndex;
-			}
-
-			return elem.selected === true;
-		},
-
-		// Contents
-		"empty": function( elem ) {
-			// http://www.w3.org/TR/selectors/#empty-pseudo
-			// :empty is only affected by element nodes and content nodes(including text(3), cdata(4)),
-			//   not comment, processing instructions, or others
-			// Thanks to Diego Perini for the nodeName shortcut
-			//   Greater than "@" means alpha characters (specifically not starting with "#" or "?")
-			for ( elem = elem.firstChild; elem; elem = elem.nextSibling ) {
-				if ( elem.nodeName > "@" || elem.nodeType === 3 || elem.nodeType === 4 ) {
-					return false;
-				}
-			}
-			return true;
-		},
-
-		"parent": function( elem ) {
-			return !Expr.pseudos["empty"]( elem );
-		},
-
-		// Element/input types
-		"header": function( elem ) {
-			return rheader.test( elem.nodeName );
-		},
-
-		"input": function( elem ) {
-			return rinputs.test( elem.nodeName );
-		},
-
-		"button": function( elem ) {
-			var name = elem.nodeName.toLowerCase();
-			return name === "input" && elem.type === "button" || name === "button";
-		},
-
-		"text": function( elem ) {
-			var attr;
-			// IE6 and 7 will map elem.type to 'text' for new HTML5 types (search, etc)
-			// use getAttribute instead to test this case
-			return elem.nodeName.toLowerCase() === "input" &&
-				elem.type === "text" &&
-				( (attr = elem.getAttribute("type")) == null || attr.toLowerCase() === elem.type );
-		},
-
-		// Position-in-collection
-		"first": createPositionalPseudo(function() {
-			return [ 0 ];
-		}),
-
-		"last": createPositionalPseudo(function( matchIndexes, length ) {
-			return [ length - 1 ];
-		}),
-
-		"eq": createPositionalPseudo(function( matchIndexes, length, argument ) {
-			return [ argument < 0 ? argument + length : argument ];
-		}),
-
-		"even": createPositionalPseudo(function( matchIndexes, length ) {
-			var i = 0;
-			for ( ; i < length; i += 2 ) {
-				matchIndexes.push( i );
-			}
-			return matchIndexes;
-		}),
-
-		"odd": createPositionalPseudo(function( matchIndexes, length ) {
-			var i = 1;
-			for ( ; i < length; i += 2 ) {
-				matchIndexes.push( i );
-			}
-			return matchIndexes;
-		}),
-
-		"lt": createPositionalPseudo(function( matchIndexes, length, argument ) {
-			var i = argument < 0 ? argument + length : argument;
-			for ( ; --i >= 0; ) {
-				matchIndexes.push( i );
-			}
-			return matchIndexes;
-		}),
-
-		"gt": createPositionalPseudo(function( matchIndexes, length, argument ) {
-			var i = argument < 0 ? argument + length : argument;
-			for ( ; ++i < length; ) {
-				matchIndexes.push( i );
-			}
-			return matchIndexes;
-		})
-	}
-};
-
-// Add button/input type pseudos
-for ( i in { radio: true, checkbox: true, file: true, password: true, image: true } ) {
-	Expr.pseudos[ i ] = createInputPseudo( i );
-}
-for ( i in { submit: true, reset: true } ) {
-	Expr.pseudos[ i ] = createButtonPseudo( i );
-}
-
-function tokenize( selector, parseOnly ) {
-	var matched, match, tokens, type,
-		soFar, groups, preFilters,
-		cached = tokenCache[ selector + " " ];
-
-	if ( cached ) {
-		return parseOnly ? 0 : cached.slice( 0 );
-	}
-
-	soFar = selector;
-	groups = [];
-	preFilters = Expr.preFilter;
-
-	while ( soFar ) {
-
-		// Comma and first run
-		if ( !matched || (match = rcomma.exec( soFar )) ) {
-			if ( match ) {
-				// Don't consume trailing commas as valid
-				soFar = soFar.slice( match[0].length ) || soFar;
-			}
-			groups.push( tokens = [] );
-		}
-
-		matched = false;
-
-		// Combinators
-		if ( (match = rcombinators.exec( soFar )) ) {
-			matched = match.shift();
-			tokens.push( {
-				value: matched,
-				// Cast descendant combinators to space
-				type: match[0].replace( rtrim, " " )
-			} );
-			soFar = soFar.slice( matched.length );
-		}
-
-		// Filters
-		for ( type in Expr.filter ) {
-			if ( (match = matchExpr[ type ].exec( soFar )) && (!preFilters[ type ] ||
-				(match = preFilters[ type ]( match ))) ) {
-				matched = match.shift();
-				tokens.push( {
-					value: matched,
-					type: type,
-					matches: match
-				} );
-				soFar = soFar.slice( matched.length );
-			}
-		}
-
-		if ( !matched ) {
-			break;
-		}
-	}
-
-	// Return the length of the invalid excess
-	// if we're just parsing
-	// Otherwise, throw an error or return tokens
-	return parseOnly ?
-		soFar.length :
-		soFar ?
-			Sizzle.error( selector ) :
-			// Cache the tokens
-			tokenCache( selector, groups ).slice( 0 );
-}
-
-function toSelector( tokens ) {
-	var i = 0,
-		len = tokens.length,
-		selector = "";
-	for ( ; i < len; i++ ) {
-		selector += tokens[i].value;
-	}
-	return selector;
-}
-
-function addCombinator( matcher, combinator, base ) {
-	var dir = combinator.dir,
-		checkNonElements = base && dir === "parentNode",
-		doneName = done++;
-
-	return combinator.first ?
-		// Check against closest ancestor/preceding element
-		function( elem, context, xml ) {
-			while ( (elem = elem[ dir ]) ) {
-				if ( elem.nodeType === 1 || checkNonElements ) {
-					return matcher( elem, context, xml );
-				}
-			}
-		} :
-
-		// Check against all ancestor/preceding elements
-		function( elem, context, xml ) {
-			var data, cache, outerCache,
-				dirkey = dirruns + " " + doneName;
-
-			// We can't set arbitrary data on XML nodes, so they don't benefit from dir caching
-			if ( xml ) {
-				while ( (elem = elem[ dir ]) ) {
-					if ( elem.nodeType === 1 || checkNonElements ) {
-						if ( matcher( elem, context, xml ) ) {
-							return true;
-						}
-					}
-				}
-			} else {
-				while ( (elem = elem[ dir ]) ) {
-					if ( elem.nodeType === 1 || checkNonElements ) {
-						outerCache = elem[ expando ] || (elem[ expando ] = {});
-						if ( (cache = outerCache[ dir ]) && cache[0] === dirkey ) {
-							if ( (data = cache[1]) === true || data === cachedruns ) {
-								return data === true;
-							}
-						} else {
-							cache = outerCache[ dir ] = [ dirkey ];
-							cache[1] = matcher( elem, context, xml ) || cachedruns;
-							if ( cache[1] === true ) {
-								return true;
-							}
-						}
-					}
-				}
-			}
-		};
-}
-
-function elementMatcher( matchers ) {
-	return matchers.length > 1 ?
-		function( elem, context, xml ) {
-			var i = matchers.length;
-			while ( i-- ) {
-				if ( !matchers[i]( elem, context, xml ) ) {
-					return false;
-				}
-			}
-			return true;
-		} :
-		matchers[0];
-}
-
-function condense( unmatched, map, filter, context, xml ) {
-	var elem,
-		newUnmatched = [],
-		i = 0,
-		len = unmatched.length,
-		mapped = map != null;
-
-	for ( ; i < len; i++ ) {
-		if ( (elem = unmatched[i]) ) {
-			if ( !filter || filter( elem, context, xml ) ) {
-				newUnmatched.push( elem );
-				if ( mapped ) {
-					map.push( i );
-				}
-			}
-		}
-	}
-
-	return newUnmatched;
-}
-
-function setMatcher( preFilter, selector, matcher, postFilter, postFinder, postSelector ) {
-	if ( postFilter && !postFilter[ expando ] ) {
-		postFilter = setMatcher( postFilter );
-	}
-	if ( postFinder && !postFinder[ expando ] ) {
-		postFinder = setMatcher( postFinder, postSelector );
-	}
-	return markFunction(function( seed, results, context, xml ) {
-		var temp, i, elem,
-			preMap = [],
-			postMap = [],
-			preexisting = results.length,
-
-			// Get initial elements from seed or context
-			elems = seed || multipleContexts( selector || "*", context.nodeType ? [ context ] : context, [] ),
-
-			// Prefilter to get matcher input, preserving a map for seed-results synchronization
-			matcherIn = preFilter && ( seed || !selector ) ?
-				condense( elems, preMap, preFilter, context, xml ) :
-				elems,
-
-			matcherOut = matcher ?
-				// If we have a postFinder, or filtered seed, or non-seed postFilter or preexisting results,
-				postFinder || ( seed ? preFilter : preexisting || postFilter ) ?
-
-					// ...intermediate processing is necessary
-					[] :
-
-					// ...otherwise use results directly
-					results :
-				matcherIn;
-
-		// Find primary matches
-		if ( matcher ) {
-			matcher( matcherIn, matcherOut, context, xml );
-		}
-
-		// Apply postFilter
-		if ( postFilter ) {
-			temp = condense( matcherOut, postMap );
-			postFilter( temp, [], context, xml );
-
-			// Un-match failing elements by moving them back to matcherIn
-			i = temp.length;
-			while ( i-- ) {
-				if ( (elem = temp[i]) ) {
-					matcherOut[ postMap[i] ] = !(matcherIn[ postMap[i] ] = elem);
-				}
-			}
-		}
-
-		if ( seed ) {
-			if ( postFinder || preFilter ) {
-				if ( postFinder ) {
-					// Get the final matcherOut by condensing this intermediate into postFinder contexts
-					temp = [];
-					i = matcherOut.length;
-					while ( i-- ) {
-						if ( (elem = matcherOut[i]) ) {
-							// Restore matcherIn since elem is not yet a final match
-							temp.push( (matcherIn[i] = elem) );
-						}
-					}
-					postFinder( null, (matcherOut = []), temp, xml );
-				}
-
-				// Move matched elements from seed to results to keep them synchronized
-				i = matcherOut.length;
-				while ( i-- ) {
-					if ( (elem = matcherOut[i]) &&
-						(temp = postFinder ? indexOf.call( seed, elem ) : preMap[i]) > -1 ) {
-
-						seed[temp] = !(results[temp] = elem);
-					}
-				}
-			}
-
-		// Add elements to results, through postFinder if defined
-		} else {
-			matcherOut = condense(
-				matcherOut === results ?
-					matcherOut.splice( preexisting, matcherOut.length ) :
-					matcherOut
-			);
-			if ( postFinder ) {
-				postFinder( null, results, matcherOut, xml );
-			} else {
-				push.apply( results, matcherOut );
-			}
-		}
-	});
-}
-
-function matcherFromTokens( tokens ) {
-	var checkContext, matcher, j,
-		len = tokens.length,
-		leadingRelative = Expr.relative[ tokens[0].type ],
-		implicitRelative = leadingRelative || Expr.relative[" "],
-		i = leadingRelative ? 1 : 0,
-
-		// The foundational matcher ensures that elements are reachable from top-level context(s)
-		matchContext = addCombinator( function( elem ) {
-			return elem === checkContext;
-		}, implicitRelative, true ),
-		matchAnyContext = addCombinator( function( elem ) {
-			return indexOf.call( checkContext, elem ) > -1;
-		}, implicitRelative, true ),
-		matchers = [ function( elem, context, xml ) {
-			return ( !leadingRelative && ( xml || context !== outermostContext ) ) || (
-				(checkContext = context).nodeType ?
-					matchContext( elem, context, xml ) :
-					matchAnyContext( elem, context, xml ) );
-		} ];
-
-	for ( ; i < len; i++ ) {
-		if ( (matcher = Expr.relative[ tokens[i].type ]) ) {
-			matchers = [ addCombinator(elementMatcher( matchers ), matcher) ];
-		} else {
-			matcher = Expr.filter[ tokens[i].type ].apply( null, tokens[i].matches );
-
-			// Return special upon seeing a positional matcher
-			if ( matcher[ expando ] ) {
-				// Find the next relative operator (if any) for proper handling
-				j = ++i;
-				for ( ; j < len; j++ ) {
-					if ( Expr.relative[ tokens[j].type ] ) {
-						break;
-					}
-				}
-				return setMatcher(
-					i > 1 && elementMatcher( matchers ),
-					i > 1 && toSelector( tokens.slice( 0, i - 1 ) ).replace( rtrim, "$1" ),
-					matcher,
-					i < j && matcherFromTokens( tokens.slice( i, j ) ),
-					j < len && matcherFromTokens( (tokens = tokens.slice( j )) ),
-					j < len && toSelector( tokens )
-				);
-			}
-			matchers.push( matcher );
-		}
-	}
-
-	return elementMatcher( matchers );
-}
-
-function matcherFromGroupMatchers( elementMatchers, setMatchers ) {
-	// A counter to specify which element is currently being matched
-	var matcherCachedRuns = 0,
-		bySet = setMatchers.length > 0,
-		byElement = elementMatchers.length > 0,
-		superMatcher = function( seed, context, xml, results, expandContext ) {
-			var elem, j, matcher,
-				setMatched = [],
-				matchedCount = 0,
-				i = "0",
-				unmatched = seed && [],
-				outermost = expandContext != null,
-				contextBackup = outermostContext,
-				// We must always have either seed elements or context
-				elems = seed || byElement && Expr.find["TAG"]( "*", expandContext && context.parentNode || context ),
-				// Use integer dirruns iff this is the outermost matcher
-				dirrunsUnique = (dirruns += contextBackup == null ? 1 : Math.random() || 0.1);
-
-			if ( outermost ) {
-				outermostContext = context !== document && context;
-				cachedruns = matcherCachedRuns;
-			}
-
-			// Add elements passing elementMatchers directly to results
-			// Keep `i` a string if there are no elements so `matchedCount` will be "00" below
-			for ( ; (elem = elems[i]) != null; i++ ) {
-				if ( byElement && elem ) {
-					j = 0;
-					while ( (matcher = elementMatchers[j++]) ) {
-						if ( matcher( elem, context, xml ) ) {
-							results.push( elem );
-							break;
-						}
-					}
-					if ( outermost ) {
-						dirruns = dirrunsUnique;
-						cachedruns = ++matcherCachedRuns;
-					}
-				}
-
-				// Track unmatched elements for set filters
-				if ( bySet ) {
-					// They will have gone through all possible matchers
-					if ( (elem = !matcher && elem) ) {
-						matchedCount--;
-					}
-
-					// Lengthen the array for every element, matched or not
-					if ( seed ) {
-						unmatched.push( elem );
-					}
-				}
-			}
-
-			// Apply set filters to unmatched elements
-			matchedCount += i;
-			if ( bySet && i !== matchedCount ) {
-				j = 0;
-				while ( (matcher = setMatchers[j++]) ) {
-					matcher( unmatched, setMatched, context, xml );
-				}
-
-				if ( seed ) {
-					// Reintegrate element matches to eliminate the need for sorting
-					if ( matchedCount > 0 ) {
-						while ( i-- ) {
-							if ( !(unmatched[i] || setMatched[i]) ) {
-								setMatched[i] = pop.call( results );
-							}
-						}
-					}
-
-					// Discard index placeholder values to get only actual matches
-					setMatched = condense( setMatched );
-				}
-
-				// Add matches to results
-				push.apply( results, setMatched );
-
-				// Seedless set matches succeeding multiple successful matchers stipulate sorting
-				if ( outermost && !seed && setMatched.length > 0 &&
-					( matchedCount + setMatchers.length ) > 1 ) {
-
-					Sizzle.uniqueSort( results );
-				}
-			}
-
-			// Override manipulation of globals by nested matchers
-			if ( outermost ) {
-				dirruns = dirrunsUnique;
-				outermostContext = contextBackup;
-			}
-
-			return unmatched;
-		};
-
-	return bySet ?
-		markFunction( superMatcher ) :
-		superMatcher;
-}
-
-compile = Sizzle.compile = function( selector, group /* Internal Use Only */ ) {
-	var i,
-		setMatchers = [],
-		elementMatchers = [],
-		cached = compilerCache[ selector + " " ];
-
-	if ( !cached ) {
-		// Generate a function of recursive functions that can be used to check each element
-		if ( !group ) {
-			group = tokenize( selector );
-		}
-		i = group.length;
-		while ( i-- ) {
-			cached = matcherFromTokens( group[i] );
-			if ( cached[ expando ] ) {
-				setMatchers.push( cached );
-			} else {
-				elementMatchers.push( cached );
-			}
-		}
-
-		// Cache the compiled function
-		cached = compilerCache( selector, matcherFromGroupMatchers( elementMatchers, setMatchers ) );
-	}
-	return cached;
-};
-
-function multipleContexts( selector, contexts, results ) {
-	var i = 0,
-		len = contexts.length;
-	for ( ; i < len; i++ ) {
-		Sizzle( selector, contexts[i], results );
-	}
-	return results;
-}
-
-function select( selector, context, results, seed ) {
-	var i, tokens, token, type, find,
-		match = tokenize( selector );
-
-	if ( !seed ) {
-		// Try to minimize operations if there is only one group
-		if ( match.length === 1 ) {
-
-			// Take a shortcut and set the context if the root selector is an ID
-			tokens = match[0] = match[0].slice( 0 );
-			if ( tokens.length > 2 && (token = tokens[0]).type === "ID" &&
-					context.nodeType === 9 && !documentIsXML &&
-					Expr.relative[ tokens[1].type ] ) {
-
-				context = Expr.find["ID"]( token.matches[0].replace( runescape, funescape ), context )[0];
-				if ( !context ) {
-					return results;
-				}
-
-				selector = selector.slice( tokens.shift().value.length );
-			}
-
-			// Fetch a seed set for right-to-left matching
-			i = matchExpr["needsContext"].test( selector ) ? 0 : tokens.length;
-			while ( i-- ) {
-				token = tokens[i];
-
-				// Abort if we hit a combinator
-				if ( Expr.relative[ (type = token.type) ] ) {
-					break;
-				}
-				if ( (find = Expr.find[ type ]) ) {
-					// Search, expanding context for leading sibling combinators
-					if ( (seed = find(
-						token.matches[0].replace( runescape, funescape ),
-						rsibling.test( tokens[0].type ) && context.parentNode || context
-					)) ) {
-
-						// If seed is empty or no tokens remain, we can return early
-						tokens.splice( i, 1 );
-						selector = seed.length && toSelector( tokens );
-						if ( !selector ) {
-							push.apply( results, slice.call( seed, 0 ) );
-							return results;
-						}
-
-						break;
-					}
-				}
-			}
-		}
-	}
-
-	// Compile and execute a filtering function
-	// Provide `match` to avoid retokenization if we modified the selector above
-	compile( selector, match )(
-		seed,
-		context,
-		documentIsXML,
-		results,
-		rsibling.test( selector )
-	);
-	return results;
-}
-
-// Deprecated
-Expr.pseudos["nth"] = Expr.pseudos["eq"];
-
-// Easy API for creating new setFilters
-function setFilters() {}
-Expr.filters = setFilters.prototype = Expr.pseudos;
-Expr.setFilters = new setFilters();
-
-// Initialize with the default document
-setDocument();
-
-// Override sizzle attribute retrieval
-Sizzle.attr = jQuery.attr;
-jQuery.find = Sizzle;
-jQuery.expr = Sizzle.selectors;
-jQuery.expr[":"] = jQuery.expr.pseudos;
-jQuery.unique = Sizzle.uniqueSort;
-jQuery.text = Sizzle.getText;
-jQuery.isXMLDoc = Sizzle.isXML;
-jQuery.contains = Sizzle.contains;
-
-
-})( window );
-var runtil = /Until$/,
+var isSimple = /^.[^:#\[\.,]*$/,
 	rparentsprev = /^(?:parents|prev(?:Until|All))/,
-	isSimple = /^.[^:#\[\.,]*$/,
 	rneedsContext = jQuery.expr.match.needsContext,
 	// methods guaranteed to produce a unique set when starting from a unique set
 	guaranteedUnique = {
@@ -5557,11 +5724,12 @@ var runtil = /Until$/,
 
 jQuery.fn.extend({
 	find: function( selector ) {
-		var i, ret, self,
-			len = this.length;
+		var i,
+			ret = [],
+			self = this,
+			len = self.length;
 
 		if ( typeof selector !== "string" ) {
-			self = this;
 			return this.pushStack( jQuery( selector ).filter(function() {
 				for ( i = 0; i < len; i++ ) {
 					if ( jQuery.contains( self[ i ], this ) ) {
@@ -5571,14 +5739,13 @@ jQuery.fn.extend({
 			}) );
 		}
 
-		ret = [];
 		for ( i = 0; i < len; i++ ) {
-			jQuery.find( selector, this[ i ], ret );
+			jQuery.find( selector, self[ i ], ret );
 		}
 
 		// Needed because $( selector, context ) becomes $( context ).find( selector )
 		ret = this.pushStack( len > 1 ? jQuery.unique( ret ) : ret );
-		ret.selector = ( this.selector ? this.selector + " " : "" ) + selector;
+		ret.selector = this.selector ? this.selector + " " + selector : selector;
 		return ret;
 	},
 
@@ -5597,22 +5764,24 @@ jQuery.fn.extend({
 	},
 
 	not: function( selector ) {
-		return this.pushStack( winnow(this, selector, false) );
+		return this.pushStack( winnow(this, selector || [], true) );
 	},
 
 	filter: function( selector ) {
-		return this.pushStack( winnow(this, selector, true) );
+		return this.pushStack( winnow(this, selector || [], false) );
 	},
 
 	is: function( selector ) {
-		return !!selector && (
-			typeof selector === "string" ?
-				// If this is a positional/relative selector, check membership in the returned set
-				// so $("p:first").is("p:last") won't return true for a doc with two "p".
-				rneedsContext.test( selector ) ?
-					jQuery( selector, this.context ).index( this[0] ) >= 0 :
-					jQuery.filter( selector, this ).length > 0 :
-				this.filter( selector ).length > 0 );
+		return !!winnow(
+			this,
+
+			// If this is a positional/relative selector, check membership in the returned set
+			// so $("p:first").is("p:last") won't return true for a doc with two "p".
+			typeof selector === "string" && rneedsContext.test( selector ) ?
+				jQuery( selector ) :
+				selector || [],
+			false
+		).length;
 	},
 
 	closest: function( selectors, context ) {
@@ -5625,14 +5794,18 @@ jQuery.fn.extend({
 				0;
 
 		for ( ; i < l; i++ ) {
-			cur = this[i];
+			for ( cur = this[i]; cur && cur !== context; cur = cur.parentNode ) {
+				// Always skip document fragments
+				if ( cur.nodeType < 11 && (pos ?
+					pos.index(cur) > -1 :
 
-			while ( cur && cur.ownerDocument && cur !== context && cur.nodeType !== 11 ) {
-				if ( pos ? pos.index(cur) > -1 : jQuery.find.matchesSelector(cur, selectors) ) {
-					ret.push( cur );
+					// Don't pass non-elements to Sizzle
+					cur.nodeType === 1 &&
+						jQuery.find.matchesSelector(cur, selectors)) ) {
+
+					cur = ret.push( cur );
 					break;
 				}
-				cur = cur.parentNode;
 			}
 		}
 
@@ -5674,8 +5847,6 @@ jQuery.fn.extend({
 		);
 	}
 });
-
-jQuery.fn.andSelf = jQuery.fn.addBack;
 
 function sibling( cur, dir ) {
 	do {
@@ -5729,7 +5900,7 @@ jQuery.each({
 	jQuery.fn[ name ] = function( until, selector ) {
 		var ret = jQuery.map( this, fn, until );
 
-		if ( !runtil.test( name ) ) {
+		if ( name.slice( -5 ) !== "Until" ) {
 			selector = until;
 		}
 
@@ -5737,10 +5908,16 @@ jQuery.each({
 			ret = jQuery.filter( selector, ret );
 		}
 
-		ret = this.length > 1 && !guaranteedUnique[ name ] ? jQuery.unique( ret ) : ret;
+		if ( this.length > 1 ) {
+			// Remove duplicates
+			if ( !guaranteedUnique[ name ] ) {
+				ret = jQuery.unique( ret );
+			}
 
-		if ( this.length > 1 && rparentsprev.test( name ) ) {
-			ret = ret.reverse();
+			// Reverse order for parents* and prev-derivatives
+			if ( rparentsprev.test( name ) ) {
+				ret = ret.reverse();
+			}
 		}
 
 		return this.pushStack( ret );
@@ -5749,13 +5926,17 @@ jQuery.each({
 
 jQuery.extend({
 	filter: function( expr, elems, not ) {
+		var elem = elems[ 0 ];
+
 		if ( not ) {
 			expr = ":not(" + expr + ")";
 		}
 
-		return elems.length === 1 ?
-			jQuery.find.matchesSelector(elems[0], expr) ? [ elems[0] ] : [] :
-			jQuery.find.matches(expr, elems);
+		return elems.length === 1 && elem.nodeType === 1 ?
+			jQuery.find.matchesSelector( elem, expr ) ? [ elem ] : [] :
+			jQuery.find.matches( expr, jQuery.grep( elems, function( elem ) {
+				return elem.nodeType === 1;
+			}));
 	},
 
 	dir: function( elem, dir, until ) {
@@ -5785,37 +5966,32 @@ jQuery.extend({
 });
 
 // Implement the identical functionality for filter and not
-function winnow( elements, qualifier, keep ) {
-
-	// Can't pass null or undefined to indexOf in Firefox 4
-	// Set to 0 to skip string check
-	qualifier = qualifier || 0;
-
+function winnow( elements, qualifier, not ) {
 	if ( jQuery.isFunction( qualifier ) ) {
-		return jQuery.grep(elements, function( elem, i ) {
-			var retVal = !!qualifier.call( elem, i, elem );
-			return retVal === keep;
+		return jQuery.grep( elements, function( elem, i ) {
+			/* jshint -W018 */
+			return !!qualifier.call( elem, i, elem ) !== not;
 		});
 
-	} else if ( qualifier.nodeType ) {
-		return jQuery.grep(elements, function( elem ) {
-			return ( elem === qualifier ) === keep;
-		});
-
-	} else if ( typeof qualifier === "string" ) {
-		var filtered = jQuery.grep(elements, function( elem ) {
-			return elem.nodeType === 1;
-		});
-
-		if ( isSimple.test( qualifier ) ) {
-			return jQuery.filter(qualifier, filtered, !keep);
-		} else {
-			qualifier = jQuery.filter( qualifier, filtered );
-		}
 	}
 
-	return jQuery.grep(elements, function( elem ) {
-		return ( jQuery.inArray( elem, qualifier ) >= 0 ) === keep;
+	if ( qualifier.nodeType ) {
+		return jQuery.grep( elements, function( elem ) {
+			return ( elem === qualifier ) !== not;
+		});
+
+	}
+
+	if ( typeof qualifier === "string" ) {
+		if ( isSimple.test( qualifier ) ) {
+			return jQuery.filter( qualifier, elements, not );
+		}
+
+		qualifier = jQuery.filter( qualifier, elements );
+	}
+
+	return jQuery.grep( elements, function( elem ) {
+		return ( jQuery.inArray( elem, qualifier ) >= 0 ) !== not;
 	});
 }
 function createSafeFragment( document ) {
@@ -5880,89 +6056,26 @@ jQuery.fn.extend({
 		}, null, value, arguments.length );
 	},
 
-	wrapAll: function( html ) {
-		if ( jQuery.isFunction( html ) ) {
-			return this.each(function(i) {
-				jQuery(this).wrapAll( html.call(this, i) );
-			});
-		}
-
-		if ( this[0] ) {
-			// The elements to wrap the target around
-			var wrap = jQuery( html, this[0].ownerDocument ).eq(0).clone(true);
-
-			if ( this[0].parentNode ) {
-				wrap.insertBefore( this[0] );
-			}
-
-			wrap.map(function() {
-				var elem = this;
-
-				while ( elem.firstChild && elem.firstChild.nodeType === 1 ) {
-					elem = elem.firstChild;
-				}
-
-				return elem;
-			}).append( this );
-		}
-
-		return this;
-	},
-
-	wrapInner: function( html ) {
-		if ( jQuery.isFunction( html ) ) {
-			return this.each(function(i) {
-				jQuery(this).wrapInner( html.call(this, i) );
-			});
-		}
-
-		return this.each(function() {
-			var self = jQuery( this ),
-				contents = self.contents();
-
-			if ( contents.length ) {
-				contents.wrapAll( html );
-
-			} else {
-				self.append( html );
-			}
-		});
-	},
-
-	wrap: function( html ) {
-		var isFunction = jQuery.isFunction( html );
-
-		return this.each(function(i) {
-			jQuery( this ).wrapAll( isFunction ? html.call(this, i) : html );
-		});
-	},
-
-	unwrap: function() {
-		return this.parent().each(function() {
-			if ( !jQuery.nodeName( this, "body" ) ) {
-				jQuery( this ).replaceWith( this.childNodes );
-			}
-		}).end();
-	},
-
 	append: function() {
-		return this.domManip(arguments, true, function( elem ) {
+		return this.domManip( arguments, function( elem ) {
 			if ( this.nodeType === 1 || this.nodeType === 11 || this.nodeType === 9 ) {
-				this.appendChild( elem );
+				var target = manipulationTarget( this, elem );
+				target.appendChild( elem );
 			}
 		});
 	},
 
 	prepend: function() {
-		return this.domManip(arguments, true, function( elem ) {
+		return this.domManip( arguments, function( elem ) {
 			if ( this.nodeType === 1 || this.nodeType === 11 || this.nodeType === 9 ) {
-				this.insertBefore( elem, this.firstChild );
+				var target = manipulationTarget( this, elem );
+				target.insertBefore( elem, target.firstChild );
 			}
 		});
 	},
 
 	before: function() {
-		return this.domManip( arguments, false, function( elem ) {
+		return this.domManip( arguments, function( elem ) {
 			if ( this.parentNode ) {
 				this.parentNode.insertBefore( elem, this );
 			}
@@ -5970,7 +6083,7 @@ jQuery.fn.extend({
 	},
 
 	after: function() {
-		return this.domManip( arguments, false, function( elem ) {
+		return this.domManip( arguments, function( elem ) {
 			if ( this.parentNode ) {
 				this.parentNode.insertBefore( elem, this.nextSibling );
 			}
@@ -5980,20 +6093,20 @@ jQuery.fn.extend({
 	// keepData is for internal use only--do not document
 	remove: function( selector, keepData ) {
 		var elem,
+			elems = selector ? jQuery.filter( selector, this ) : this,
 			i = 0;
 
-		for ( ; (elem = this[i]) != null; i++ ) {
-			if ( !selector || jQuery.filter( selector, [ elem ] ).length > 0 ) {
-				if ( !keepData && elem.nodeType === 1 ) {
-					jQuery.cleanData( getAll( elem ) );
-				}
+		for ( ; (elem = elems[i]) != null; i++ ) {
 
-				if ( elem.parentNode ) {
-					if ( keepData && jQuery.contains( elem.ownerDocument, elem ) ) {
-						setGlobalEval( getAll( elem, "script" ) );
-					}
-					elem.parentNode.removeChild( elem );
+			if ( !keepData && elem.nodeType === 1 ) {
+				jQuery.cleanData( getAll( elem ) );
+			}
+
+			if ( elem.parentNode ) {
+				if ( keepData && jQuery.contains( elem.ownerDocument, elem ) ) {
+					setGlobalEval( getAll( elem, "script" ) );
 				}
+				elem.parentNode.removeChild( elem );
 			}
 		}
 
@@ -6076,31 +6189,39 @@ jQuery.fn.extend({
 		}, null, value, arguments.length );
 	},
 
-	replaceWith: function( value ) {
-		var isFunc = jQuery.isFunction( value );
+	replaceWith: function() {
+		var
+			// Snapshot the DOM in case .domManip sweeps something relevant into its fragment
+			args = jQuery.map( this, function( elem ) {
+				return [ elem.nextSibling, elem.parentNode ];
+			}),
+			i = 0;
 
-		// Make sure that the elements are removed from the DOM before they are inserted
-		// this can help fix replacing a parent with child elements
-		if ( !isFunc && typeof value !== "string" ) {
-			value = jQuery( value ).not( this ).detach();
-		}
-
-		return this.domManip( [ value ], true, function( elem ) {
-			var next = this.nextSibling,
-				parent = this.parentNode;
+		// Make the changes, replacing each context element with the new content
+		this.domManip( arguments, function( elem ) {
+			var next = args[ i++ ],
+				parent = args[ i++ ];
 
 			if ( parent ) {
+				// Don't use the snapshot next if it has moved (#13810)
+				if ( next && next.parentNode !== parent ) {
+					next = this.nextSibling;
+				}
 				jQuery( this ).remove();
 				parent.insertBefore( elem, next );
 			}
-		});
+		// Allow new content to include elements from the context set
+		}, true );
+
+		// Force removal if there was no new content (e.g., from empty arguments)
+		return i ? this : this.remove();
 	},
 
 	detach: function( selector ) {
 		return this.remove( selector, true );
 	},
 
-	domManip: function( args, table, callback ) {
+	domManip: function( args, callback, allowIntersection ) {
 
 		// Flatten any nested arrays
 		args = core_concat.apply( [], args );
@@ -6119,14 +6240,14 @@ jQuery.fn.extend({
 			return this.each(function( index ) {
 				var self = set.eq( index );
 				if ( isFunction ) {
-					args[0] = value.call( this, index, table ? self.html() : undefined );
+					args[0] = value.call( this, index, self.html() );
 				}
-				self.domManip( args, table, callback );
+				self.domManip( args, callback, allowIntersection );
 			});
 		}
 
 		if ( l ) {
-			fragment = jQuery.buildFragment( args, this[ 0 ].ownerDocument, false, this );
+			fragment = jQuery.buildFragment( args, this[ 0 ].ownerDocument, false, !allowIntersection && this );
 			first = fragment.firstChild;
 
 			if ( fragment.childNodes.length === 1 ) {
@@ -6134,7 +6255,6 @@ jQuery.fn.extend({
 			}
 
 			if ( first ) {
-				table = table && jQuery.nodeName( first, "tr" );
 				scripts = jQuery.map( getAll( fragment, "script" ), disableScript );
 				hasScripts = scripts.length;
 
@@ -6152,13 +6272,7 @@ jQuery.fn.extend({
 						}
 					}
 
-					callback.call(
-						table && jQuery.nodeName( this[i], "table" ) ?
-							findOrAppend( this[i], "tbody" ) :
-							this[i],
-						node,
-						i
-					);
+					callback.call( this[i], node, i );
 				}
 
 				if ( hasScripts ) {
@@ -6175,14 +6289,7 @@ jQuery.fn.extend({
 
 							if ( node.src ) {
 								// Hope ajax is available...
-								jQuery.ajax({
-									url: node.src,
-									type: "GET",
-									dataType: "script",
-									async: false,
-									global: false,
-									"throws": true
-								});
+								jQuery._evalUrl( node.src );
 							} else {
 								jQuery.globalEval( ( node.text || node.textContent || node.innerHTML || "" ).replace( rcleanScript, "" ) );
 							}
@@ -6199,14 +6306,20 @@ jQuery.fn.extend({
 	}
 });
 
-function findOrAppend( elem, tag ) {
-	return elem.getElementsByTagName( tag )[0] || elem.appendChild( elem.ownerDocument.createElement( tag ) );
+// Support: IE<8
+// Manipulating tables requires a tbody
+function manipulationTarget( elem, content ) {
+	return jQuery.nodeName( elem, "table" ) &&
+		jQuery.nodeName( content.nodeType === 1 ? content : content.firstChild, "tr" ) ?
+
+		elem.getElementsByTagName("tbody")[0] ||
+			elem.appendChild( elem.ownerDocument.createElement("tbody") ) :
+		elem;
 }
 
 // Replace/restore the type attribute of script elements for safe DOM manipulation
 function disableScript( elem ) {
-	var attr = elem.getAttributeNode("type");
-	elem.type = ( attr && attr.specified ) + "/" + elem.type;
+	elem.type = (jQuery.find.attr( elem, "type" ) !== null) + "/" + elem.type;
 	return elem;
 }
 function restoreScript( elem ) {
@@ -6612,6 +6725,83 @@ jQuery.extend({
 				}
 			}
 		}
+	},
+
+	_evalUrl: function( url ) {
+		return jQuery.ajax({
+			url: url,
+			type: "GET",
+			dataType: "script",
+			async: false,
+			global: false,
+			"throws": true
+		});
+	}
+});
+jQuery.fn.extend({
+	wrapAll: function( html ) {
+		if ( jQuery.isFunction( html ) ) {
+			return this.each(function(i) {
+				jQuery(this).wrapAll( html.call(this, i) );
+			});
+		}
+
+		if ( this[0] ) {
+			// The elements to wrap the target around
+			var wrap = jQuery( html, this[0].ownerDocument ).eq(0).clone(true);
+
+			if ( this[0].parentNode ) {
+				wrap.insertBefore( this[0] );
+			}
+
+			wrap.map(function() {
+				var elem = this;
+
+				while ( elem.firstChild && elem.firstChild.nodeType === 1 ) {
+					elem = elem.firstChild;
+				}
+
+				return elem;
+			}).append( this );
+		}
+
+		return this;
+	},
+
+	wrapInner: function( html ) {
+		if ( jQuery.isFunction( html ) ) {
+			return this.each(function(i) {
+				jQuery(this).wrapInner( html.call(this, i) );
+			});
+		}
+
+		return this.each(function() {
+			var self = jQuery( this ),
+				contents = self.contents();
+
+			if ( contents.length ) {
+				contents.wrapAll( html );
+
+			} else {
+				self.append( html );
+			}
+		});
+	},
+
+	wrap: function( html ) {
+		var isFunction = jQuery.isFunction( html );
+
+		return this.each(function(i) {
+			jQuery( this ).wrapAll( isFunction ? html.call(this, i) : html );
+		});
+	},
+
+	unwrap: function() {
+		return this.parent().each(function() {
+			if ( !jQuery.nodeName( this, "body" ) ) {
+				jQuery( this ).replaceWith( this.childNodes );
+			}
+		}).end();
 	}
 });
 var iframe, getStyles, curCSS,
@@ -6777,7 +6967,7 @@ jQuery.extend({
 		}
 	},
 
-	// Exclude the following css properties to add px
+	// Don't automatically add "px" to these possibly-unitless properties
 	cssNumber: {
 		"columnCount": true,
 		"fillOpacity": true,
@@ -6895,27 +7085,6 @@ jQuery.extend({
 			return extra === true || jQuery.isNumeric( num ) ? num || 0 : val;
 		}
 		return val;
-	},
-
-	// A method for quickly swapping in/out CSS properties to get correct calculations
-	swap: function( elem, options, callback, args ) {
-		var ret, name,
-			old = {};
-
-		// Remember the old values, and insert the new ones
-		for ( name in options ) {
-			old[ name ] = elem.style[ name ];
-			elem.style[ name ] = options[ name ];
-		}
-
-		ret = callback.apply( elem, args || [] );
-
-		// Revert the old values
-		for ( name in options ) {
-			elem.style[ name ] = old[ name ];
-		}
-
-		return ret;
 	}
 });
 
@@ -7404,9 +7573,26 @@ jQuery.each( ("blur focus focusin focusout load resize scroll unload click dblcl
 	};
 });
 
-jQuery.fn.hover = function( fnOver, fnOut ) {
-	return this.mouseenter( fnOver ).mouseleave( fnOut || fnOver );
-};
+jQuery.fn.extend({
+	hover: function( fnOver, fnOut ) {
+		return this.mouseenter( fnOver ).mouseleave( fnOut || fnOver );
+	},
+
+	bind: function( types, data, fn ) {
+		return this.on( types, null, data, fn );
+	},
+	unbind: function( types, fn ) {
+		return this.off( types, null, fn );
+	},
+
+	delegate: function( selector, types, data, fn ) {
+		return this.on( types, selector, data, fn );
+	},
+	undelegate: function( selector, types, fn ) {
+		// ( namespace ) or ( selector, types [, fn] )
+		return arguments.length === 1 ? this.off( selector, "**" ) : this.off( types, selector || "**", fn );
+	}
+});
 var
 	// Document location
 	ajaxLocParts,
@@ -7602,25 +7788,6 @@ jQuery.each( [ "ajaxStart", "ajaxStop", "ajaxComplete", "ajaxError", "ajaxSucces
 	};
 });
 
-jQuery.each( [ "get", "post" ], function( i, method ) {
-	jQuery[ method ] = function( url, data, callback, type ) {
-		// shift arguments if data argument was omitted
-		if ( jQuery.isFunction( data ) ) {
-			type = type || callback;
-			callback = data;
-			data = undefined;
-		}
-
-		return jQuery.ajax({
-			url: url,
-			type: method,
-			dataType: type,
-			data: data,
-			success: callback
-		});
-	};
-});
-
 jQuery.extend({
 
 	// Counter for holding the number of active queries
@@ -7666,7 +7833,8 @@ jQuery.extend({
 
 		responseFields: {
 			xml: "responseXML",
-			text: "responseText"
+			text: "responseText",
+			json: "responseJSON"
 		},
 
 		// Data converters
@@ -7674,7 +7842,7 @@ jQuery.extend({
 		converters: {
 
 			// Convert anything to text
-			"* text": window.String,
+			"* text": String,
 
 			// Text to html (true = no transformation)
 			"text html": true,
@@ -7853,8 +8021,8 @@ jQuery.extend({
 			parts = rurl.exec( s.url.toLowerCase() );
 			s.crossDomain = !!( parts &&
 				( parts[ 1 ] !== ajaxLocParts[ 1 ] || parts[ 2 ] !== ajaxLocParts[ 2 ] ||
-					( parts[ 3 ] || ( parts[ 1 ] === "http:" ? 80 : 443 ) ) !=
-						( ajaxLocParts[ 3 ] || ( ajaxLocParts[ 1 ] === "http:" ? 80 : 443 ) ) )
+					( parts[ 3 ] || ( parts[ 1 ] === "http:" ? "80" : "443" ) ) !==
+						( ajaxLocParts[ 3 ] || ( ajaxLocParts[ 1 ] === "http:" ? "80" : "443" ) ) )
 			);
 		}
 
@@ -8015,13 +8183,19 @@ jQuery.extend({
 			// Set readyState
 			jqXHR.readyState = status > 0 ? 4 : 0;
 
+			// Determine if successful
+			isSuccess = status >= 200 && status < 300 || status === 304;
+
 			// Get response data
 			if ( responses ) {
 				response = ajaxHandleResponses( s, jqXHR, responses );
 			}
 
+			// Convert no matter what (that way responseXXX fields are always set)
+			response = ajaxConvert( s, response, jqXHR, isSuccess );
+
 			// If successful, handle type chaining
-			if ( status >= 200 && status < 300 || status === 304 ) {
+			if ( isSuccess ) {
 
 				// Set the If-Modified-Since and/or If-None-Match header, if in ifModified mode.
 				if ( s.ifModified ) {
@@ -8036,21 +8210,18 @@ jQuery.extend({
 				}
 
 				// if no content
-				if ( status === 204 ) {
-					isSuccess = true;
+				if ( status === 204 || s.type === "HEAD" ) {
 					statusText = "nocontent";
 
 				// if not modified
 				} else if ( status === 304 ) {
-					isSuccess = true;
 					statusText = "notmodified";
 
 				// If we have data, let's convert it
 				} else {
-					isSuccess = ajaxConvert( s, response );
-					statusText = isSuccess.state;
-					success = isSuccess.data;
-					error = isSuccess.error;
+					statusText = response.state;
+					success = response.data;
+					error = response.error;
 					isSuccess = !error;
 				}
 			} else {
@@ -8100,32 +8271,42 @@ jQuery.extend({
 		return jqXHR;
 	},
 
-	getScript: function( url, callback ) {
-		return jQuery.get( url, undefined, callback, "script" );
-	},
-
 	getJSON: function( url, data, callback ) {
 		return jQuery.get( url, data, callback, "json" );
+	},
+
+	getScript: function( url, callback ) {
+		return jQuery.get( url, undefined, callback, "script" );
 	}
 });
 
+jQuery.each( [ "get", "post" ], function( i, method ) {
+	jQuery[ method ] = function( url, data, callback, type ) {
+		// shift arguments if data argument was omitted
+		if ( jQuery.isFunction( data ) ) {
+			type = type || callback;
+			callback = data;
+			data = undefined;
+		}
+
+		return jQuery.ajax({
+			url: url,
+			type: method,
+			dataType: type,
+			data: data,
+			success: callback
+		});
+	};
+});
+
 /* Handles responses to an ajax request:
- * - sets all responseXXX fields accordingly
  * - finds the right dataType (mediates between content-type and expected dataType)
  * - returns the corresponding response
  */
 function ajaxHandleResponses( s, jqXHR, responses ) {
 	var firstDataType, ct, finalDataType, type,
 		contents = s.contents,
-		dataTypes = s.dataTypes,
-		responseFields = s.responseFields;
-
-	// Fill responseXXX fields
-	for ( type in responseFields ) {
-		if ( type in responses ) {
-			jqXHR[ responseFields[type] ] = responses[ type ];
-		}
-	}
+		dataTypes = s.dataTypes;
 
 	// Remove auto dataType and get content-type in the process
 	while( dataTypes[ 0 ] === "*" ) {
@@ -8174,19 +8355,14 @@ function ajaxHandleResponses( s, jqXHR, responses ) {
 	}
 }
 
-// Chain conversions given the request and the original response
-function ajaxConvert( s, response ) {
-	var conv2, current, conv, tmp,
+/* Chain conversions given the request and the original response
+ * Also sets the responseXXX fields on the jqXHR instance
+ */
+function ajaxConvert( s, response, jqXHR, isSuccess ) {
+	var conv2, current, conv, tmp, prev,
 		converters = {},
-		i = 0,
 		// Work with a copy of dataTypes in case we need to modify it for conversion
-		dataTypes = s.dataTypes.slice(),
-		prev = dataTypes[ 0 ];
-
-	// Apply the dataFilter if provided
-	if ( s.dataFilter ) {
-		response = s.dataFilter( response, s.dataType );
-	}
+		dataTypes = s.dataTypes.slice();
 
 	// Create converters map with lowercased keys
 	if ( dataTypes[ 1 ] ) {
@@ -8195,14 +8371,32 @@ function ajaxConvert( s, response ) {
 		}
 	}
 
-	// Convert to each sequential dataType, tolerating list modification
-	for ( ; (current = dataTypes[++i]); ) {
+	current = dataTypes.shift();
 
-		// There's only work to do if current dataType is non-auto
-		if ( current !== "*" ) {
+	// Convert to each sequential dataType
+	while ( current ) {
+
+		if ( s.responseFields[ current ] ) {
+			jqXHR[ s.responseFields[ current ] ] = response;
+		}
+
+		// Apply the dataFilter if provided
+		if ( !prev && isSuccess && s.dataFilter ) {
+			response = s.dataFilter( response, s.dataType );
+		}
+
+		prev = current;
+		current = dataTypes.shift();
+
+		if ( current ) {
+
+			// There's only work to do if current dataType is non-auto
+			if ( current === "*" ) {
+
+				current = prev;
 
 			// Convert response if prev dataType is non-auto and differs from current
-			if ( prev !== "*" && prev !== current ) {
+			} else if ( prev !== "*" && prev !== current ) {
 
 				// Seek a direct converter
 				conv = converters[ prev + " " + current ] || converters[ "* " + current ];
@@ -8212,7 +8406,7 @@ function ajaxConvert( s, response ) {
 					for ( conv2 in converters ) {
 
 						// If conv2 outputs current
-						tmp = conv2.split(" ");
+						tmp = conv2.split( " " );
 						if ( tmp[ 1 ] === current ) {
 
 							// If prev can be converted to accepted input
@@ -8226,9 +8420,8 @@ function ajaxConvert( s, response ) {
 								// Otherwise, insert the intermediate dataType
 								} else if ( converters[ conv2 ] !== true ) {
 									current = tmp[ 0 ];
-									dataTypes.splice( i--, 0, current );
+									dataTypes.unshift( tmp[ 1 ] );
 								}
-
 								break;
 							}
 						}
@@ -8239,7 +8432,7 @@ function ajaxConvert( s, response ) {
 				if ( conv !== true ) {
 
 					// Unless errors are allowed to bubble, catch and return them
-					if ( conv && s["throws"] ) {
+					if ( conv && s[ "throws" ] ) {
 						response = conv( response );
 					} else {
 						try {
@@ -8250,9 +8443,6 @@ function ajaxConvert( s, response ) {
 					}
 				}
 			}
-
-			// Update prev for next iteration
-			prev = current;
 		}
 	}
 
@@ -8638,44 +8828,51 @@ var fxNow, timerId,
 	animationPrefilters = [ defaultPrefilter ],
 	tweeners = {
 		"*": [function( prop, value ) {
-			var end, unit,
-				tween = this.createTween( prop, value ),
-				parts = rfxnum.exec( value ),
+			var tween = this.createTween( prop, value ),
 				target = tween.cur(),
-				start = +target || 0,
+				parts = rfxnum.exec( value ),
+				unit = parts && parts[ 3 ] || ( jQuery.cssNumber[ prop ] ? "" : "px" ),
+
+				// Starting value computation is required for potential unit mismatches
+				start = ( jQuery.cssNumber[ prop ] || unit !== "px" && +target ) &&
+					rfxnum.exec( jQuery.css( tween.elem, prop ) ),
 				scale = 1,
 				maxIterations = 20;
 
-			if ( parts ) {
-				end = +parts[2];
-				unit = parts[3] || ( jQuery.cssNumber[ prop ] ? "" : "px" );
+			if ( start && start[ 3 ] !== unit ) {
+				// Trust units reported by jQuery.css
+				unit = unit || start[ 3 ];
 
-				// We need to compute starting value
-				if ( unit !== "px" && start ) {
-					// Iteratively approximate from a nonzero starting point
-					// Prefer the current property, because this process will be trivial if it uses the same units
-					// Fallback to end or a simple constant
-					start = jQuery.css( tween.elem, prop, true ) || end || 1;
+				// Make sure we update the tween properties later on
+				parts = parts || [];
 
-					do {
-						// If previous iteration zeroed out, double until we get *something*
-						// Use a string for doubling factor so we don't accidentally see scale as unchanged below
-						scale = scale || ".5";
+				// Iteratively approximate from a nonzero starting point
+				start = +target || 1;
 
-						// Adjust and apply
-						start = start / scale;
-						jQuery.style( tween.elem, prop, start + unit );
+				do {
+					// If previous iteration zeroed out, double until we get *something*
+					// Use a string for doubling factor so we don't accidentally see scale as unchanged below
+					scale = scale || ".5";
 
-					// Update scale, tolerating zero or NaN from tween.cur()
-					// And breaking the loop if scale is unchanged or perfect, or if we've just had enough
-					} while ( scale !== (scale = tween.cur() / target) && scale !== 1 && --maxIterations );
-				}
+					// Adjust and apply
+					start = start / scale;
+					jQuery.style( tween.elem, prop, start + unit );
 
-				tween.unit = unit;
-				tween.start = start;
-				// If a +=/-= token was provided, we're doing a relative animation
-				tween.end = parts[1] ? start + ( parts[1] + 1 ) * end : end;
+				// Update scale, tolerating zero or NaN from tween.cur()
+				// And breaking the loop if scale is unchanged or perfect, or if we've just had enough
+				} while ( scale !== (scale = tween.cur() / target) && scale !== 1 && --maxIterations );
 			}
+
+			// Update tween properties
+			if ( parts ) {
+				tween.unit = unit;
+				tween.start = +start || +target || 0;
+				// If a +=/-= token was provided, we're doing a relative animation
+				tween.end = parts[ 1 ] ?
+					start + ( parts[ 1 ] + 1 ) * parts[ 2 ] :
+					+parts[ 2 ];
+			}
+
 			return tween;
 		}]
 	};
@@ -8688,19 +8885,18 @@ function createFxNow() {
 	return ( fxNow = jQuery.now() );
 }
 
-function createTweens( animation, props ) {
-	jQuery.each( props, function( prop, value ) {
-		var collection = ( tweeners[ prop ] || [] ).concat( tweeners[ "*" ] ),
-			index = 0,
-			length = collection.length;
-		for ( ; index < length; index++ ) {
-			if ( collection[ index ].call( animation, prop, value ) ) {
+function createTween( value, prop, animation ) {
+	var tween,
+		collection = ( tweeners[ prop ] || [] ).concat( tweeners[ "*" ] ),
+		index = 0,
+		length = collection.length;
+	for ( ; index < length; index++ ) {
+		if ( (tween = collection[ index ].call( animation, prop, value )) ) {
 
-				// we're done with this property
-				return;
-			}
+			// we're done with this property
+			return tween;
 		}
-	});
+	}
 }
 
 function Animation( elem, properties, options ) {
@@ -8786,7 +8982,7 @@ function Animation( elem, properties, options ) {
 		}
 	}
 
-	createTweens( animation, props );
+	jQuery.map( props, createTween, animation );
 
 	if ( jQuery.isFunction( animation.opts.start ) ) {
 		animation.opts.start.call( elem, animation );
@@ -8808,7 +9004,7 @@ function Animation( elem, properties, options ) {
 }
 
 function propFilter( props, specialEasing ) {
-	var value, name, index, easing, hooks;
+	var index, name, easing, value, hooks;
 
 	// camelCase, specialEasing and expand cssHook pass
 	for ( index in props ) {
@@ -8875,15 +9071,13 @@ jQuery.Animation = jQuery.extend( Animation, {
 });
 
 function defaultPrefilter( elem, props, opts ) {
-	/*jshint validthis:true */
-	var prop, index, length,
-		value, dataShow, toggle,
-		tween, hooks, oldfire,
+	/* jshint validthis: true */
+	var prop, value, toggle, tween, hooks, oldfire,
 		anim = this,
-		style = elem.style,
 		orig = {},
-		handled = [],
-		hidden = elem.nodeType && isHidden( elem );
+		style = elem.style,
+		hidden = elem.nodeType && isHidden( elem ),
+		dataShow = jQuery._data( elem, "fxshow" );
 
 	// handle queue: false promises
 	if ( !opts.queue ) {
@@ -8948,23 +9142,25 @@ function defaultPrefilter( elem, props, opts ) {
 
 
 	// show/hide pass
-	for ( index in props ) {
-		value = props[ index ];
+	for ( prop in props ) {
+		value = props[ prop ];
 		if ( rfxtypes.exec( value ) ) {
-			delete props[ index ];
+			delete props[ prop ];
 			toggle = toggle || value === "toggle";
 			if ( value === ( hidden ? "hide" : "show" ) ) {
 				continue;
 			}
-			handled.push( index );
+			orig[ prop ] = dataShow && dataShow[ prop ] || jQuery.style( elem, prop );
 		}
 	}
 
-	length = handled.length;
-	if ( length ) {
-		dataShow = jQuery._data( elem, "fxshow" ) || jQuery._data( elem, "fxshow", {} );
-		if ( "hidden" in dataShow ) {
-			hidden = dataShow.hidden;
+	if ( !jQuery.isEmptyObject( orig ) ) {
+		if ( dataShow ) {
+			if ( "hidden" in dataShow ) {
+				hidden = dataShow.hidden;
+			}
+		} else {
+			dataShow = jQuery._data( elem, "fxshow", {} );
 		}
 
 		// store state if its toggle - enables .stop().toggle() to "reverse"
@@ -8985,10 +9181,8 @@ function defaultPrefilter( elem, props, opts ) {
 				jQuery.style( elem, prop, orig[ prop ] );
 			}
 		});
-		for ( index = 0 ; index < length ; index++ ) {
-			prop = handled[ index ];
-			tween = anim.createTween( prop, hidden ? dataShow[ prop ] : 0 );
-			orig[ prop ] = dataShow[ prop ] || jQuery.style( elem, prop );
+		for ( prop in orig ) {
+			tween = createTween( hidden ? dataShow[ prop ] : 0, prop, anim );
 
 			if ( !( prop in dataShow ) ) {
 				dataShow[ prop ] = tween.start;
@@ -9084,8 +9278,8 @@ Tween.propHooks = {
 	}
 };
 
-// Remove in 2.0 - this supports IE8's panic based approach
-// to setting things on disconnected nodes
+// Support: IE <=9
+// Panic based approach to setting things on disconnected nodes
 
 Tween.propHooks.scrollTop = Tween.propHooks.scrollLeft = {
 	set: function( tween ) {
@@ -9486,11 +9680,11 @@ jQuery.fn.extend({
 
 	offsetParent: function() {
 		return this.map(function() {
-			var offsetParent = this.offsetParent || document.documentElement;
+			var offsetParent = this.offsetParent || docElem;
 			while ( offsetParent && ( !jQuery.nodeName( offsetParent, "html" ) && jQuery.css( offsetParent, "position") === "static" ) ) {
 				offsetParent = offsetParent.offsetParent;
 			}
-			return offsetParent || document.documentElement;
+			return offsetParent || docElem;
 		});
 	}
 });
@@ -9574,24 +9768,34 @@ jQuery.each( { Height: "height", Width: "width" }, function( name, type ) {
 // Limit scope pollution from any deprecated API
 // (function() {
 
-// })();
-// Expose jQuery to the global object
-window.jQuery = window.$ = jQuery;
+// The number of elements contained in the matched element set
+jQuery.fn.size = function() {
+	return this.length;
+};
 
-// Expose jQuery as an AMD module, but only for AMD loaders that
-// understand the issues with loading multiple versions of jQuery
-// in a page that all might call define(). The loader will indicate
-// they have special allowances for multiple jQuery versions by
-// specifying define.amd.jQuery = true. Register as a named module,
-// since jQuery can be concatenated with other files that may use define,
-// but not use a proper concatenation script that understands anonymous
-// AMD modules. A named AMD is safest and most robust way to register.
-// Lowercase jquery is used because AMD module names are derived from
-// file names, and jQuery is normally delivered in a lowercase file name.
-// Do this after creating the global so that if an AMD module wants to call
-// noConflict to hide this version of jQuery, it will work.
-if ( typeof define === "function" && define.amd && define.amd.jQuery ) {
-	define( "jquery", [], function () { return jQuery; } );
+jQuery.fn.andSelf = jQuery.fn.addBack;
+
+// })();
+if ( typeof module === "object" && typeof module.exports === "object" ) {
+	// Expose jQuery as module.exports in loaders that implement the Node
+	// module pattern (including browserify). Do not create the global, since
+	// the user will be storing it themselves locally, and globals are frowned
+	// upon in the Node module world.
+	module.exports = jQuery;
+} else {
+	// Otherwise expose jQuery to the global object as usual
+	window.jQuery = window.$ = jQuery;
+
+	// Register as a named AMD module, since jQuery can be concatenated with other
+	// files that may use define, but not via a proper concatenation script that
+	// understands anonymous AMD modules. A named AMD is safest and most robust
+	// way to register. Lowercase jquery is used because AMD module names are
+	// derived from file names, and jQuery is normally delivered in a lowercase
+	// file name. Do this after creating the global so that if an AMD module wants
+	// to call noConflict to hide this version of jQuery, it will work.
+	if ( typeof define === "function" && define.amd ) {
+		define( "jquery", [], function () { return jQuery; } );
+	}
 }
 
 })( window );
@@ -9615,6 +9819,7 @@ e){b.setFromString(d,e)})},toString:function(a){var b=[],c;for(c in this)if(this
 typeof a.easing&&(c=a.easing,delete a.easing);"undefined"!==typeof a.duration&&(b=a.duration,delete a.duration);"undefined"!==typeof a.complete&&(f=a.complete,delete a.complete);"undefined"!==typeof a.queue&&(i=a.queue,delete a.queue);"undefined"!==typeof a.delay&&(g=a.delay,delete a.delay);"undefined"===typeof b&&(b=d.fx.speeds._default);"undefined"===typeof c&&(c=d.cssEase._default);var b=n(b),j=q(a,b,c,g),l=d.transit.enabled&&e.transition?parseInt(b,10)+parseInt(g,10):0;if(0===l)return p(h,i,function(b){h.css(a);
 f&&f.apply(h);b&&b()}),h;var k={},m=function(b){var c=false,g=function(){c&&h.unbind(o,g);l>0&&h.each(function(){this.style[e.transition]=k[this]||null});typeof f==="function"&&f.apply(h);typeof b==="function"&&b()};if(l>0&&o&&d.transit.useTransitionEnd){c=true;h.bind(o,g)}else window.setTimeout(g,l);h.each(function(){l>0&&(this.style[e.transition]=j);d(this).css(a)})};p(h,i,function(a){var b=0;e.transition==="MozTransition"&&b<25&&(b=25);window.setTimeout(function(){m(a)},b)});return this};d.transit.getTransitionValue=
 q})(jQuery);
+
 /*
 
 Copyright (C) 2011 by Yehuda Katz
@@ -9639,31 +9844,45 @@ THE SOFTWARE.
 
 */
 
+// lib/handlebars/browser-prefix.js
+var Handlebars = {};
+
+(function(Handlebars, undefined) {
+;
 // lib/handlebars/base.js
 
-/*jshint eqnull:true*/
-this.Handlebars = {};
-
-(function(Handlebars) {
-
-Handlebars.VERSION = "1.0.0-rc.3";
-Handlebars.COMPILER_REVISION = 2;
+Handlebars.VERSION = "1.0.0-rc.4";
+Handlebars.COMPILER_REVISION = 3;
 
 Handlebars.REVISION_CHANGES = {
   1: '<= 1.0.rc.2', // 1.0.rc.2 is actually rev2 but doesn't report it
-  2: '>= 1.0.0-rc.3'
+  2: '== 1.0.0-rc.3',
+  3: '>= 1.0.0-rc.4'
 };
 
 Handlebars.helpers  = {};
 Handlebars.partials = {};
 
+var toString = Object.prototype.toString,
+    functionType = '[object Function]',
+    objectType = '[object Object]';
+
 Handlebars.registerHelper = function(name, fn, inverse) {
-  if(inverse) { fn.not = inverse; }
-  this.helpers[name] = fn;
+  if (toString.call(name) === objectType) {
+    if (inverse || fn) { throw new Handlebars.Exception('Arg not supported with multiple helpers'); }
+    Handlebars.Utils.extend(this.helpers, name);
+  } else {
+    if (inverse) { fn.not = inverse; }
+    this.helpers[name] = fn;
+  }
 };
 
 Handlebars.registerPartial = function(name, str) {
-  this.partials[name] = str;
+  if (toString.call(name) === objectType) {
+    Handlebars.Utils.extend(this.partials,  name);
+  } else {
+    this.partials[name] = str;
+  }
 };
 
 Handlebars.registerHelper('helperMissing', function(arg) {
@@ -9674,13 +9893,9 @@ Handlebars.registerHelper('helperMissing', function(arg) {
   }
 });
 
-var toString = Object.prototype.toString, functionType = "[object Function]";
-
 Handlebars.registerHelper('blockHelperMissing', function(context, options) {
   var inverse = options.inverse || function() {}, fn = options.fn;
 
-
-  var ret = "";
   var type = toString.call(context);
 
   if(type === functionType) { context = context.call(this); }
@@ -9771,641 +9986,18 @@ Handlebars.registerHelper('if', function(context, options) {
 });
 
 Handlebars.registerHelper('unless', function(context, options) {
-  var fn = options.fn, inverse = options.inverse;
-  options.fn = inverse;
-  options.inverse = fn;
-
-  return Handlebars.helpers['if'].call(this, context, options);
+  return Handlebars.helpers['if'].call(this, context, {fn: options.inverse, inverse: options.fn});
 });
 
 Handlebars.registerHelper('with', function(context, options) {
-  return options.fn(context);
+  if (!Handlebars.Utils.isEmpty(context)) return options.fn(context);
 });
 
 Handlebars.registerHelper('log', function(context, options) {
   var level = options.data && options.data.level != null ? parseInt(options.data.level, 10) : 1;
   Handlebars.log(level, context);
 });
-
-}(this.Handlebars));
 ;
-// lib/handlebars/compiler/parser.js
-/* Jison generated parser */
-var handlebars = (function(){
-var parser = {trace: function trace() { },
-yy: {},
-symbols_: {"error":2,"root":3,"program":4,"EOF":5,"simpleInverse":6,"statements":7,"statement":8,"openInverse":9,"closeBlock":10,"openBlock":11,"mustache":12,"partial":13,"CONTENT":14,"COMMENT":15,"OPEN_BLOCK":16,"inMustache":17,"CLOSE":18,"OPEN_INVERSE":19,"OPEN_ENDBLOCK":20,"path":21,"OPEN":22,"OPEN_UNESCAPED":23,"OPEN_PARTIAL":24,"partialName":25,"params":26,"hash":27,"DATA":28,"param":29,"STRING":30,"INTEGER":31,"BOOLEAN":32,"hashSegments":33,"hashSegment":34,"ID":35,"EQUALS":36,"PARTIAL_NAME":37,"pathSegments":38,"SEP":39,"$accept":0,"$end":1},
-terminals_: {2:"error",5:"EOF",14:"CONTENT",15:"COMMENT",16:"OPEN_BLOCK",18:"CLOSE",19:"OPEN_INVERSE",20:"OPEN_ENDBLOCK",22:"OPEN",23:"OPEN_UNESCAPED",24:"OPEN_PARTIAL",28:"DATA",30:"STRING",31:"INTEGER",32:"BOOLEAN",35:"ID",36:"EQUALS",37:"PARTIAL_NAME",39:"SEP"},
-productions_: [0,[3,2],[4,2],[4,3],[4,2],[4,1],[4,1],[4,0],[7,1],[7,2],[8,3],[8,3],[8,1],[8,1],[8,1],[8,1],[11,3],[9,3],[10,3],[12,3],[12,3],[13,3],[13,4],[6,2],[17,3],[17,2],[17,2],[17,1],[17,1],[26,2],[26,1],[29,1],[29,1],[29,1],[29,1],[29,1],[27,1],[33,2],[33,1],[34,3],[34,3],[34,3],[34,3],[34,3],[25,1],[21,1],[38,3],[38,1]],
-performAction: function anonymous(yytext,yyleng,yylineno,yy,yystate,$$,_$) {
-
-var $0 = $$.length - 1;
-switch (yystate) {
-case 1: return $$[$0-1];
-break;
-case 2: this.$ = new yy.ProgramNode([], $$[$0]);
-break;
-case 3: this.$ = new yy.ProgramNode($$[$0-2], $$[$0]);
-break;
-case 4: this.$ = new yy.ProgramNode($$[$0-1], []);
-break;
-case 5: this.$ = new yy.ProgramNode($$[$0]);
-break;
-case 6: this.$ = new yy.ProgramNode([], []);
-break;
-case 7: this.$ = new yy.ProgramNode([]);
-break;
-case 8: this.$ = [$$[$0]];
-break;
-case 9: $$[$0-1].push($$[$0]); this.$ = $$[$0-1];
-break;
-case 10: this.$ = new yy.BlockNode($$[$0-2], $$[$0-1].inverse, $$[$0-1], $$[$0]);
-break;
-case 11: this.$ = new yy.BlockNode($$[$0-2], $$[$0-1], $$[$0-1].inverse, $$[$0]);
-break;
-case 12: this.$ = $$[$0];
-break;
-case 13: this.$ = $$[$0];
-break;
-case 14: this.$ = new yy.ContentNode($$[$0]);
-break;
-case 15: this.$ = new yy.CommentNode($$[$0]);
-break;
-case 16: this.$ = new yy.MustacheNode($$[$0-1][0], $$[$0-1][1]);
-break;
-case 17: this.$ = new yy.MustacheNode($$[$0-1][0], $$[$0-1][1]);
-break;
-case 18: this.$ = $$[$0-1];
-break;
-case 19: this.$ = new yy.MustacheNode($$[$0-1][0], $$[$0-1][1]);
-break;
-case 20: this.$ = new yy.MustacheNode($$[$0-1][0], $$[$0-1][1], true);
-break;
-case 21: this.$ = new yy.PartialNode($$[$0-1]);
-break;
-case 22: this.$ = new yy.PartialNode($$[$0-2], $$[$0-1]);
-break;
-case 23:
-break;
-case 24: this.$ = [[$$[$0-2]].concat($$[$0-1]), $$[$0]];
-break;
-case 25: this.$ = [[$$[$0-1]].concat($$[$0]), null];
-break;
-case 26: this.$ = [[$$[$0-1]], $$[$0]];
-break;
-case 27: this.$ = [[$$[$0]], null];
-break;
-case 28: this.$ = [[new yy.DataNode($$[$0])], null];
-break;
-case 29: $$[$0-1].push($$[$0]); this.$ = $$[$0-1];
-break;
-case 30: this.$ = [$$[$0]];
-break;
-case 31: this.$ = $$[$0];
-break;
-case 32: this.$ = new yy.StringNode($$[$0]);
-break;
-case 33: this.$ = new yy.IntegerNode($$[$0]);
-break;
-case 34: this.$ = new yy.BooleanNode($$[$0]);
-break;
-case 35: this.$ = new yy.DataNode($$[$0]);
-break;
-case 36: this.$ = new yy.HashNode($$[$0]);
-break;
-case 37: $$[$0-1].push($$[$0]); this.$ = $$[$0-1];
-break;
-case 38: this.$ = [$$[$0]];
-break;
-case 39: this.$ = [$$[$0-2], $$[$0]];
-break;
-case 40: this.$ = [$$[$0-2], new yy.StringNode($$[$0])];
-break;
-case 41: this.$ = [$$[$0-2], new yy.IntegerNode($$[$0])];
-break;
-case 42: this.$ = [$$[$0-2], new yy.BooleanNode($$[$0])];
-break;
-case 43: this.$ = [$$[$0-2], new yy.DataNode($$[$0])];
-break;
-case 44: this.$ = new yy.PartialNameNode($$[$0]);
-break;
-case 45: this.$ = new yy.IdNode($$[$0]);
-break;
-case 46: $$[$0-2].push($$[$0]); this.$ = $$[$0-2];
-break;
-case 47: this.$ = [$$[$0]];
-break;
-}
-},
-table: [{3:1,4:2,5:[2,7],6:3,7:4,8:6,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,5],22:[1,14],23:[1,15],24:[1,16]},{1:[3]},{5:[1,17]},{5:[2,6],7:18,8:6,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,19],20:[2,6],22:[1,14],23:[1,15],24:[1,16]},{5:[2,5],6:20,8:21,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,5],20:[2,5],22:[1,14],23:[1,15],24:[1,16]},{17:23,18:[1,22],21:24,28:[1,25],35:[1,27],38:26},{5:[2,8],14:[2,8],15:[2,8],16:[2,8],19:[2,8],20:[2,8],22:[2,8],23:[2,8],24:[2,8]},{4:28,6:3,7:4,8:6,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,5],20:[2,7],22:[1,14],23:[1,15],24:[1,16]},{4:29,6:3,7:4,8:6,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,5],20:[2,7],22:[1,14],23:[1,15],24:[1,16]},{5:[2,12],14:[2,12],15:[2,12],16:[2,12],19:[2,12],20:[2,12],22:[2,12],23:[2,12],24:[2,12]},{5:[2,13],14:[2,13],15:[2,13],16:[2,13],19:[2,13],20:[2,13],22:[2,13],23:[2,13],24:[2,13]},{5:[2,14],14:[2,14],15:[2,14],16:[2,14],19:[2,14],20:[2,14],22:[2,14],23:[2,14],24:[2,14]},{5:[2,15],14:[2,15],15:[2,15],16:[2,15],19:[2,15],20:[2,15],22:[2,15],23:[2,15],24:[2,15]},{17:30,21:24,28:[1,25],35:[1,27],38:26},{17:31,21:24,28:[1,25],35:[1,27],38:26},{17:32,21:24,28:[1,25],35:[1,27],38:26},{25:33,37:[1,34]},{1:[2,1]},{5:[2,2],8:21,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,19],20:[2,2],22:[1,14],23:[1,15],24:[1,16]},{17:23,21:24,28:[1,25],35:[1,27],38:26},{5:[2,4],7:35,8:6,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,19],20:[2,4],22:[1,14],23:[1,15],24:[1,16]},{5:[2,9],14:[2,9],15:[2,9],16:[2,9],19:[2,9],20:[2,9],22:[2,9],23:[2,9],24:[2,9]},{5:[2,23],14:[2,23],15:[2,23],16:[2,23],19:[2,23],20:[2,23],22:[2,23],23:[2,23],24:[2,23]},{18:[1,36]},{18:[2,27],21:41,26:37,27:38,28:[1,45],29:39,30:[1,42],31:[1,43],32:[1,44],33:40,34:46,35:[1,47],38:26},{18:[2,28]},{18:[2,45],28:[2,45],30:[2,45],31:[2,45],32:[2,45],35:[2,45],39:[1,48]},{18:[2,47],28:[2,47],30:[2,47],31:[2,47],32:[2,47],35:[2,47],39:[2,47]},{10:49,20:[1,50]},{10:51,20:[1,50]},{18:[1,52]},{18:[1,53]},{18:[1,54]},{18:[1,55],21:56,35:[1,27],38:26},{18:[2,44],35:[2,44]},{5:[2,3],8:21,9:7,11:8,12:9,13:10,14:[1,11],15:[1,12],16:[1,13],19:[1,19],20:[2,3],22:[1,14],23:[1,15],24:[1,16]},{14:[2,17],15:[2,17],16:[2,17],19:[2,17],20:[2,17],22:[2,17],23:[2,17],24:[2,17]},{18:[2,25],21:41,27:57,28:[1,45],29:58,30:[1,42],31:[1,43],32:[1,44],33:40,34:46,35:[1,47],38:26},{18:[2,26]},{18:[2,30],28:[2,30],30:[2,30],31:[2,30],32:[2,30],35:[2,30]},{18:[2,36],34:59,35:[1,60]},{18:[2,31],28:[2,31],30:[2,31],31:[2,31],32:[2,31],35:[2,31]},{18:[2,32],28:[2,32],30:[2,32],31:[2,32],32:[2,32],35:[2,32]},{18:[2,33],28:[2,33],30:[2,33],31:[2,33],32:[2,33],35:[2,33]},{18:[2,34],28:[2,34],30:[2,34],31:[2,34],32:[2,34],35:[2,34]},{18:[2,35],28:[2,35],30:[2,35],31:[2,35],32:[2,35],35:[2,35]},{18:[2,38],35:[2,38]},{18:[2,47],28:[2,47],30:[2,47],31:[2,47],32:[2,47],35:[2,47],36:[1,61],39:[2,47]},{35:[1,62]},{5:[2,10],14:[2,10],15:[2,10],16:[2,10],19:[2,10],20:[2,10],22:[2,10],23:[2,10],24:[2,10]},{21:63,35:[1,27],38:26},{5:[2,11],14:[2,11],15:[2,11],16:[2,11],19:[2,11],20:[2,11],22:[2,11],23:[2,11],24:[2,11]},{14:[2,16],15:[2,16],16:[2,16],19:[2,16],20:[2,16],22:[2,16],23:[2,16],24:[2,16]},{5:[2,19],14:[2,19],15:[2,19],16:[2,19],19:[2,19],20:[2,19],22:[2,19],23:[2,19],24:[2,19]},{5:[2,20],14:[2,20],15:[2,20],16:[2,20],19:[2,20],20:[2,20],22:[2,20],23:[2,20],24:[2,20]},{5:[2,21],14:[2,21],15:[2,21],16:[2,21],19:[2,21],20:[2,21],22:[2,21],23:[2,21],24:[2,21]},{18:[1,64]},{18:[2,24]},{18:[2,29],28:[2,29],30:[2,29],31:[2,29],32:[2,29],35:[2,29]},{18:[2,37],35:[2,37]},{36:[1,61]},{21:65,28:[1,69],30:[1,66],31:[1,67],32:[1,68],35:[1,27],38:26},{18:[2,46],28:[2,46],30:[2,46],31:[2,46],32:[2,46],35:[2,46],39:[2,46]},{18:[1,70]},{5:[2,22],14:[2,22],15:[2,22],16:[2,22],19:[2,22],20:[2,22],22:[2,22],23:[2,22],24:[2,22]},{18:[2,39],35:[2,39]},{18:[2,40],35:[2,40]},{18:[2,41],35:[2,41]},{18:[2,42],35:[2,42]},{18:[2,43],35:[2,43]},{5:[2,18],14:[2,18],15:[2,18],16:[2,18],19:[2,18],20:[2,18],22:[2,18],23:[2,18],24:[2,18]}],
-defaultActions: {17:[2,1],25:[2,28],38:[2,26],57:[2,24]},
-parseError: function parseError(str, hash) {
-    throw new Error(str);
-},
-parse: function parse(input) {
-    var self = this, stack = [0], vstack = [null], lstack = [], table = this.table, yytext = "", yylineno = 0, yyleng = 0, recovering = 0, TERROR = 2, EOF = 1;
-    this.lexer.setInput(input);
-    this.lexer.yy = this.yy;
-    this.yy.lexer = this.lexer;
-    this.yy.parser = this;
-    if (typeof this.lexer.yylloc == "undefined")
-        this.lexer.yylloc = {};
-    var yyloc = this.lexer.yylloc;
-    lstack.push(yyloc);
-    var ranges = this.lexer.options && this.lexer.options.ranges;
-    if (typeof this.yy.parseError === "function")
-        this.parseError = this.yy.parseError;
-    function popStack(n) {
-        stack.length = stack.length - 2 * n;
-        vstack.length = vstack.length - n;
-        lstack.length = lstack.length - n;
-    }
-    function lex() {
-        var token;
-        token = self.lexer.lex() || 1;
-        if (typeof token !== "number") {
-            token = self.symbols_[token] || token;
-        }
-        return token;
-    }
-    var symbol, preErrorSymbol, state, action, a, r, yyval = {}, p, len, newState, expected;
-    while (true) {
-        state = stack[stack.length - 1];
-        if (this.defaultActions[state]) {
-            action = this.defaultActions[state];
-        } else {
-            if (symbol === null || typeof symbol == "undefined") {
-                symbol = lex();
-            }
-            action = table[state] && table[state][symbol];
-        }
-        if (typeof action === "undefined" || !action.length || !action[0]) {
-            var errStr = "";
-            if (!recovering) {
-                expected = [];
-                for (p in table[state])
-                    if (this.terminals_[p] && p > 2) {
-                        expected.push("'" + this.terminals_[p] + "'");
-                    }
-                if (this.lexer.showPosition) {
-                    errStr = "Parse error on line " + (yylineno + 1) + ":\n" + this.lexer.showPosition() + "\nExpecting " + expected.join(", ") + ", got '" + (this.terminals_[symbol] || symbol) + "'";
-                } else {
-                    errStr = "Parse error on line " + (yylineno + 1) + ": Unexpected " + (symbol == 1?"end of input":"'" + (this.terminals_[symbol] || symbol) + "'");
-                }
-                this.parseError(errStr, {text: this.lexer.match, token: this.terminals_[symbol] || symbol, line: this.lexer.yylineno, loc: yyloc, expected: expected});
-            }
-        }
-        if (action[0] instanceof Array && action.length > 1) {
-            throw new Error("Parse Error: multiple actions possible at state: " + state + ", token: " + symbol);
-        }
-        switch (action[0]) {
-        case 1:
-            stack.push(symbol);
-            vstack.push(this.lexer.yytext);
-            lstack.push(this.lexer.yylloc);
-            stack.push(action[1]);
-            symbol = null;
-            if (!preErrorSymbol) {
-                yyleng = this.lexer.yyleng;
-                yytext = this.lexer.yytext;
-                yylineno = this.lexer.yylineno;
-                yyloc = this.lexer.yylloc;
-                if (recovering > 0)
-                    recovering--;
-            } else {
-                symbol = preErrorSymbol;
-                preErrorSymbol = null;
-            }
-            break;
-        case 2:
-            len = this.productions_[action[1]][1];
-            yyval.$ = vstack[vstack.length - len];
-            yyval._$ = {first_line: lstack[lstack.length - (len || 1)].first_line, last_line: lstack[lstack.length - 1].last_line, first_column: lstack[lstack.length - (len || 1)].first_column, last_column: lstack[lstack.length - 1].last_column};
-            if (ranges) {
-                yyval._$.range = [lstack[lstack.length - (len || 1)].range[0], lstack[lstack.length - 1].range[1]];
-            }
-            r = this.performAction.call(yyval, yytext, yyleng, yylineno, this.yy, action[1], vstack, lstack);
-            if (typeof r !== "undefined") {
-                return r;
-            }
-            if (len) {
-                stack = stack.slice(0, -1 * len * 2);
-                vstack = vstack.slice(0, -1 * len);
-                lstack = lstack.slice(0, -1 * len);
-            }
-            stack.push(this.productions_[action[1]][0]);
-            vstack.push(yyval.$);
-            lstack.push(yyval._$);
-            newState = table[stack[stack.length - 2]][stack[stack.length - 1]];
-            stack.push(newState);
-            break;
-        case 3:
-            return true;
-        }
-    }
-    return true;
-}
-};
-/* Jison generated lexer */
-var lexer = (function(){
-var lexer = ({EOF:1,
-parseError:function parseError(str, hash) {
-        if (this.yy.parser) {
-            this.yy.parser.parseError(str, hash);
-        } else {
-            throw new Error(str);
-        }
-    },
-setInput:function (input) {
-        this._input = input;
-        this._more = this._less = this.done = false;
-        this.yylineno = this.yyleng = 0;
-        this.yytext = this.matched = this.match = '';
-        this.conditionStack = ['INITIAL'];
-        this.yylloc = {first_line:1,first_column:0,last_line:1,last_column:0};
-        if (this.options.ranges) this.yylloc.range = [0,0];
-        this.offset = 0;
-        return this;
-    },
-input:function () {
-        var ch = this._input[0];
-        this.yytext += ch;
-        this.yyleng++;
-        this.offset++;
-        this.match += ch;
-        this.matched += ch;
-        var lines = ch.match(/(?:\r\n?|\n).*/g);
-        if (lines) {
-            this.yylineno++;
-            this.yylloc.last_line++;
-        } else {
-            this.yylloc.last_column++;
-        }
-        if (this.options.ranges) this.yylloc.range[1]++;
-
-        this._input = this._input.slice(1);
-        return ch;
-    },
-unput:function (ch) {
-        var len = ch.length;
-        var lines = ch.split(/(?:\r\n?|\n)/g);
-
-        this._input = ch + this._input;
-        this.yytext = this.yytext.substr(0, this.yytext.length-len-1);
-        //this.yyleng -= len;
-        this.offset -= len;
-        var oldLines = this.match.split(/(?:\r\n?|\n)/g);
-        this.match = this.match.substr(0, this.match.length-1);
-        this.matched = this.matched.substr(0, this.matched.length-1);
-
-        if (lines.length-1) this.yylineno -= lines.length-1;
-        var r = this.yylloc.range;
-
-        this.yylloc = {first_line: this.yylloc.first_line,
-          last_line: this.yylineno+1,
-          first_column: this.yylloc.first_column,
-          last_column: lines ?
-              (lines.length === oldLines.length ? this.yylloc.first_column : 0) + oldLines[oldLines.length - lines.length].length - lines[0].length:
-              this.yylloc.first_column - len
-          };
-
-        if (this.options.ranges) {
-            this.yylloc.range = [r[0], r[0] + this.yyleng - len];
-        }
-        return this;
-    },
-more:function () {
-        this._more = true;
-        return this;
-    },
-less:function (n) {
-        this.unput(this.match.slice(n));
-    },
-pastInput:function () {
-        var past = this.matched.substr(0, this.matched.length - this.match.length);
-        return (past.length > 20 ? '...':'') + past.substr(-20).replace(/\n/g, "");
-    },
-upcomingInput:function () {
-        var next = this.match;
-        if (next.length < 20) {
-            next += this._input.substr(0, 20-next.length);
-        }
-        return (next.substr(0,20)+(next.length > 20 ? '...':'')).replace(/\n/g, "");
-    },
-showPosition:function () {
-        var pre = this.pastInput();
-        var c = new Array(pre.length + 1).join("-");
-        return pre + this.upcomingInput() + "\n" + c+"^";
-    },
-next:function () {
-        if (this.done) {
-            return this.EOF;
-        }
-        if (!this._input) this.done = true;
-
-        var token,
-            match,
-            tempMatch,
-            index,
-            col,
-            lines;
-        if (!this._more) {
-            this.yytext = '';
-            this.match = '';
-        }
-        var rules = this._currentRules();
-        for (var i=0;i < rules.length; i++) {
-            tempMatch = this._input.match(this.rules[rules[i]]);
-            if (tempMatch && (!match || tempMatch[0].length > match[0].length)) {
-                match = tempMatch;
-                index = i;
-                if (!this.options.flex) break;
-            }
-        }
-        if (match) {
-            lines = match[0].match(/(?:\r\n?|\n).*/g);
-            if (lines) this.yylineno += lines.length;
-            this.yylloc = {first_line: this.yylloc.last_line,
-                           last_line: this.yylineno+1,
-                           first_column: this.yylloc.last_column,
-                           last_column: lines ? lines[lines.length-1].length-lines[lines.length-1].match(/\r?\n?/)[0].length : this.yylloc.last_column + match[0].length};
-            this.yytext += match[0];
-            this.match += match[0];
-            this.matches = match;
-            this.yyleng = this.yytext.length;
-            if (this.options.ranges) {
-                this.yylloc.range = [this.offset, this.offset += this.yyleng];
-            }
-            this._more = false;
-            this._input = this._input.slice(match[0].length);
-            this.matched += match[0];
-            token = this.performAction.call(this, this.yy, this, rules[index],this.conditionStack[this.conditionStack.length-1]);
-            if (this.done && this._input) this.done = false;
-            if (token) return token;
-            else return;
-        }
-        if (this._input === "") {
-            return this.EOF;
-        } else {
-            return this.parseError('Lexical error on line '+(this.yylineno+1)+'. Unrecognized text.\n'+this.showPosition(),
-                    {text: "", token: null, line: this.yylineno});
-        }
-    },
-lex:function lex() {
-        var r = this.next();
-        if (typeof r !== 'undefined') {
-            return r;
-        } else {
-            return this.lex();
-        }
-    },
-begin:function begin(condition) {
-        this.conditionStack.push(condition);
-    },
-popState:function popState() {
-        return this.conditionStack.pop();
-    },
-_currentRules:function _currentRules() {
-        return this.conditions[this.conditionStack[this.conditionStack.length-1]].rules;
-    },
-topState:function () {
-        return this.conditionStack[this.conditionStack.length-2];
-    },
-pushState:function begin(condition) {
-        this.begin(condition);
-    }});
-lexer.options = {};
-lexer.performAction = function anonymous(yy,yy_,$avoiding_name_collisions,YY_START) {
-
-var YYSTATE=YY_START
-switch($avoiding_name_collisions) {
-case 0:
-                                   if(yy_.yytext.slice(-1) !== "\\") this.begin("mu");
-                                   if(yy_.yytext.slice(-1) === "\\") yy_.yytext = yy_.yytext.substr(0,yy_.yyleng-1), this.begin("emu");
-                                   if(yy_.yytext) return 14;
-
-break;
-case 1: return 14;
-break;
-case 2:
-                                   if(yy_.yytext.slice(-1) !== "\\") this.popState();
-                                   if(yy_.yytext.slice(-1) === "\\") yy_.yytext = yy_.yytext.substr(0,yy_.yyleng-1);
-                                   return 14;
-
-break;
-case 3: yy_.yytext = yy_.yytext.substr(0, yy_.yyleng-4); this.popState(); return 15;
-break;
-case 4: this.begin("par"); return 24;
-break;
-case 5: return 16;
-break;
-case 6: return 20;
-break;
-case 7: return 19;
-break;
-case 8: return 19;
-break;
-case 9: return 23;
-break;
-case 10: return 23;
-break;
-case 11: this.popState(); this.begin('com');
-break;
-case 12: yy_.yytext = yy_.yytext.substr(3,yy_.yyleng-5); this.popState(); return 15;
-break;
-case 13: return 22;
-break;
-case 14: return 36;
-break;
-case 15: return 35;
-break;
-case 16: return 35;
-break;
-case 17: return 39;
-break;
-case 18: /*ignore whitespace*/
-break;
-case 19: this.popState(); return 18;
-break;
-case 20: this.popState(); return 18;
-break;
-case 21: yy_.yytext = yy_.yytext.substr(1,yy_.yyleng-2).replace(/\\"/g,'"'); return 30;
-break;
-case 22: yy_.yytext = yy_.yytext.substr(1,yy_.yyleng-2).replace(/\\'/g,"'"); return 30;
-break;
-case 23: yy_.yytext = yy_.yytext.substr(1); return 28;
-break;
-case 24: return 32;
-break;
-case 25: return 32;
-break;
-case 26: return 31;
-break;
-case 27: return 35;
-break;
-case 28: yy_.yytext = yy_.yytext.substr(1, yy_.yyleng-2); return 35;
-break;
-case 29: return 'INVALID';
-break;
-case 30: /*ignore whitespace*/
-break;
-case 31: this.popState(); return 37;
-break;
-case 32: return 5;
-break;
-}
-};
-lexer.rules = [/^(?:[^\x00]*?(?=(\{\{)))/,/^(?:[^\x00]+)/,/^(?:[^\x00]{2,}?(?=(\{\{|$)))/,/^(?:[\s\S]*?--\}\})/,/^(?:\{\{>)/,/^(?:\{\{#)/,/^(?:\{\{\/)/,/^(?:\{\{\^)/,/^(?:\{\{\s*else\b)/,/^(?:\{\{\{)/,/^(?:\{\{&)/,/^(?:\{\{!--)/,/^(?:\{\{![\s\S]*?\}\})/,/^(?:\{\{)/,/^(?:=)/,/^(?:\.(?=[} ]))/,/^(?:\.\.)/,/^(?:[\/.])/,/^(?:\s+)/,/^(?:\}\}\})/,/^(?:\}\})/,/^(?:"(\\["]|[^"])*")/,/^(?:'(\\[']|[^'])*')/,/^(?:@[a-zA-Z]+)/,/^(?:true(?=[}\s]))/,/^(?:false(?=[}\s]))/,/^(?:[0-9]+(?=[}\s]))/,/^(?:[a-zA-Z0-9_$-]+(?=[=}\s\/.]))/,/^(?:\[[^\]]*\])/,/^(?:.)/,/^(?:\s+)/,/^(?:[a-zA-Z0-9_$-/]+)/,/^(?:$)/];
-lexer.conditions = {"mu":{"rules":[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,32],"inclusive":false},"emu":{"rules":[2],"inclusive":false},"com":{"rules":[3],"inclusive":false},"par":{"rules":[30,31],"inclusive":false},"INITIAL":{"rules":[0,1,32],"inclusive":true}};
-return lexer;})()
-parser.lexer = lexer;
-function Parser () { this.yy = {}; }Parser.prototype = parser;parser.Parser = Parser;
-return new Parser;
-})();;
-// lib/handlebars/compiler/base.js
-Handlebars.Parser = handlebars;
-
-Handlebars.parse = function(input) {
-
-  // Just return if an already-compile AST was passed in.
-  if(input.constructor === Handlebars.AST.ProgramNode) { return input; }
-
-  Handlebars.Parser.yy = Handlebars.AST;
-  return Handlebars.Parser.parse(input);
-};
-
-Handlebars.print = function(ast) {
-  return new Handlebars.PrintVisitor().accept(ast);
-};;
-// lib/handlebars/compiler/ast.js
-(function() {
-
-  Handlebars.AST = {};
-
-  Handlebars.AST.ProgramNode = function(statements, inverse) {
-    this.type = "program";
-    this.statements = statements;
-    if(inverse) { this.inverse = new Handlebars.AST.ProgramNode(inverse); }
-  };
-
-  Handlebars.AST.MustacheNode = function(rawParams, hash, unescaped) {
-    this.type = "mustache";
-    this.escaped = !unescaped;
-    this.hash = hash;
-
-    var id = this.id = rawParams[0];
-    var params = this.params = rawParams.slice(1);
-
-    // a mustache is an eligible helper if:
-    // * its id is simple (a single part, not `this` or `..`)
-    var eligibleHelper = this.eligibleHelper = id.isSimple;
-
-    // a mustache is definitely a helper if:
-    // * it is an eligible helper, and
-    // * it has at least one parameter or hash segment
-    this.isHelper = eligibleHelper && (params.length || hash);
-
-    // if a mustache is an eligible helper but not a definite
-    // helper, it is ambiguous, and will be resolved in a later
-    // pass or at runtime.
-  };
-
-  Handlebars.AST.PartialNode = function(partialName, context) {
-    this.type         = "partial";
-    this.partialName  = partialName;
-    this.context      = context;
-  };
-
-  var verifyMatch = function(open, close) {
-    if(open.original !== close.original) {
-      throw new Handlebars.Exception(open.original + " doesn't match " + close.original);
-    }
-  };
-
-  Handlebars.AST.BlockNode = function(mustache, program, inverse, close) {
-    verifyMatch(mustache.id, close);
-    this.type = "block";
-    this.mustache = mustache;
-    this.program  = program;
-    this.inverse  = inverse;
-
-    if (this.inverse && !this.program) {
-      this.isInverse = true;
-    }
-  };
-
-  Handlebars.AST.ContentNode = function(string) {
-    this.type = "content";
-    this.string = string;
-  };
-
-  Handlebars.AST.HashNode = function(pairs) {
-    this.type = "hash";
-    this.pairs = pairs;
-  };
-
-  Handlebars.AST.IdNode = function(parts) {
-    this.type = "ID";
-    this.original = parts.join(".");
-
-    var dig = [], depth = 0;
-
-    for(var i=0,l=parts.length; i<l; i++) {
-      var part = parts[i];
-
-      if (part === ".." || part === "." || part === "this") {
-        if (dig.length > 0) { throw new Handlebars.Exception("Invalid path: " + this.original); }
-        else if (part === "..") { depth++; }
-        else { this.isScoped = true; }
-      }
-      else { dig.push(part); }
-    }
-
-    this.parts    = dig;
-    this.string   = dig.join('.');
-    this.depth    = depth;
-
-    // an ID is simple if it only has one part, and that part is not
-    // `..` or `this`.
-    this.isSimple = parts.length === 1 && !this.isScoped && depth === 0;
-
-    this.stringModeValue = this.string;
-  };
-
-  Handlebars.AST.PartialNameNode = function(name) {
-    this.type = "PARTIAL_NAME";
-    this.name = name;
-  };
-
-  Handlebars.AST.DataNode = function(id) {
-    this.type = "DATA";
-    this.id = id;
-  };
-
-  Handlebars.AST.StringNode = function(string) {
-    this.type = "STRING";
-    this.string = string;
-    this.stringModeValue = string;
-  };
-
-  Handlebars.AST.IntegerNode = function(integer) {
-    this.type = "INTEGER";
-    this.integer = integer;
-    this.stringModeValue = Number(integer);
-  };
-
-  Handlebars.AST.BooleanNode = function(bool) {
-    this.type = "BOOLEAN";
-    this.bool = bool;
-    this.stringModeValue = bool === "true";
-  };
-
-  Handlebars.AST.CommentNode = function(comment) {
-    this.type = "comment";
-    this.comment = comment;
-  };
-
-})();;
 // lib/handlebars/utils.js
 
 var errorProps = ['description', 'fileName', 'lineNumber', 'message', 'name', 'number', 'stack'];
@@ -10428,1311 +10020,61 @@ Handlebars.SafeString.prototype.toString = function() {
   return this.string.toString();
 };
 
-(function() {
-  var escape = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#x27;",
-    "`": "&#x60;"
-  };
-
-  var badChars = /[&<>"'`]/g;
-  var possible = /[&<>"'`]/;
-
-  var escapeChar = function(chr) {
-    return escape[chr] || "&amp;";
-  };
-
-  Handlebars.Utils = {
-    escapeExpression: function(string) {
-      // don't escape SafeStrings, since they're already safe
-      if (string instanceof Handlebars.SafeString) {
-        return string.toString();
-      } else if (string == null || string === false) {
-        return "";
-      }
-
-      if(!possible.test(string)) { return string; }
-      return string.replace(badChars, escapeChar);
-    },
-
-    isEmpty: function(value) {
-      if (!value && value !== 0) {
-        return true;
-      } else if(Object.prototype.toString.call(value) === "[object Array]" && value.length === 0) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-  };
-})();;
-// lib/handlebars/compiler/compiler.js
-
-/*jshint eqnull:true*/
-Handlebars.Compiler = function() {};
-Handlebars.JavaScriptCompiler = function() {};
-
-(function(Compiler, JavaScriptCompiler) {
-  // the foundHelper register will disambiguate helper lookup from finding a
-  // function in a context. This is necessary for mustache compatibility, which
-  // requires that context functions in blocks are evaluated by blockHelperMissing,
-  // and then proceed as if the resulting value was provided to blockHelperMissing.
-
-  Compiler.prototype = {
-    compiler: Compiler,
-
-    disassemble: function() {
-      var opcodes = this.opcodes, opcode, out = [], params, param;
-
-      for (var i=0, l=opcodes.length; i<l; i++) {
-        opcode = opcodes[i];
-
-        if (opcode.opcode === 'DECLARE') {
-          out.push("DECLARE " + opcode.name + "=" + opcode.value);
-        } else {
-          params = [];
-          for (var j=0; j<opcode.args.length; j++) {
-            param = opcode.args[j];
-            if (typeof param === "string") {
-              param = "\"" + param.replace("\n", "\\n") + "\"";
-            }
-            params.push(param);
-          }
-          out.push(opcode.opcode + " " + params.join(" "));
-        }
-      }
-
-      return out.join("\n");
-    },
-    equals: function(other) {
-      var len = this.opcodes.length;
-      if (other.opcodes.length !== len) {
-        return false;
-      }
-
-      for (var i = 0; i < len; i++) {
-        var opcode = this.opcodes[i],
-            otherOpcode = other.opcodes[i];
-        if (opcode.opcode !== otherOpcode.opcode || opcode.args.length !== otherOpcode.args.length) {
-          return false;
-        }
-        for (var j = 0; j < opcode.args.length; j++) {
-          if (opcode.args[j] !== otherOpcode.args[j]) {
-            return false;
-          }
-        }
-      }
-      return true;
-    },
-
-    guid: 0,
-
-    compile: function(program, options) {
-      this.children = [];
-      this.depths = {list: []};
-      this.options = options;
-
-      // These changes will propagate to the other compiler components
-      var knownHelpers = this.options.knownHelpers;
-      this.options.knownHelpers = {
-        'helperMissing': true,
-        'blockHelperMissing': true,
-        'each': true,
-        'if': true,
-        'unless': true,
-        'with': true,
-        'log': true
-      };
-      if (knownHelpers) {
-        for (var name in knownHelpers) {
-          this.options.knownHelpers[name] = knownHelpers[name];
-        }
-      }
-
-      return this.program(program);
-    },
-
-    accept: function(node) {
-      return this[node.type](node);
-    },
-
-    program: function(program) {
-      var statements = program.statements, statement;
-      this.opcodes = [];
-
-      for(var i=0, l=statements.length; i<l; i++) {
-        statement = statements[i];
-        this[statement.type](statement);
-      }
-      this.isSimple = l === 1;
-
-      this.depths.list = this.depths.list.sort(function(a, b) {
-        return a - b;
-      });
-
-      return this;
-    },
-
-    compileProgram: function(program) {
-      var result = new this.compiler().compile(program, this.options);
-      var guid = this.guid++, depth;
-
-      this.usePartial = this.usePartial || result.usePartial;
-
-      this.children[guid] = result;
-
-      for(var i=0, l=result.depths.list.length; i<l; i++) {
-        depth = result.depths.list[i];
-
-        if(depth < 2) { continue; }
-        else { this.addDepth(depth - 1); }
-      }
-
-      return guid;
-    },
-
-    block: function(block) {
-      var mustache = block.mustache,
-          program = block.program,
-          inverse = block.inverse;
-
-      if (program) {
-        program = this.compileProgram(program);
-      }
-
-      if (inverse) {
-        inverse = this.compileProgram(inverse);
-      }
-
-      var type = this.classifyMustache(mustache);
-
-      if (type === "helper") {
-        this.helperMustache(mustache, program, inverse);
-      } else if (type === "simple") {
-        this.simpleMustache(mustache);
-
-        // now that the simple mustache is resolved, we need to
-        // evaluate it by executing `blockHelperMissing`
-        this.opcode('pushProgram', program);
-        this.opcode('pushProgram', inverse);
-        this.opcode('emptyHash');
-        this.opcode('blockValue');
-      } else {
-        this.ambiguousMustache(mustache, program, inverse);
-
-        // now that the simple mustache is resolved, we need to
-        // evaluate it by executing `blockHelperMissing`
-        this.opcode('pushProgram', program);
-        this.opcode('pushProgram', inverse);
-        this.opcode('emptyHash');
-        this.opcode('ambiguousBlockValue');
-      }
-
-      this.opcode('append');
-    },
-
-    hash: function(hash) {
-      var pairs = hash.pairs, pair, val;
-
-      this.opcode('pushHash');
-
-      for(var i=0, l=pairs.length; i<l; i++) {
-        pair = pairs[i];
-        val  = pair[1];
-
-        if (this.options.stringParams) {
-          this.opcode('pushStringParam', val.stringModeValue, val.type);
-        } else {
-          this.accept(val);
-        }
-
-        this.opcode('assignToHash', pair[0]);
-      }
-      this.opcode('popHash');
-    },
-
-    partial: function(partial) {
-      var partialName = partial.partialName;
-      this.usePartial = true;
-
-      if(partial.context) {
-        this.ID(partial.context);
-      } else {
-        this.opcode('push', 'depth0');
-      }
-
-      this.opcode('invokePartial', partialName.name);
-      this.opcode('append');
-    },
-
-    content: function(content) {
-      this.opcode('appendContent', content.string);
-    },
-
-    mustache: function(mustache) {
-      var options = this.options;
-      var type = this.classifyMustache(mustache);
-
-      if (type === "simple") {
-        this.simpleMustache(mustache);
-      } else if (type === "helper") {
-        this.helperMustache(mustache);
-      } else {
-        this.ambiguousMustache(mustache);
-      }
-
-      if(mustache.escaped && !options.noEscape) {
-        this.opcode('appendEscaped');
-      } else {
-        this.opcode('append');
-      }
-    },
-
-    ambiguousMustache: function(mustache, program, inverse) {
-      var id = mustache.id,
-          name = id.parts[0],
-          isBlock = program != null || inverse != null;
-
-      this.opcode('getContext', id.depth);
-
-      this.opcode('pushProgram', program);
-      this.opcode('pushProgram', inverse);
-
-      this.opcode('invokeAmbiguous', name, isBlock);
-    },
-
-    simpleMustache: function(mustache) {
-      var id = mustache.id;
-
-      if (id.type === 'DATA') {
-        this.DATA(id);
-      } else if (id.parts.length) {
-        this.ID(id);
-      } else {
-        // Simplified ID for `this`
-        this.addDepth(id.depth);
-        this.opcode('getContext', id.depth);
-        this.opcode('pushContext');
-      }
-
-      this.opcode('resolvePossibleLambda');
-    },
-
-    helperMustache: function(mustache, program, inverse) {
-      var params = this.setupFullMustacheParams(mustache, program, inverse),
-          name = mustache.id.parts[0];
-
-      if (this.options.knownHelpers[name]) {
-        this.opcode('invokeKnownHelper', params.length, name);
-      } else if (this.knownHelpersOnly) {
-        throw new Error("You specified knownHelpersOnly, but used the unknown helper " + name);
-      } else {
-        this.opcode('invokeHelper', params.length, name);
-      }
-    },
-
-    ID: function(id) {
-      this.addDepth(id.depth);
-      this.opcode('getContext', id.depth);
-
-      var name = id.parts[0];
-      if (!name) {
-        this.opcode('pushContext');
-      } else {
-        this.opcode('lookupOnContext', id.parts[0]);
-      }
-
-      for(var i=1, l=id.parts.length; i<l; i++) {
-        this.opcode('lookup', id.parts[i]);
-      }
-    },
-
-    DATA: function(data) {
-      this.options.data = true;
-      this.opcode('lookupData', data.id);
-    },
-
-    STRING: function(string) {
-      this.opcode('pushString', string.string);
-    },
-
-    INTEGER: function(integer) {
-      this.opcode('pushLiteral', integer.integer);
-    },
-
-    BOOLEAN: function(bool) {
-      this.opcode('pushLiteral', bool.bool);
-    },
-
-    comment: function() {},
-
-    // HELPERS
-    opcode: function(name) {
-      this.opcodes.push({ opcode: name, args: [].slice.call(arguments, 1) });
-    },
-
-    declare: function(name, value) {
-      this.opcodes.push({ opcode: 'DECLARE', name: name, value: value });
-    },
-
-    addDepth: function(depth) {
-      if(isNaN(depth)) { throw new Error("EWOT"); }
-      if(depth === 0) { return; }
-
-      if(!this.depths[depth]) {
-        this.depths[depth] = true;
-        this.depths.list.push(depth);
-      }
-    },
-
-    classifyMustache: function(mustache) {
-      var isHelper   = mustache.isHelper;
-      var isEligible = mustache.eligibleHelper;
-      var options    = this.options;
-
-      // if ambiguous, we can possibly resolve the ambiguity now
-      if (isEligible && !isHelper) {
-        var name = mustache.id.parts[0];
-
-        if (options.knownHelpers[name]) {
-          isHelper = true;
-        } else if (options.knownHelpersOnly) {
-          isEligible = false;
-        }
-      }
-
-      if (isHelper) { return "helper"; }
-      else if (isEligible) { return "ambiguous"; }
-      else { return "simple"; }
-    },
-
-    pushParams: function(params) {
-      var i = params.length, param;
-
-      while(i--) {
-        param = params[i];
-
-        if(this.options.stringParams) {
-          if(param.depth) {
-            this.addDepth(param.depth);
-          }
-
-          this.opcode('getContext', param.depth || 0);
-          this.opcode('pushStringParam', param.stringModeValue, param.type);
-        } else {
-          this[param.type](param);
-        }
-      }
-    },
-
-    setupMustacheParams: function(mustache) {
-      var params = mustache.params;
-      this.pushParams(params);
-
-      if(mustache.hash) {
-        this.hash(mustache.hash);
-      } else {
-        this.opcode('emptyHash');
-      }
-
-      return params;
-    },
-
-    // this will replace setupMustacheParams when we're done
-    setupFullMustacheParams: function(mustache, program, inverse) {
-      var params = mustache.params;
-      this.pushParams(params);
-
-      this.opcode('pushProgram', program);
-      this.opcode('pushProgram', inverse);
-
-      if(mustache.hash) {
-        this.hash(mustache.hash);
-      } else {
-        this.opcode('emptyHash');
-      }
-
-      return params;
-    }
-  };
-
-  var Literal = function(value) {
-    this.value = value;
-  };
-
-  JavaScriptCompiler.prototype = {
-    // PUBLIC API: You can override these methods in a subclass to provide
-    // alternative compiled forms for name lookup and buffering semantics
-    nameLookup: function(parent, name /* , type*/) {
-      if (/^[0-9]+$/.test(name)) {
-        return parent + "[" + name + "]";
-      } else if (JavaScriptCompiler.isValidJavaScriptVariableName(name)) {
-        return parent + "." + name;
-      }
-      else {
-        return parent + "['" + name + "']";
-      }
-    },
-
-    appendToBuffer: function(string) {
-      if (this.environment.isSimple) {
-        return "return " + string + ";";
-      } else {
-        return {
-          appendToBuffer: true,
-          content: string,
-          toString: function() { return "buffer += " + string + ";"; }
-        };
-      }
-    },
-
-    initializeBuffer: function() {
-      return this.quotedString("");
-    },
-
-    namespace: "Handlebars",
-    // END PUBLIC API
-
-    compile: function(environment, options, context, asObject) {
-      this.environment = environment;
-      this.options = options || {};
-
-      Handlebars.log(Handlebars.logger.DEBUG, this.environment.disassemble() + "\n\n");
-
-      this.name = this.environment.name;
-      this.isChild = !!context;
-      this.context = context || {
-        programs: [],
-        environments: [],
-        aliases: { }
-      };
-
-      this.preamble();
-
-      this.stackSlot = 0;
-      this.stackVars = [];
-      this.registers = { list: [] };
-      this.compileStack = [];
-      this.inlineStack = [];
-
-      this.compileChildren(environment, options);
-
-      var opcodes = environment.opcodes, opcode;
-
-      this.i = 0;
-
-      for(l=opcodes.length; this.i<l; this.i++) {
-        opcode = opcodes[this.i];
-
-        if(opcode.opcode === 'DECLARE') {
-          this[opcode.name] = opcode.value;
-        } else {
-          this[opcode.opcode].apply(this, opcode.args);
-        }
-      }
-
-      return this.createFunctionContext(asObject);
-    },
-
-    nextOpcode: function() {
-      var opcodes = this.environment.opcodes;
-      return opcodes[this.i + 1];
-    },
-
-    eat: function() {
-      this.i = this.i + 1;
-    },
-
-    preamble: function() {
-      var out = [];
-
-      if (!this.isChild) {
-        var namespace = this.namespace;
-        var copies = "helpers = helpers || " + namespace + ".helpers;";
-        if (this.environment.usePartial) { copies = copies + " partials = partials || " + namespace + ".partials;"; }
-        if (this.options.data) { copies = copies + " data = data || {};"; }
-        out.push(copies);
-      } else {
-        out.push('');
-      }
-
-      if (!this.environment.isSimple) {
-        out.push(", buffer = " + this.initializeBuffer());
-      } else {
-        out.push("");
-      }
-
-      // track the last context pushed into place to allow skipping the
-      // getContext opcode when it would be a noop
-      this.lastContext = 0;
-      this.source = out;
-    },
-
-    createFunctionContext: function(asObject) {
-      var locals = this.stackVars.concat(this.registers.list);
-
-      if(locals.length > 0) {
-        this.source[1] = this.source[1] + ", " + locals.join(", ");
-      }
-
-      // Generate minimizer alias mappings
-      if (!this.isChild) {
-        for (var alias in this.context.aliases) {
-          this.source[1] = this.source[1] + ', ' + alias + '=' + this.context.aliases[alias];
-        }
-      }
-
-      if (this.source[1]) {
-        this.source[1] = "var " + this.source[1].substring(2) + ";";
-      }
-
-      // Merge children
-      if (!this.isChild) {
-        this.source[1] += '\n' + this.context.programs.join('\n') + '\n';
-      }
-
-      if (!this.environment.isSimple) {
-        this.source.push("return buffer;");
-      }
-
-      var params = this.isChild ? ["depth0", "data"] : ["Handlebars", "depth0", "helpers", "partials", "data"];
-
-      for(var i=0, l=this.environment.depths.list.length; i<l; i++) {
-        params.push("depth" + this.environment.depths.list[i]);
-      }
-
-      // Perform a second pass over the output to merge content when possible
-      var source = this.mergeSource();
-
-      if (!this.isChild) {
-        var revision = Handlebars.COMPILER_REVISION,
-            versions = Handlebars.REVISION_CHANGES[revision];
-        source = "this.compilerInfo = ["+revision+",'"+versions+"'];\n"+source;
-      }
-
-      if (asObject) {
-        params.push(source);
-
-        return Function.apply(this, params);
-      } else {
-        var functionSource = 'function ' + (this.name || '') + '(' + params.join(',') + ') {\n  ' + source + '}';
-        Handlebars.log(Handlebars.logger.DEBUG, functionSource + "\n\n");
-        return functionSource;
-      }
-    },
-    mergeSource: function() {
-      // WARN: We are not handling the case where buffer is still populated as the source should
-      // not have buffer append operations as their final action.
-      var source = '',
-          buffer;
-      for (var i = 0, len = this.source.length; i < len; i++) {
-        var line = this.source[i];
-        if (line.appendToBuffer) {
-          if (buffer) {
-            buffer = buffer + '\n    + ' + line.content;
-          } else {
-            buffer = line.content;
-          }
-        } else {
-          if (buffer) {
-            source += 'buffer += ' + buffer + ';\n  ';
-            buffer = undefined;
-          }
-          source += line + '\n  ';
-        }
-      }
-      return source;
-    },
-
-    // [blockValue]
-    //
-    // On stack, before: hash, inverse, program, value
-    // On stack, after: return value of blockHelperMissing
-    //
-    // The purpose of this opcode is to take a block of the form
-    // `{{#foo}}...{{/foo}}`, resolve the value of `foo`, and
-    // replace it on the stack with the result of properly
-    // invoking blockHelperMissing.
-    blockValue: function() {
-      this.context.aliases.blockHelperMissing = 'helpers.blockHelperMissing';
-
-      var params = ["depth0"];
-      this.setupParams(0, params);
-
-      this.replaceStack(function(current) {
-        params.splice(1, 0, current);
-        return "blockHelperMissing.call(" + params.join(", ") + ")";
-      });
-    },
-
-    // [ambiguousBlockValue]
-    //
-    // On stack, before: hash, inverse, program, value
-    // Compiler value, before: lastHelper=value of last found helper, if any
-    // On stack, after, if no lastHelper: same as [blockValue]
-    // On stack, after, if lastHelper: value
-    ambiguousBlockValue: function() {
-      this.context.aliases.blockHelperMissing = 'helpers.blockHelperMissing';
-
-      var params = ["depth0"];
-      this.setupParams(0, params);
-
-      var current = this.topStack();
-      params.splice(1, 0, current);
-
-      // Use the options value generated from the invocation
-      params[params.length-1] = 'options';
-
-      this.source.push("if (!" + this.lastHelper + ") { " + current + " = blockHelperMissing.call(" + params.join(", ") + "); }");
-    },
-
-    // [appendContent]
-    //
-    // On stack, before: ...
-    // On stack, after: ...
-    //
-    // Appends the string value of `content` to the current buffer
-    appendContent: function(content) {
-      this.source.push(this.appendToBuffer(this.quotedString(content)));
-    },
-
-    // [append]
-    //
-    // On stack, before: value, ...
-    // On stack, after: ...
-    //
-    // Coerces `value` to a String and appends it to the current buffer.
-    //
-    // If `value` is truthy, or 0, it is coerced into a string and appended
-    // Otherwise, the empty string is appended
-    append: function() {
-      // Force anything that is inlined onto the stack so we don't have duplication
-      // when we examine local
-      this.flushInline();
-      var local = this.popStack();
-      this.source.push("if(" + local + " || " + local + " === 0) { " + this.appendToBuffer(local) + " }");
-      if (this.environment.isSimple) {
-        this.source.push("else { " + this.appendToBuffer("''") + " }");
-      }
-    },
-
-    // [appendEscaped]
-    //
-    // On stack, before: value, ...
-    // On stack, after: ...
-    //
-    // Escape `value` and append it to the buffer
-    appendEscaped: function() {
-      this.context.aliases.escapeExpression = 'this.escapeExpression';
-
-      this.source.push(this.appendToBuffer("escapeExpression(" + this.popStack() + ")"));
-    },
-
-    // [getContext]
-    //
-    // On stack, before: ...
-    // On stack, after: ...
-    // Compiler value, after: lastContext=depth
-    //
-    // Set the value of the `lastContext` compiler value to the depth
-    getContext: function(depth) {
-      if(this.lastContext !== depth) {
-        this.lastContext = depth;
-      }
-    },
-
-    // [lookupOnContext]
-    //
-    // On stack, before: ...
-    // On stack, after: currentContext[name], ...
-    //
-    // Looks up the value of `name` on the current context and pushes
-    // it onto the stack.
-    lookupOnContext: function(name) {
-      this.push(this.nameLookup('depth' + this.lastContext, name, 'context'));
-    },
-
-    // [pushContext]
-    //
-    // On stack, before: ...
-    // On stack, after: currentContext, ...
-    //
-    // Pushes the value of the current context onto the stack.
-    pushContext: function() {
-      this.pushStackLiteral('depth' + this.lastContext);
-    },
-
-    // [resolvePossibleLambda]
-    //
-    // On stack, before: value, ...
-    // On stack, after: resolved value, ...
-    //
-    // If the `value` is a lambda, replace it on the stack by
-    // the return value of the lambda
-    resolvePossibleLambda: function() {
-      this.context.aliases.functionType = '"function"';
-
-      this.replaceStack(function(current) {
-        return "typeof " + current + " === functionType ? " + current + ".apply(depth0) : " + current;
-      });
-    },
-
-    // [lookup]
-    //
-    // On stack, before: value, ...
-    // On stack, after: value[name], ...
-    //
-    // Replace the value on the stack with the result of looking
-    // up `name` on `value`
-    lookup: function(name) {
-      this.replaceStack(function(current) {
-        return current + " == null || " + current + " === false ? " + current + " : " + this.nameLookup(current, name, 'context');
-      });
-    },
-
-    // [lookupData]
-    //
-    // On stack, before: ...
-    // On stack, after: data[id], ...
-    //
-    // Push the result of looking up `id` on the current data
-    lookupData: function(id) {
-      this.push(this.nameLookup('data', id, 'data'));
-    },
-
-    // [pushStringParam]
-    //
-    // On stack, before: ...
-    // On stack, after: string, currentContext, ...
-    //
-    // This opcode is designed for use in string mode, which
-    // provides the string value of a parameter along with its
-    // depth rather than resolving it immediately.
-    pushStringParam: function(string, type) {
-      this.pushStackLiteral('depth' + this.lastContext);
-
-      this.pushString(type);
-
-      if (typeof string === 'string') {
-        this.pushString(string);
-      } else {
-        this.pushStackLiteral(string);
-      }
-    },
-
-    emptyHash: function() {
-      this.pushStackLiteral('{}');
-
-      if (this.options.stringParams) {
-        this.register('hashTypes', '{}');
-      }
-    },
-    pushHash: function() {
-      this.hash = {values: [], types: []};
-    },
-    popHash: function() {
-      var hash = this.hash;
-      this.hash = undefined;
-
-      if (this.options.stringParams) {
-        this.register('hashTypes', '{' + hash.types.join(',') + '}');
-      }
-      this.push('{\n    ' + hash.values.join(',\n    ') + '\n  }');
-    },
-
-    // [pushString]
-    //
-    // On stack, before: ...
-    // On stack, after: quotedString(string), ...
-    //
-    // Push a quoted version of `string` onto the stack
-    pushString: function(string) {
-      this.pushStackLiteral(this.quotedString(string));
-    },
-
-    // [push]
-    //
-    // On stack, before: ...
-    // On stack, after: expr, ...
-    //
-    // Push an expression onto the stack
-    push: function(expr) {
-      this.inlineStack.push(expr);
-      return expr;
-    },
-
-    // [pushLiteral]
-    //
-    // On stack, before: ...
-    // On stack, after: value, ...
-    //
-    // Pushes a value onto the stack. This operation prevents
-    // the compiler from creating a temporary variable to hold
-    // it.
-    pushLiteral: function(value) {
-      this.pushStackLiteral(value);
-    },
-
-    // [pushProgram]
-    //
-    // On stack, before: ...
-    // On stack, after: program(guid), ...
-    //
-    // Push a program expression onto the stack. This takes
-    // a compile-time guid and converts it into a runtime-accessible
-    // expression.
-    pushProgram: function(guid) {
-      if (guid != null) {
-        this.pushStackLiteral(this.programExpression(guid));
-      } else {
-        this.pushStackLiteral(null);
-      }
-    },
-
-    // [invokeHelper]
-    //
-    // On stack, before: hash, inverse, program, params..., ...
-    // On stack, after: result of helper invocation
-    //
-    // Pops off the helper's parameters, invokes the helper,
-    // and pushes the helper's return value onto the stack.
-    //
-    // If the helper is not found, `helperMissing` is called.
-    invokeHelper: function(paramSize, name) {
-      this.context.aliases.helperMissing = 'helpers.helperMissing';
-
-      var helper = this.lastHelper = this.setupHelper(paramSize, name, true);
-
-      this.push(helper.name);
-      this.replaceStack(function(name) {
-        return name + ' ? ' + name + '.call(' +
-            helper.callParams + ") " + ": helperMissing.call(" +
-            helper.helperMissingParams + ")";
-      });
-    },
-
-    // [invokeKnownHelper]
-    //
-    // On stack, before: hash, inverse, program, params..., ...
-    // On stack, after: result of helper invocation
-    //
-    // This operation is used when the helper is known to exist,
-    // so a `helperMissing` fallback is not required.
-    invokeKnownHelper: function(paramSize, name) {
-      var helper = this.setupHelper(paramSize, name);
-      this.push(helper.name + ".call(" + helper.callParams + ")");
-    },
-
-    // [invokeAmbiguous]
-    //
-    // On stack, before: hash, inverse, program, params..., ...
-    // On stack, after: result of disambiguation
-    //
-    // This operation is used when an expression like `{{foo}}`
-    // is provided, but we don't know at compile-time whether it
-    // is a helper or a path.
-    //
-    // This operation emits more code than the other options,
-    // and can be avoided by passing the `knownHelpers` and
-    // `knownHelpersOnly` flags at compile-time.
-    invokeAmbiguous: function(name, helperCall) {
-      this.context.aliases.functionType = '"function"';
-
-      this.pushStackLiteral('{}');    // Hash value
-      var helper = this.setupHelper(0, name, helperCall);
-
-      var helperName = this.lastHelper = this.nameLookup('helpers', name, 'helper');
-
-      var nonHelper = this.nameLookup('depth' + this.lastContext, name, 'context');
-      var nextStack = this.nextStack();
-
-      this.source.push('if (' + nextStack + ' = ' + helperName + ') { ' + nextStack + ' = ' + nextStack + '.call(' + helper.callParams + '); }');
-      this.source.push('else { ' + nextStack + ' = ' + nonHelper + '; ' + nextStack + ' = typeof ' + nextStack + ' === functionType ? ' + nextStack + '.apply(depth0) : ' + nextStack + '; }');
-    },
-
-    // [invokePartial]
-    //
-    // On stack, before: context, ...
-    // On stack after: result of partial invocation
-    //
-    // This operation pops off a context, invokes a partial with that context,
-    // and pushes the result of the invocation back.
-    invokePartial: function(name) {
-      var params = [this.nameLookup('partials', name, 'partial'), "'" + name + "'", this.popStack(), "helpers", "partials"];
-
-      if (this.options.data) {
-        params.push("data");
-      }
-
-      this.context.aliases.self = "this";
-      this.push("self.invokePartial(" + params.join(", ") + ")");
-    },
-
-    // [assignToHash]
-    //
-    // On stack, before: value, hash, ...
-    // On stack, after: hash, ...
-    //
-    // Pops a value and hash off the stack, assigns `hash[key] = value`
-    // and pushes the hash back onto the stack.
-    assignToHash: function(key) {
-      var value = this.popStack(),
-          type;
-
-      if (this.options.stringParams) {
-        type = this.popStack();
-        this.popStack();
-      }
-
-      var hash = this.hash;
-      if (type) {
-        hash.types.push("'" + key + "': " + type);
-      }
-      hash.values.push("'" + key + "': (" + value + ")");
-    },
-
-    // HELPERS
-
-    compiler: JavaScriptCompiler,
-
-    compileChildren: function(environment, options) {
-      var children = environment.children, child, compiler;
-
-      for(var i=0, l=children.length; i<l; i++) {
-        child = children[i];
-        compiler = new this.compiler();
-
-        var index = this.matchExistingProgram(child);
-
-        if (index == null) {
-          this.context.programs.push('');     // Placeholder to prevent name conflicts for nested children
-          index = this.context.programs.length;
-          child.index = index;
-          child.name = 'program' + index;
-          this.context.programs[index] = compiler.compile(child, options, this.context);
-          this.context.environments[index] = child;
-        } else {
-          child.index = index;
-          child.name = 'program' + index;
-        }
-      }
-    },
-    matchExistingProgram: function(child) {
-      for (var i = 0, len = this.context.environments.length; i < len; i++) {
-        var environment = this.context.environments[i];
-        if (environment && environment.equals(child)) {
-          return i;
-        }
-      }
-    },
-
-    programExpression: function(guid) {
-      this.context.aliases.self = "this";
-
-      if(guid == null) {
-        return "self.noop";
-      }
-
-      var child = this.environment.children[guid],
-          depths = child.depths.list, depth;
-
-      var programParams = [child.index, child.name, "data"];
-
-      for(var i=0, l = depths.length; i<l; i++) {
-        depth = depths[i];
-
-        if(depth === 1) { programParams.push("depth0"); }
-        else { programParams.push("depth" + (depth - 1)); }
-      }
-
-      if(depths.length === 0) {
-        return "self.program(" + programParams.join(", ") + ")";
-      } else {
-        programParams.shift();
-        return "self.programWithDepth(" + programParams.join(", ") + ")";
-      }
-    },
-
-    register: function(name, val) {
-      this.useRegister(name);
-      this.source.push(name + " = " + val + ";");
-    },
-
-    useRegister: function(name) {
-      if(!this.registers[name]) {
-        this.registers[name] = true;
-        this.registers.list.push(name);
-      }
-    },
-
-    pushStackLiteral: function(item) {
-      return this.push(new Literal(item));
-    },
-
-    pushStack: function(item) {
-      this.flushInline();
-
-      var stack = this.incrStack();
-      if (item) {
-        this.source.push(stack + " = " + item + ";");
-      }
-      this.compileStack.push(stack);
-      return stack;
-    },
-
-    replaceStack: function(callback) {
-      var prefix = '',
-          inline = this.isInline(),
-          stack;
-
-      // If we are currently inline then we want to merge the inline statement into the
-      // replacement statement via ','
-      if (inline) {
-        var top = this.popStack(true);
-
-        if (top instanceof Literal) {
-          // Literals do not need to be inlined
-          stack = top.value;
-        } else {
-          // Get or create the current stack name for use by the inline
-          var name = this.stackSlot ? this.topStackName() : this.incrStack();
-
-          prefix = '(' + this.push(name) + ' = ' + top + '),';
-          stack = this.topStack();
-        }
-      } else {
-        stack = this.topStack();
-      }
-
-      var item = callback.call(this, stack);
-
-      if (inline) {
-        if (this.inlineStack.length || this.compileStack.length) {
-          this.popStack();
-        }
-        this.push('(' + prefix + item + ')');
-      } else {
-        // Prevent modification of the context depth variable. Through replaceStack
-        if (!/^stack/.test(stack)) {
-          stack = this.nextStack();
-        }
-
-        this.source.push(stack + " = (" + prefix + item + ");");
-      }
-      return stack;
-    },
-
-    nextStack: function() {
-      return this.pushStack();
-    },
-
-    incrStack: function() {
-      this.stackSlot++;
-      if(this.stackSlot > this.stackVars.length) { this.stackVars.push("stack" + this.stackSlot); }
-      return this.topStackName();
-    },
-    topStackName: function() {
-      return "stack" + this.stackSlot;
-    },
-    flushInline: function() {
-      var inlineStack = this.inlineStack;
-      if (inlineStack.length) {
-        this.inlineStack = [];
-        for (var i = 0, len = inlineStack.length; i < len; i++) {
-          var entry = inlineStack[i];
-          if (entry instanceof Literal) {
-            this.compileStack.push(entry);
-          } else {
-            this.pushStack(entry);
-          }
-        }
-      }
-    },
-    isInline: function() {
-      return this.inlineStack.length;
-    },
-
-    popStack: function(wrapped) {
-      var inline = this.isInline(),
-          item = (inline ? this.inlineStack : this.compileStack).pop();
-
-      if (!wrapped && (item instanceof Literal)) {
-        return item.value;
-      } else {
-        if (!inline) {
-          this.stackSlot--;
-        }
-        return item;
-      }
-    },
-
-    topStack: function(wrapped) {
-      var stack = (this.isInline() ? this.inlineStack : this.compileStack),
-          item = stack[stack.length - 1];
-
-      if (!wrapped && (item instanceof Literal)) {
-        return item.value;
-      } else {
-        return item;
-      }
-    },
-
-    quotedString: function(str) {
-      return '"' + str
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r') + '"';
-    },
-
-    setupHelper: function(paramSize, name, missingParams) {
-      var params = [];
-      this.setupParams(paramSize, params, missingParams);
-      var foundHelper = this.nameLookup('helpers', name, 'helper');
-
-      return {
-        params: params,
-        name: foundHelper,
-        callParams: ["depth0"].concat(params).join(", "),
-        helperMissingParams: missingParams && ["depth0", this.quotedString(name)].concat(params).join(", ")
-      };
-    },
-
-    // the params and contexts arguments are passed in arrays
-    // to fill in
-    setupParams: function(paramSize, params, useRegister) {
-      var options = [], contexts = [], types = [], param, inverse, program;
-
-      options.push("hash:" + this.popStack());
-
-      inverse = this.popStack();
-      program = this.popStack();
-
-      // Avoid setting fn and inverse if neither are set. This allows
-      // helpers to do a check for `if (options.fn)`
-      if (program || inverse) {
-        if (!program) {
-          this.context.aliases.self = "this";
-          program = "self.noop";
-        }
-
-        if (!inverse) {
-         this.context.aliases.self = "this";
-          inverse = "self.noop";
-        }
-
-        options.push("inverse:" + inverse);
-        options.push("fn:" + program);
-      }
-
-      for(var i=0; i<paramSize; i++) {
-        param = this.popStack();
-        params.push(param);
-
-        if(this.options.stringParams) {
-          types.push(this.popStack());
-          contexts.push(this.popStack());
-        }
-      }
-
-      if (this.options.stringParams) {
-        options.push("contexts:[" + contexts.join(",") + "]");
-        options.push("types:[" + types.join(",") + "]");
-        options.push("hashTypes:hashTypes");
-      }
-
-      if(this.options.data) {
-        options.push("data:data");
-      }
-
-      options = "{" + options.join(",") + "}";
-      if (useRegister) {
-        this.register('options', options);
-        params.push('options');
-      } else {
-        params.push(options);
-      }
-      return params.join(", ");
-    }
-  };
-
-  var reservedWords = (
-    "break else new var" +
-    " case finally return void" +
-    " catch for switch while" +
-    " continue function this with" +
-    " default if throw" +
-    " delete in try" +
-    " do instanceof typeof" +
-    " abstract enum int short" +
-    " boolean export interface static" +
-    " byte extends long super" +
-    " char final native synchronized" +
-    " class float package throws" +
-    " const goto private transient" +
-    " debugger implements protected volatile" +
-    " double import public let yield"
-  ).split(" ");
-
-  var compilerWords = JavaScriptCompiler.RESERVED_WORDS = {};
-
-  for(var i=0, l=reservedWords.length; i<l; i++) {
-    compilerWords[reservedWords[i]] = true;
-  }
-
-  JavaScriptCompiler.isValidJavaScriptVariableName = function(name) {
-    if(!JavaScriptCompiler.RESERVED_WORDS[name] && /^[a-zA-Z_$][0-9a-zA-Z_$]+$/.test(name)) {
-      return true;
-    }
-    return false;
-  };
-
-})(Handlebars.Compiler, Handlebars.JavaScriptCompiler);
-
-Handlebars.precompile = function(input, options) {
-  if (!input || (typeof input !== 'string' && input.constructor !== Handlebars.AST.ProgramNode)) {
-    throw new Handlebars.Exception("You must pass a string or Handlebars AST to Handlebars.compile. You passed " + input);
-  }
-
-  options = options || {};
-  if (!('data' in options)) {
-    options.data = true;
-  }
-  var ast = Handlebars.parse(input);
-  var environment = new Handlebars.Compiler().compile(ast, options);
-  return new Handlebars.JavaScriptCompiler().compile(environment, options);
+var escape = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#x27;",
+  "`": "&#x60;"
 };
 
-Handlebars.compile = function(input, options) {
-  if (!input || (typeof input !== 'string' && input.constructor !== Handlebars.AST.ProgramNode)) {
-    throw new Handlebars.Exception("You must pass a string or Handlebars AST to Handlebars.compile. You passed " + input);
-  }
+var badChars = /[&<>"'`]/g;
+var possible = /[&<>"'`]/;
 
-  options = options || {};
-  if (!('data' in options)) {
-    options.data = true;
-  }
-  var compiled;
-  function compile() {
-    var ast = Handlebars.parse(input);
-    var environment = new Handlebars.Compiler().compile(ast, options);
-    var templateSpec = new Handlebars.JavaScriptCompiler().compile(environment, options, undefined, true);
-    return Handlebars.template(templateSpec);
-  }
+var escapeChar = function(chr) {
+  return escape[chr] || "&amp;";
+};
 
-  // Template is only compiled on first use and cached after that point.
-  return function(context, options) {
-    if (!compiled) {
-      compiled = compile();
+Handlebars.Utils = {
+  extend: function(obj, value) {
+    for(var key in value) {
+      if(value.hasOwnProperty(key)) {
+        obj[key] = value[key];
+      }
     }
-    return compiled.call(this, context, options);
-  };
+  },
+
+  escapeExpression: function(string) {
+    // don't escape SafeStrings, since they're already safe
+    if (string instanceof Handlebars.SafeString) {
+      return string.toString();
+    } else if (string == null || string === false) {
+      return "";
+    }
+
+    // Force a string conversion as this will be done by the append regardless and
+    // the regex test will do this transparently behind the scenes, causing issues if
+    // an object's to string has escaped characters in it.
+    string = string.toString();
+
+    if(!possible.test(string)) { return string; }
+    return string.replace(badChars, escapeChar);
+  },
+
+  isEmpty: function(value) {
+    if (!value && value !== 0) {
+      return true;
+    } else if(toString.call(value) === "[object Array]" && value.length === 0) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 };
 ;
 // lib/handlebars/runtime.js
+
 Handlebars.VM = {
   template: function(templateSpec) {
     // Just add water
@@ -11743,13 +10085,11 @@ Handlebars.VM = {
       program: function(i, fn, data) {
         var programWrapper = this.programs[i];
         if(data) {
-          return Handlebars.VM.program(fn, data);
-        } else if(programWrapper) {
-          return programWrapper;
-        } else {
-          programWrapper = this.programs[i] = Handlebars.VM.program(fn);
-          return programWrapper;
+          programWrapper = Handlebars.VM.program(i, fn, data);
+        } else if (!programWrapper) {
+          programWrapper = this.programs[i] = Handlebars.VM.program(i, fn);
         }
+        return programWrapper;
       },
       programWithDepth: Handlebars.VM.programWithDepth,
       noop: Handlebars.VM.noop,
@@ -11781,21 +10121,27 @@ Handlebars.VM = {
     };
   },
 
-  programWithDepth: function(fn, data, $depth) {
-    var args = Array.prototype.slice.call(arguments, 2);
+  programWithDepth: function(i, fn, data /*, $depth */) {
+    var args = Array.prototype.slice.call(arguments, 3);
 
-    return function(context, options) {
+    var program = function(context, options) {
       options = options || {};
 
       return fn.apply(this, [context, options.data || data].concat(args));
     };
+    program.program = i;
+    program.depth = args.length;
+    return program;
   },
-  program: function(fn, data) {
-    return function(context, options) {
+  program: function(i, fn, data) {
+    var program = function(context, options) {
       options = options || {};
 
       return fn(context, options.data || data);
     };
+    program.program = i;
+    program.depth = 0;
+    return program;
   },
   noop: function() { return ""; },
   invokePartial: function(partial, name, context, helpers, partials, data) {
@@ -11816,8 +10162,12 @@ Handlebars.VM = {
 
 Handlebars.template = Handlebars.VM.template;
 ;
-// Version: v1.0.0-rc.3
-// Last commit: a488a58 (2013-04-20 22:49:17 -0700)
+// lib/handlebars/browser-suffix.js
+})(Handlebars);
+;
+
+// Version: v1.0.0-rc.3-272-g4c74b2d
+// Last commit: 4c74b2d (2013-05-21 12:35:21 -0700)
 
 
 (function() {
@@ -11969,8 +10319,8 @@ Ember.deprecateFunc = function(message, func) {
 
 })();
 
-// Version: v1.0.0-rc.2-186-ga488a58
-// Last commit: a488a58 (2013-04-20 22:49:17 -0700)
+// Version: v1.0.0-rc.4
+// Last commit: 1acec81 (2013-05-27 20:18:28 -0500)
 
 
 (function() {
@@ -11987,11 +10337,18 @@ var define, requireModule;
     if (seen[name]) { return seen[name]; }
     seen[name] = {};
 
-    var mod = registry[name],
-        deps = mod.deps,
-        callback = mod.callback,
-        reified = [],
-        exports;
+    var mod, deps, callback, reified, exports;
+
+    mod = registry[name];
+
+    if (!mod) {
+      throw new Error("Module '" + name + "' not found.");
+    }
+
+    deps = mod.deps;
+    callback = mod.callback;
+    reified = [];
+    exports;
 
     for (var i=0, l=deps.length; i<l; i++) {
       if (deps[i] === 'exports') {
@@ -12030,7 +10387,7 @@ var define, requireModule;
 
   @class Ember
   @static
-  @version 1.0.0-rc.3
+  @version 1.0.0-rc.4
 */
 
 if ('undefined' === typeof Ember) {
@@ -12057,10 +10414,10 @@ Ember.toString = function() { return "Ember"; };
 /**
   @property VERSION
   @type String
-  @default '1.0.0-rc.3'
+  @default '1.0.0-rc.4'
   @final
 */
-Ember.VERSION = '1.0.0-rc.3';
+Ember.VERSION = '1.0.0-rc.4';
 
 /**
   Standard environmental variables. You can define these in a global `ENV`
@@ -12209,7 +10566,7 @@ Ember.onerror = null;
 /**
   @private
 
-  Wrap code block in a try/catch if {{#crossLink "Ember/onerror"}}{{/crossLink}} is set.
+  Wrap code block in a try/catch if `Ember.onerror` is set.
 
   @method handleErrors
   @for Ember
@@ -12285,7 +10642,7 @@ Ember.none = Ember.deprecateFunc("Ember.none is deprecated. Please use Ember.isN
   @return {Boolean}
 */
 Ember.isEmpty = function(obj) {
-  return obj === null || obj === undefined || (obj.length === 0 && typeof obj !== 'function') || (typeof obj === 'object' && Ember.get(obj, 'length') === 0);
+  return Ember.isNone(obj) || (obj.length === 0 && typeof obj !== 'function') || (typeof obj === 'object' && Ember.get(obj, 'length') === 0);
 };
 Ember.empty = Ember.deprecateFunc("Ember.empty is deprecated. Please use Ember.isEmpty instead.", Ember.isEmpty) ;
 
@@ -12317,6 +10674,13 @@ var platform = Ember.platform = {};
   @for Ember
 */
 Ember.create = Object.create;
+
+// IE8 has Object.create but it couldn't treat property descripters.
+if (Ember.create) {
+  if (Ember.create({a: 1}, {a: {value: 2}}).a !== 2) {
+    Ember.create = null;
+  }
+}
 
 // STUB_OBJECT_CREATE allows us to override other libraries that stub
 // Object.create different than we would prefer
@@ -12638,7 +11002,7 @@ Ember.guidFor = function guidFor(obj) {
   if (obj === undefined) return "(undefined)";
   if (obj === null) return "(null)";
 
-  var cache, ret;
+  var ret;
   var type = typeof obj;
 
   // Don't allow prototype changes to String etc. to change the guidFor
@@ -12787,6 +11151,7 @@ Ember.setMeta = function setMeta(obj, property, value) {
 };
 
 /**
+  @deprecated
   @private
 
   In order to store defaults for a class, a prototype may need to create
@@ -12819,6 +11184,7 @@ Ember.setMeta = function setMeta(obj, property, value) {
     shared with its constructor
 */
 Ember.metaPath = function metaPath(obj, path, writable) {
+  Ember.deprecate("Ember.metaPath is deprecated and will be removed from future releases.");
   var meta = Ember.meta(obj, writable), keyName, value;
 
   for (var i=0, l=path.length; i<l; i++) {
@@ -13039,7 +11405,7 @@ if (needsFinallyFix) {
 */
 if (needsFinallyFix) {
   Ember.tryCatchFinally = function(tryable, catchable, finalizer, binding) {
-    var result, finalResult, finalError, finalReturn;
+    var result, finalResult, finalError;
 
     binding = binding || this;
 
@@ -13149,6 +11515,7 @@ Ember.typeOf = function(item) {
 
   return ret;
 };
+
 })();
 
 
@@ -13395,371 +11762,6 @@ var utils = Ember.EnumerableUtils = {
 @module ember-metal
 */
 
-/*
-  JavaScript (before ES6) does not have a Map implementation. Objects,
-  which are often used as dictionaries, may only have Strings as keys.
-
-  Because Ember has a way to get a unique identifier for every object
-  via `Ember.guidFor`, we can implement a performant Map with arbitrary
-  keys. Because it is commonly used in low-level bookkeeping, Map is
-  implemented as a pure JavaScript object for performance.
-
-  This implementation follows the current iteration of the ES6 proposal for
-  maps (http://wiki.ecmascript.org/doku.php?id=harmony:simple_maps_and_sets),
-  with two exceptions. First, because we need our implementation to be pleasant
-  on older browsers, we do not use the `delete` name (using `remove` instead).
-  Second, as we do not have the luxury of in-VM iteration, we implement a
-  forEach method for iteration.
-
-  Map is mocked out to look like an Ember object, so you can do
-  `Ember.Map.create()` for symmetry with other Ember classes.
-*/
-var guidFor = Ember.guidFor,
-    indexOf = Ember.ArrayPolyfills.indexOf;
-
-var copy = function(obj) {
-  var output = {};
-
-  for (var prop in obj) {
-    if (obj.hasOwnProperty(prop)) { output[prop] = obj[prop]; }
-  }
-
-  return output;
-};
-
-var copyMap = function(original, newObject) {
-  var keys = original.keys.copy(),
-      values = copy(original.values);
-
-  newObject.keys = keys;
-  newObject.values = values;
-
-  return newObject;
-};
-
-/**
-  This class is used internally by Ember and Ember Data.
-  Please do not use it at this time. We plan to clean it up
-  and add many tests soon.
-
-  @class OrderedSet
-  @namespace Ember
-  @constructor
-  @private
-*/
-var OrderedSet = Ember.OrderedSet = function() {
-  this.clear();
-};
-
-/**
-  @method create
-  @static
-  @return {Ember.OrderedSet}
-*/
-OrderedSet.create = function() {
-  return new OrderedSet();
-};
-
-
-OrderedSet.prototype = {
-  /**
-    @method clear
-  */
-  clear: function() {
-    this.presenceSet = {};
-    this.list = [];
-  },
-
-  /**
-    @method add
-    @param obj
-  */
-  add: function(obj) {
-    var guid = guidFor(obj),
-        presenceSet = this.presenceSet,
-        list = this.list;
-
-    if (guid in presenceSet) { return; }
-
-    presenceSet[guid] = true;
-    list.push(obj);
-  },
-
-  /**
-    @method remove
-    @param obj
-  */
-  remove: function(obj) {
-    var guid = guidFor(obj),
-        presenceSet = this.presenceSet,
-        list = this.list;
-
-    delete presenceSet[guid];
-
-    var index = indexOf.call(list, obj);
-    if (index > -1) {
-      list.splice(index, 1);
-    }
-  },
-
-  /**
-    @method isEmpty
-    @return {Boolean}
-  */
-  isEmpty: function() {
-    return this.list.length === 0;
-  },
-
-  /**
-    @method has
-    @param obj
-    @return {Boolean}
-  */
-  has: function(obj) {
-    var guid = guidFor(obj),
-        presenceSet = this.presenceSet;
-
-    return guid in presenceSet;
-  },
-
-  /**
-    @method forEach
-    @param {Function} fn
-    @param self
-  */
-  forEach: function(fn, self) {
-    // allow mutation during iteration
-    var list = this.toArray();
-
-    for (var i = 0, j = list.length; i < j; i++) {
-      fn.call(self, list[i]);
-    }
-  },
-
-  /**
-    @method toArray
-    @return {Array}
-  */
-  toArray: function() {
-    return this.list.slice();
-  },
-
-  /**
-    @method copy
-    @return {Ember.OrderedSet}
-  */
-  copy: function() {
-    var set = new OrderedSet();
-
-    set.presenceSet = copy(this.presenceSet);
-    set.list = this.toArray();
-
-    return set;
-  }
-};
-
-/**
-  A Map stores values indexed by keys. Unlike JavaScript's
-  default Objects, the keys of a Map can be any JavaScript
-  object.
-
-  Internally, a Map has two data structures:
-
-  1. `keys`: an OrderedSet of all of the existing keys
-  2. `values`: a JavaScript Object indexed by the `Ember.guidFor(key)`
-
-  When a key/value pair is added for the first time, we
-  add the key to the `keys` OrderedSet, and create or
-  replace an entry in `values`. When an entry is deleted,
-  we delete its entry in `keys` and `values`.
-
-  @class Map
-  @namespace Ember
-  @private
-  @constructor
-*/
-var Map = Ember.Map = function() {
-  this.keys = Ember.OrderedSet.create();
-  this.values = {};
-};
-
-/**
-  @method create
-  @static
-*/
-Map.create = function() {
-  return new Map();
-};
-
-Map.prototype = {
-  /**
-    Retrieve the value associated with a given key.
-
-    @method get
-    @param {*} key
-    @return {*} the value associated with the key, or `undefined`
-  */
-  get: function(key) {
-    var values = this.values,
-        guid = guidFor(key);
-
-    return values[guid];
-  },
-
-  /**
-    Adds a value to the map. If a value for the given key has already been
-    provided, the new value will replace the old value.
-
-    @method set
-    @param {*} key
-    @param {*} value
-  */
-  set: function(key, value) {
-    var keys = this.keys,
-        values = this.values,
-        guid = guidFor(key);
-
-    keys.add(key);
-    values[guid] = value;
-  },
-
-  /**
-    Removes a value from the map for an associated key.
-
-    @method remove
-    @param {*} key
-    @return {Boolean} true if an item was removed, false otherwise
-  */
-  remove: function(key) {
-    // don't use ES6 "delete" because it will be annoying
-    // to use in browsers that are not ES6 friendly;
-    var keys = this.keys,
-        values = this.values,
-        guid = guidFor(key);
-
-    if (values.hasOwnProperty(guid)) {
-      keys.remove(key);
-      delete values[guid];
-      return true;
-    } else {
-      return false;
-    }
-  },
-
-  /**
-    Check whether a key is present.
-
-    @method has
-    @param {*} key
-    @return {Boolean} true if the item was present, false otherwise
-  */
-  has: function(key) {
-    var values = this.values,
-        guid = guidFor(key);
-
-    return values.hasOwnProperty(guid);
-  },
-
-  /**
-    Iterate over all the keys and values. Calls the function once
-    for each key, passing in the key and value, in that order.
-
-    The keys are guaranteed to be iterated over in insertion order.
-
-    @method forEach
-    @param {Function} callback
-    @param {*} self if passed, the `this` value inside the
-      callback. By default, `this` is the map.
-  */
-  forEach: function(callback, self) {
-    var keys = this.keys,
-        values = this.values;
-
-    keys.forEach(function(key) {
-      var guid = guidFor(key);
-      callback.call(self, key, values[guid]);
-    });
-  },
-
-  /**
-    @method copy
-    @return {Ember.Map}
-  */
-  copy: function() {
-    return copyMap(this, new Map());
-  }
-};
-
-/**
-  @class MapWithDefault
-  @namespace Ember
-  @extends Ember.Map
-  @private
-  @constructor
-  @param [options]
-    @param {*} [options.defaultValue]
-*/
-var MapWithDefault = Ember.MapWithDefault = function(options) {
-  Map.call(this);
-  this.defaultValue = options.defaultValue;
-};
-
-/**
-  @method create
-  @static
-  @param [options]
-    @param {*} [options.defaultValue]
-  @return {Ember.MapWithDefault|Ember.Map} If options are passed, returns
-    `Ember.MapWithDefault` otherwise returns `Ember.Map`
-*/
-MapWithDefault.create = function(options) {
-  if (options) {
-    return new MapWithDefault(options);
-  } else {
-    return new Map();
-  }
-};
-
-MapWithDefault.prototype = Ember.create(Map.prototype);
-
-/**
-  Retrieve the value associated with a given key.
-
-  @method get
-  @param {*} key
-  @return {*} the value associated with the key, or the default value
-*/
-MapWithDefault.prototype.get = function(key) {
-  var hasValue = this.has(key);
-
-  if (hasValue) {
-    return Map.prototype.get.call(this, key);
-  } else {
-    var defaultValue = this.defaultValue(key);
-    this.set(key, defaultValue);
-    return defaultValue;
-  }
-};
-
-/**
-  @method copy
-  @return {Ember.MapWithDefault}
-*/
-MapWithDefault.prototype.copy = function() {
-  return copyMap(this, new MapWithDefault({
-    defaultValue: this.defaultValue
-  }));
-};
-
-})();
-
-
-
-(function() {
-/**
-@module ember-metal
-*/
-
 var META_KEY = Ember.META_KEY, get;
 
 var MANDATORY_SETTER = Ember.ENV.MANDATORY_SETTER;
@@ -13810,12 +11812,11 @@ get = function get(obj, keyName) {
     obj = null;
   }
 
-  if (!obj || keyName.indexOf('.') !== -1) {
-    Ember.assert("Cannot call get with '"+ keyName +"' on an undefined object.", obj !== undefined);
+  Ember.assert("Cannot call get with '"+ keyName +"' on an undefined object.", obj !== undefined);
+
+  if (obj === null || keyName.indexOf('.') !== -1) {
     return getPath(obj, keyName);
   }
-
-  Ember.assert("You need to provide an object and key to `get`.", !!obj && keyName);
 
   var meta = obj[META_KEY], desc = meta && meta.descs[keyName], ret;
   if (desc) {
@@ -13888,7 +11889,7 @@ var getPath = Ember._getPath = function(root, path) {
 
   parts = path.split(".");
   len = parts.length;
-  for (idx=0; root && idx<len; idx++) {
+  for (idx = 0; root != null && idx < len; idx++) {
     root = get(root, parts[idx], true);
     if (root && root.isDestroyed) { return undefined; }
   }
@@ -13923,6 +11924,7 @@ Ember.getWithDefault = function(root, key, defaultValue) {
 
 Ember.get = get;
 Ember.getPath = Ember.deprecateFunc('getPath is deprecated since get now supports paths', Ember.get);
+
 })();
 
 
@@ -13934,7 +11936,9 @@ Ember.getPath = Ember.deprecateFunc('getPath is deprecated since get now support
 
 var o_create = Ember.create,
     metaFor = Ember.meta,
-    META_KEY = Ember.META_KEY;
+    META_KEY = Ember.META_KEY,
+    /* listener flags */
+    ONCE = 1, SUSPENDED = 2;
 
 /*
   The event system uses a series of nested hashes to store listeners on an
@@ -13947,7 +11951,7 @@ var o_create = Ember.create,
       {
         listeners: {       // variable name: `listenerSet`
           "foo:changed": [ // variable name: `actions`
-            [target, method, onceFlag, suspendedFlag]
+            [target, method, flags]
           ]
         }
       }
@@ -13993,12 +11997,11 @@ function actionsUnion(obj, eventName, otherActions) {
   for (var i = actions.length - 1; i >= 0; i--) {
     var target = actions[i][0],
         method = actions[i][1],
-        once = actions[i][2],
-        suspended = actions[i][3],
+        flags = actions[i][2],
         actionIndex = indexOf(otherActions, target, method);
 
     if (actionIndex === -1) {
-      otherActions.push([target, method, once, suspended]);
+      otherActions.push([target, method, flags]);
     }
   }
 }
@@ -14012,14 +12015,13 @@ function actionsDiff(obj, eventName, otherActions) {
   for (var i = actions.length - 1; i >= 0; i--) {
     var target = actions[i][0],
         method = actions[i][1],
-        once = actions[i][2],
-        suspended = actions[i][3],
+        flags = actions[i][2],
         actionIndex = indexOf(otherActions, target, method);
 
     if (actionIndex !== -1) { continue; }
 
-    otherActions.push([target, method, once, suspended]);
-    diffActions.push([target, method, once, suspended]);
+    otherActions.push([target, method, flags]);
+    diffActions.push([target, method, flags]);
   }
 
   return diffActions;
@@ -14045,11 +12047,14 @@ function addListener(obj, eventName, target, method, once) {
   }
 
   var actions = actionsFor(obj, eventName),
-      actionIndex = indexOf(actions, target, method);
+      actionIndex = indexOf(actions, target, method),
+      flags = 0;
+
+  if (once) flags |= ONCE;
 
   if (actionIndex !== -1) { return; }
 
-  actions.push([target, method, once, undefined]);
+  actions.push([target, method, flags]);
 
   if ('function' === typeof obj.didAddListener) {
     obj.didAddListener(eventName, target, method);
@@ -14059,7 +12064,7 @@ function addListener(obj, eventName, target, method, once) {
 /**
   Remove an event listener
 
-  Arguments should match those passed to {{#crossLink "Ember/addListener"}}{{/crossLink}}
+  Arguments should match those passed to `Ember.addListener`.
 
   @method removeListener
   @for Ember
@@ -14076,7 +12081,7 @@ function removeListener(obj, eventName, target, method) {
     target = null;
   }
 
-  function _removeListener(target, method, once) {
+  function _removeListener(target, method) {
     var actions = actionsFor(obj, eventName),
         actionIndex = indexOf(actions, target, method);
 
@@ -14133,12 +12138,12 @@ function suspendListener(obj, eventName, target, method, callback) {
 
   if (actionIndex !== -1) {
     action = actions[actionIndex].slice(); // copy it, otherwise we're modifying a shared object
-    action[3] = true; // mark the action as suspended
+    action[2] |= SUSPENDED; // mark the action as suspended
     actions[actionIndex] = action; // replace the shared object with our copy
   }
 
   function tryable()   { return callback.call(target); }
-  function finalizer() { if (action) { action[3] = undefined; } }
+  function finalizer() { if (action) { action[2] &= ~SUSPENDED; } }
 
   return Ember.tryFinally(tryable, finalizer);
 }
@@ -14177,7 +12182,7 @@ function suspendListeners(obj, eventNames, target, method, callback) {
 
     if (actionIndex !== -1) {
       action = actions[actionIndex].slice();
-      action[3] = true;
+      action[2] |= SUSPENDED;
       actions[actionIndex] = action;
       suspendedActions.push(action);
     }
@@ -14187,7 +12192,7 @@ function suspendListeners(obj, eventNames, target, method, callback) {
 
   function finalizer() {
     for (i = 0, l = suspendedActions.length; i < l; i++) {
-      suspendedActions[i][3] = undefined;
+      suspendedActions[i][2] &= ~SUSPENDED;
     }
   }
 
@@ -14237,13 +12242,11 @@ function sendEvent(obj, eventName, params, actions) {
   if (!actions) { return; }
 
   for (var i = actions.length - 1; i >= 0; i--) { // looping in reverse for once listeners
-    if (!actions[i] || actions[i][3] === true) { continue; }
-
-    var target = actions[i][0],
-        method = actions[i][1],
-        once = actions[i][2];
-
-    if (once) { removeListener(obj, eventName, target, method); }
+    var action = actions[i];
+    if (!action) { continue; }
+    var target = action[0], method = action[1], flags = action[2];
+    if (flags & SUSPENDED) { continue; }
+    if (flags & ONCE) { removeListener(obj, eventName, target, method); }
     if (!target) { target = obj; }
     if ('string' === typeof method) { method = target[method]; }
     if (params) {
@@ -14323,7 +12326,7 @@ var guidFor = Ember.guidFor,
       keyName: keyName,
       eventName: eventName,
       listeners: [
-        [target, method, onceFlag, suspendedFlag]
+        [target, method, flags]
       ]
     },
     ...
@@ -14552,11 +12555,11 @@ var endPropertyChanges = Ember.endPropertyChanges = function() {
   });
   ```
 
-  @method changePropertiess
+  @method changeProperties
   @param {Function} callback
   @param [binding]
 */
-var changeProperties = Ember.changeProperties = function(cb, binding){
+Ember.changeProperties = function(cb, binding){
   beginPropertyChanges();
   tryFinally(cb, endPropertyChanges, binding);
 };
@@ -14740,6 +12743,386 @@ Ember.trySetPath = Ember.deprecateFunc('trySetPath has been renamed to trySet', 
 @module ember-metal
 */
 
+/*
+  JavaScript (before ES6) does not have a Map implementation. Objects,
+  which are often used as dictionaries, may only have Strings as keys.
+
+  Because Ember has a way to get a unique identifier for every object
+  via `Ember.guidFor`, we can implement a performant Map with arbitrary
+  keys. Because it is commonly used in low-level bookkeeping, Map is
+  implemented as a pure JavaScript object for performance.
+
+  This implementation follows the current iteration of the ES6 proposal for
+  maps (http://wiki.ecmascript.org/doku.php?id=harmony:simple_maps_and_sets),
+  with two exceptions. First, because we need our implementation to be pleasant
+  on older browsers, we do not use the `delete` name (using `remove` instead).
+  Second, as we do not have the luxury of in-VM iteration, we implement a
+  forEach method for iteration.
+
+  Map is mocked out to look like an Ember object, so you can do
+  `Ember.Map.create()` for symmetry with other Ember classes.
+*/
+var get = Ember.get,
+    set = Ember.set,
+    guidFor = Ember.guidFor,
+    indexOf = Ember.ArrayPolyfills.indexOf;
+
+var copy = function(obj) {
+  var output = {};
+
+  for (var prop in obj) {
+    if (obj.hasOwnProperty(prop)) { output[prop] = obj[prop]; }
+  }
+
+  return output;
+};
+
+var copyMap = function(original, newObject) {
+  var keys = original.keys.copy(),
+      values = copy(original.values);
+
+  newObject.keys = keys;
+  newObject.values = values;
+  newObject.length = original.length;
+
+  return newObject;
+};
+
+/**
+  This class is used internally by Ember and Ember Data.
+  Please do not use it at this time. We plan to clean it up
+  and add many tests soon.
+
+  @class OrderedSet
+  @namespace Ember
+  @constructor
+  @private
+*/
+var OrderedSet = Ember.OrderedSet = function() {
+  this.clear();
+};
+
+/**
+  @method create
+  @static
+  @return {Ember.OrderedSet}
+*/
+OrderedSet.create = function() {
+  return new OrderedSet();
+};
+
+
+OrderedSet.prototype = {
+  /**
+    @method clear
+  */
+  clear: function() {
+    this.presenceSet = {};
+    this.list = [];
+  },
+
+  /**
+    @method add
+    @param obj
+  */
+  add: function(obj) {
+    var guid = guidFor(obj),
+        presenceSet = this.presenceSet,
+        list = this.list;
+
+    if (guid in presenceSet) { return; }
+
+    presenceSet[guid] = true;
+    list.push(obj);
+  },
+
+  /**
+    @method remove
+    @param obj
+  */
+  remove: function(obj) {
+    var guid = guidFor(obj),
+        presenceSet = this.presenceSet,
+        list = this.list;
+
+    delete presenceSet[guid];
+
+    var index = indexOf.call(list, obj);
+    if (index > -1) {
+      list.splice(index, 1);
+    }
+  },
+
+  /**
+    @method isEmpty
+    @return {Boolean}
+  */
+  isEmpty: function() {
+    return this.list.length === 0;
+  },
+
+  /**
+    @method has
+    @param obj
+    @return {Boolean}
+  */
+  has: function(obj) {
+    var guid = guidFor(obj),
+        presenceSet = this.presenceSet;
+
+    return guid in presenceSet;
+  },
+
+  /**
+    @method forEach
+    @param {Function} fn
+    @param self
+  */
+  forEach: function(fn, self) {
+    // allow mutation during iteration
+    var list = this.toArray();
+
+    for (var i = 0, j = list.length; i < j; i++) {
+      fn.call(self, list[i]);
+    }
+  },
+
+  /**
+    @method toArray
+    @return {Array}
+  */
+  toArray: function() {
+    return this.list.slice();
+  },
+
+  /**
+    @method copy
+    @return {Ember.OrderedSet}
+  */
+  copy: function() {
+    var set = new OrderedSet();
+
+    set.presenceSet = copy(this.presenceSet);
+    set.list = this.toArray();
+
+    return set;
+  }
+};
+
+/**
+  A Map stores values indexed by keys. Unlike JavaScript's
+  default Objects, the keys of a Map can be any JavaScript
+  object.
+
+  Internally, a Map has two data structures:
+
+  1. `keys`: an OrderedSet of all of the existing keys
+  2. `values`: a JavaScript Object indexed by the `Ember.guidFor(key)`
+
+  When a key/value pair is added for the first time, we
+  add the key to the `keys` OrderedSet, and create or
+  replace an entry in `values`. When an entry is deleted,
+  we delete its entry in `keys` and `values`.
+
+  @class Map
+  @namespace Ember
+  @private
+  @constructor
+*/
+var Map = Ember.Map = function() {
+  this.keys = Ember.OrderedSet.create();
+  this.values = {};
+};
+
+/**
+  @method create
+  @static
+*/
+Map.create = function() {
+  return new Map();
+};
+
+Map.prototype = {
+  /**
+    This property will change as the number of objects in the map changes.
+   
+    @property length
+    @type number
+    @default 0
+  */
+  length: 0,
+    
+    
+  /**
+    Retrieve the value associated with a given key.
+
+    @method get
+    @param {*} key
+    @return {*} the value associated with the key, or `undefined`
+  */
+  get: function(key) {
+    var values = this.values,
+        guid = guidFor(key);
+
+    return values[guid];
+  },
+
+  /**
+    Adds a value to the map. If a value for the given key has already been
+    provided, the new value will replace the old value.
+
+    @method set
+    @param {*} key
+    @param {*} value
+  */
+  set: function(key, value) {
+    var keys = this.keys,
+        values = this.values,
+        guid = guidFor(key);
+
+    keys.add(key);
+    values[guid] = value;
+    set(this, 'length', keys.list.length);
+  },
+
+  /**
+    Removes a value from the map for an associated key.
+
+    @method remove
+    @param {*} key
+    @return {Boolean} true if an item was removed, false otherwise
+  */
+  remove: function(key) {
+    // don't use ES6 "delete" because it will be annoying
+    // to use in browsers that are not ES6 friendly;
+    var keys = this.keys,
+        values = this.values,
+        guid = guidFor(key);
+
+    if (values.hasOwnProperty(guid)) {
+      keys.remove(key);
+      delete values[guid];
+      set(this, 'length', keys.list.length);
+      return true;
+    } else {
+      return false;
+    }
+  },
+
+  /**
+    Check whether a key is present.
+
+    @method has
+    @param {*} key
+    @return {Boolean} true if the item was present, false otherwise
+  */
+  has: function(key) {
+    var values = this.values,
+        guid = guidFor(key);
+
+    return values.hasOwnProperty(guid);
+  },
+
+  /**
+    Iterate over all the keys and values. Calls the function once
+    for each key, passing in the key and value, in that order.
+
+    The keys are guaranteed to be iterated over in insertion order.
+
+    @method forEach
+    @param {Function} callback
+    @param {*} self if passed, the `this` value inside the
+      callback. By default, `this` is the map.
+  */
+  forEach: function(callback, self) {
+    var keys = this.keys,
+        values = this.values;
+
+    keys.forEach(function(key) {
+      var guid = guidFor(key);
+      callback.call(self, key, values[guid]);
+    });
+  },
+
+  /**
+    @method copy
+    @return {Ember.Map}
+  */
+  copy: function() {
+    return copyMap(this, new Map());
+  }
+};
+
+/**
+  @class MapWithDefault
+  @namespace Ember
+  @extends Ember.Map
+  @private
+  @constructor
+  @param [options]
+    @param {*} [options.defaultValue]
+*/
+var MapWithDefault = Ember.MapWithDefault = function(options) {
+  Map.call(this);
+  this.defaultValue = options.defaultValue;
+};
+
+/**
+  @method create
+  @static
+  @param [options]
+    @param {*} [options.defaultValue]
+  @return {Ember.MapWithDefault|Ember.Map} If options are passed, returns
+    `Ember.MapWithDefault` otherwise returns `Ember.Map`
+*/
+MapWithDefault.create = function(options) {
+  if (options) {
+    return new MapWithDefault(options);
+  } else {
+    return new Map();
+  }
+};
+
+MapWithDefault.prototype = Ember.create(Map.prototype);
+
+/**
+  Retrieve the value associated with a given key.
+
+  @method get
+  @param {*} key
+  @return {*} the value associated with the key, or the default value
+*/
+MapWithDefault.prototype.get = function(key) {
+  var hasValue = this.has(key);
+
+  if (hasValue) {
+    return Map.prototype.get.call(this, key);
+  } else {
+    var defaultValue = this.defaultValue(key);
+    this.set(key, defaultValue);
+    return defaultValue;
+  }
+};
+
+/**
+  @method copy
+  @return {Ember.MapWithDefault}
+*/
+MapWithDefault.prototype.copy = function() {
+  return copyMap(this, new MapWithDefault({
+    defaultValue: this.defaultValue
+  }));
+};
+
+})();
+
+
+
+(function() {
+/**
+@module ember-metal
+*/
+
 var META_KEY = Ember.META_KEY,
     metaFor = Ember.meta,
     objectDefineProperty = Ember.platform.defineProperty;
@@ -14761,7 +13144,7 @@ var MANDATORY_SETTER = Ember.ENV.MANDATORY_SETTER;
   @private
   @constructor
 */
-var Descriptor = Ember.Descriptor = function() {};
+Ember.Descriptor = function() {};
 
 // ..........................................................
 // DEFINING PROPERTIES API
@@ -15322,7 +13705,7 @@ Ember.watchPath = function(obj, keyPath) {
 };
 
 Ember.unwatchPath = function(obj, keyPath) {
-  var m = metaFor(obj), watching = m.watching, desc;
+  var m = metaFor(obj), watching = m.watching;
 
   if (watching[keyPath] === 1) {
     watching[keyPath] = 0;
@@ -15584,27 +13967,14 @@ ComputedProperty.prototype = new Ember.Descriptor();
 var ComputedPropertyPrototype = ComputedProperty.prototype;
 
 /*
-  Call on a computed property to explicitly change it's cacheable mode.
+  Properties are cacheable by default. Computed property will automatically
+  cache the return value of your function until one of the dependent keys changes.
 
-  Please use `.volatile` over this method.
+  Call `volatile()` to set it into non-cached mode. When in this mode
+  the computed property will not automatically cache the return value.
 
-  ```javascript
-  MyApp.president = Ember.Object.create({
-    fullName: function() {
-      return this.get('firstName') + ' ' + this.get('lastName');
-
-      // By default, Ember will return the value of this property
-      // without re-executing this function.
-    }.property('firstName', 'lastName')
-
-    initials: function() {
-      return this.get('firstName')[0] + this.get('lastName')[0];
-
-      // This function will be executed every time this property
-      // is requested.
-    }.property('firstName', 'lastName').cacheable(false)
-  });
-  ```
+  However, if a property is properly observable, there is no reason to disable
+  caching.
 
   @method cacheable
   @param {Boolean} aFlag optional set to `false` to disable caching
@@ -15868,7 +14238,6 @@ ComputedPropertyPrototype.teardown = function(obj, keyName) {
   The function should accept two parameters, key and value. If value is not
   undefined you should set the value first. In either case return the
   current value of the property.
-
   @method computed
   @for Ember
   @param {Function} func The computed property function.
@@ -16110,7 +14479,7 @@ registerComputedWithProperties('or', function(properties) {
   @for Ember
   @param {String} dependentKey, [dependentKey...]
   @return {Ember.ComputedProperty} computed property which returns
-  the first trouthy value of given list of properties.
+  the first truthy value of given list of properties.
 */
 registerComputedWithProperties('any', function(properties) {
   for (var key in properties) {
@@ -16161,6 +14530,48 @@ Ember.computed.alias = function(dependentKey) {
 };
 
 /**
+  @method computed.oneWay
+  @for Ember
+  @param {String} dependentKey
+  @return {Ember.ComputedProperty} computed property which creates an
+  one way computed property to the original value for property.
+
+  Where `computed.alias` aliases `get` and `set`, and allows for bidirectional 
+  data flow, `computed.oneWay` only provides an aliased `get`. The `set` will
+  not mutate the upstream property, rather causes the current property to
+  become the value set. This causes the downstream property to permentantly
+  diverge from the upstream property.
+
+  ```javascript
+  User = Ember.Object.extend({
+    firstName: null,
+    lastName: null,
+    nickName: Ember.computed.oneWay('firstName')
+  });
+
+  user = User.create({
+    firstName: 'Teddy',
+    lastName:  'Zeenny'
+  });
+
+  user.get('nickName');
+  # 'Teddy'
+
+  user.set('nickName', 'TeddyBear');
+  # 'TeddyBear'
+
+  user.get('firstName');
+  # 'Teddy'
+  ```
+*/
+Ember.computed.oneWay = function(dependentKey) {
+  return Ember.computed(dependentKey, function() {
+    return get(this, dependentKey);
+  });
+};
+
+
+/**
   @method computed.defaultTo
   @for Ember
   @param {String} defaultPath
@@ -16188,8 +14599,6 @@ Ember.computed.defaultTo = function(defaultPath) {
 
 var AFTER_OBSERVERS = ':change';
 var BEFORE_OBSERVERS = ':before';
-
-var guidFor = Ember.guidFor;
 
 function changeEvent(keyName) {
   return keyName+AFTER_OBSERVERS;
@@ -16287,183 +14696,507 @@ Ember.removeBeforeObserver = function(obj, path, target, method) {
 
 
 (function() {
-// Ember.Logger
-// Ember.watch.flushPending
-// Ember.beginPropertyChanges, Ember.endPropertyChanges
-// Ember.guidFor, Ember.tryFinally
+define("backburner",
+  ["backburner/deferred_action_queues","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var DeferredActionQueues = __dependency1__.DeferredActionQueues;
 
-/**
-@module ember-metal
-*/
+    var slice = [].slice,
+        pop = [].pop,
+        debouncees = [],
+        timers = [],
+        autorun, laterTimer, laterTimerExpiresAt;
 
-// ..........................................................
-// HELPERS
-//
-
-var slice = [].slice,
-    forEach = Ember.ArrayPolyfills.forEach;
-
-// invokes passed params - normalizing so you can pass target/func,
-// target/string or just func
-function invoke(target, method, args, ignore) {
-
-  if (method === undefined) {
-    method = target;
-    target = undefined;
-  }
-
-  if ('string' === typeof method) { method = target[method]; }
-  if (args && ignore > 0) {
-    args = args.length > ignore ? slice.call(args, ignore) : null;
-  }
-
-  return Ember.handleErrors(function() {
-    // IE8's Function.prototype.apply doesn't accept undefined/null arguments.
-    return method.apply(target || this, args || []);
-  }, this);
-}
-
-
-// ..........................................................
-// RUNLOOP
-//
-
-/**
-Ember RunLoop (Private)
-
-@class RunLoop
-@namespace Ember
-@private
-@constructor
-*/
-var RunLoop = function(prev) {
-  this._prev = prev || null;
-  this.onceTimers = {};
-};
-
-RunLoop.prototype = {
-  /**
-    @method end
-  */
-  end: function() {
-    this.flush();
-  },
-
-  /**
-    @method prev
-  */
-  prev: function() {
-    return this._prev;
-  },
-
-  // ..........................................................
-  // Delayed Actions
-  //
-
-  /**
-    @method schedule
-    @param {String} queueName
-    @param target
-    @param method
-  */
-  schedule: function(queueName, target, method) {
-    var queues = this._queues, queue;
-    if (!queues) { queues = this._queues = {}; }
-    queue = queues[queueName];
-    if (!queue) { queue = queues[queueName] = []; }
-
-    var args = arguments.length > 3 ? slice.call(arguments, 3) : null;
-    queue.push({ target: target, method: method, args: args });
-    return this;
-  },
-
-  /**
-    @method flush
-    @param {String} queueName
-  */
-  flush: function(queueName) {
-    var queueNames, idx, len, queue, log;
-
-    if (!this._queues) { return this; } // nothing to do
-
-    function iter(item) {
-      invoke(item.target, item.method, item.args);
-    }
-
-    function tryable() {
-      forEach.call(queue, iter);
-    }
-
-    Ember.watch.flushPending(); // make sure all chained watchers are setup
-
-    if (queueName) {
-      while (this._queues && (queue = this._queues[queueName])) {
-        this._queues[queueName] = null;
-
-        // the sync phase is to allow property changes to propagate. don't
-        // invoke observers until that is finished.
-        if (queueName === 'sync') {
-          log = Ember.LOG_BINDINGS;
-          if (log) { Ember.Logger.log('Begin: Flush Sync Queue'); }
-
-          Ember.beginPropertyChanges();
-
-          Ember.tryFinally(tryable, Ember.endPropertyChanges);
-
-          if (log) { Ember.Logger.log('End: Flush Sync Queue'); }
-
-        } else {
-          forEach.call(queue, iter);
-        }
+    function Backburner(queueNames, options) {
+      this.queueNames = queueNames;
+      this.options = options || {};
+      if (!this.options.defaultQueue) {
+        this.options.defaultQueue = queueNames[0];
       }
+      this.instanceStack = [];
+    }
 
-    } else {
-      queueNames = Ember.run.queues;
-      len = queueNames.length;
-      idx = 0;
+    Backburner.prototype = {
+      queueNames: null,
+      options: null,
+      currentInstance: null,
+      instanceStack: null,
 
-      outerloop:
-      while (idx < len) {
-        queueName = queueNames[idx];
-        queue = this._queues && this._queues[queueName];
-        delete this._queues[queueName];
+      begin: function() {
+        var onBegin = this.options && this.options.onBegin,
+            previousInstance = this.currentInstance;
 
-        if (queue) {
-          // the sync phase is to allow property changes to propagate. don't
-          // invoke observers until that is finished.
-          if (queueName === 'sync') {
-            log = Ember.LOG_BINDINGS;
-            if (log) { Ember.Logger.log('Begin: Flush Sync Queue'); }
+        if (previousInstance) {
+          this.instanceStack.push(previousInstance);
+        }
 
-            Ember.beginPropertyChanges();
+        this.currentInstance = new DeferredActionQueues(this.queueNames, this.options);
+        if (onBegin) {
+          onBegin(this.currentInstance, previousInstance);
+        }
+      },
 
-            Ember.tryFinally(tryable, Ember.endPropertyChanges);
+      end: function() {
+        var onEnd = this.options && this.options.onEnd,
+            currentInstance = this.currentInstance,
+            nextInstance = null;
 
-            if (log) { Ember.Logger.log('End: Flush Sync Queue'); }
-          } else {
-            forEach.call(queue, iter);
+        try {
+          currentInstance.flush();
+        } finally {
+          this.currentInstance = null;
+
+          if (this.instanceStack.length) {
+            nextInstance = this.instanceStack.pop();
+            this.currentInstance = nextInstance;
+          }
+
+          if (onEnd) {
+            onEnd(currentInstance, nextInstance);
           }
         }
+      },
 
-        // Loop through prior queues
-        for (var i = 0; i <= idx; i++) {
-          if (this._queues && this._queues[queueNames[i]]) {
-            // Start over at the first queue with contents
-            idx = i;
+      run: function(target, method /*, args */) {
+        var ret;
+        this.begin();
+
+        if (!method) {
+          method = target;
+          target = null;
+        }
+
+        if (typeof method === 'string') {
+          method = target[method];
+        }
+
+        // Prevent Safari double-finally.
+        var finallyAlreadyCalled = false;
+        try {
+          if (arguments.length > 2) {
+            ret = method.apply(target, slice.call(arguments, 2));
+          } else {
+            ret = method.call(target);
+          }
+        } finally {
+          if (!finallyAlreadyCalled) {
+            finallyAlreadyCalled = true;
+            this.end();
+          }
+        }
+        return ret;
+      },
+
+      defer: function(queueName, target, method /* , args */) {
+        if (!method) {
+          method = target;
+          target = null;
+        }
+
+        if (typeof method === 'string') {
+          method = target[method];
+        }
+
+        var stack = new Error().stack,
+            args = arguments.length > 3 ? slice.call(arguments, 3) : undefined;
+        if (!this.currentInstance) { createAutorun(this); }
+        return this.currentInstance.schedule(queueName, target, method, args, false, stack);
+      },
+
+      deferOnce: function(queueName, target, method /* , args */) {
+        if (!method) {
+          method = target;
+          target = null;
+        }
+
+        if (typeof method === 'string') {
+          method = target[method];
+        }
+
+        var stack = new Error().stack,
+            args = arguments.length > 3 ? slice.call(arguments, 3) : undefined;
+        if (!this.currentInstance) { createAutorun(this); }
+        return this.currentInstance.schedule(queueName, target, method, args, true, stack);
+      },
+
+      setTimeout: function() {
+        var self = this,
+            wait = pop.call(arguments),
+            target = arguments[0],
+            method = arguments[1],
+            executeAt = (+new Date()) + wait;
+
+        if (!method) {
+          method = target;
+          target = null;
+        }
+
+        if (typeof method === 'string') {
+          method = target[method];
+        }
+
+        var fn, args;
+        if (arguments.length > 2) {
+          args = slice.call(arguments, 2);
+
+          fn = function() {
+            method.apply(target, args);
+          };
+        } else {
+          fn = function() {
+            method.call(target);
+          };
+        }
+
+        // find position to insert - TODO: binary search
+        var i, l;
+        for (i = 0, l = timers.length; i < l; i += 2) {
+          if (executeAt < timers[i]) { break; }
+        }
+
+        timers.splice(i, 0, executeAt, fn);
+
+        if (laterTimer && laterTimerExpiresAt < executeAt) { return fn; }
+
+        if (laterTimer) {
+          clearTimeout(laterTimer);
+          laterTimer = null;
+        }
+        laterTimer = setTimeout(function() {
+          executeTimers(self);
+          laterTimer = null;
+          laterTimerExpiresAt = null;
+        }, wait);
+        laterTimerExpiresAt = executeAt;
+
+        return fn;
+      },
+
+      debounce: function(target, method /* , args, wait */) {
+        var self = this,
+            args = arguments,
+            wait = pop.call(args),
+            debouncee;
+
+        for (var i = 0, l = debouncees.length; i < l; i++) {
+          debouncee = debouncees[i];
+          if (debouncee[0] === target && debouncee[1] === method) { return; } // do nothing
+        }
+
+        var timer = setTimeout(function() {
+          self.run.apply(self, args);
+
+          // remove debouncee
+          var index = -1;
+          for (var i = 0, l = debouncees.length; i < l; i++) {
+            debouncee = debouncees[i];
+            if (debouncee[0] === target && debouncee[1] === method) {
+              index = i;
+              break;
+            }
+          }
+
+          if (index > -1) { debouncees.splice(index, 1); }
+        }, wait);
+
+        debouncees.push([target, method, timer]);
+      },
+
+      cancelTimers: function() {
+        for (var i = 0, l = debouncees.length; i < l; i++) {
+          clearTimeout(debouncees[i][2]);
+        }
+        debouncees = [];
+
+        if (laterTimer) {
+          clearTimeout(laterTimer);
+          laterTimer = null;
+        }
+        timers = [];
+
+        if (autorun) {
+          clearTimeout(autorun);
+          autorun = null;
+        }
+      },
+
+      hasTimers: function() {
+        return !!timers.length || autorun;
+      },
+
+      cancel: function(timer) {
+        if (typeof timer === 'object' && timer.queue && timer.method) { // we're cancelling a deferOnce
+          return timer.queue.cancel(timer);
+        } else if (typeof timer === 'function') { // we're cancelling a setTimeout
+          for (var i = 0, l = timers.length; i < l; i += 2) {
+            if (timers[i + 1] === timer) {
+              timers.splice(i, 2); // remove the two elements
+              return true;
+            }
+          }
+        }
+      }
+    };
+
+    Backburner.prototype.schedule = Backburner.prototype.defer;
+    Backburner.prototype.scheduleOnce = Backburner.prototype.deferOnce;
+    Backburner.prototype.later = Backburner.prototype.setTimeout;
+
+    function createAutorun(backburner) {
+      backburner.begin();
+      autorun = setTimeout(function() {
+        backburner.end();
+        autorun = null;
+      });
+    }
+
+    function executeTimers(self) {
+      var now = +new Date(),
+          time, fns, i, l;
+
+      self.run(function() {
+        // TODO: binary search
+        for (i = 0, l = timers.length; i < l; i += 2) {
+          time = timers[i];
+          if (time > now) { break; }
+        }
+
+        fns = timers.splice(0, i);
+
+        for (i = 1, l = fns.length; i < l; i += 2) {
+          self.schedule(self.options.defaultQueue, null, fns[i]);
+        }
+      });
+
+      if (timers.length) {
+        laterTimer = setTimeout(function() {
+          executeTimers(self);
+          laterTimer = null;
+          laterTimerExpiresAt = null;
+        }, timers[0] - now);
+        laterTimerExpiresAt = timers[0];
+      }
+    }
+
+
+    __exports__.Backburner = Backburner;
+  });
+
+define("backburner/deferred_action_queues",
+  ["backburner/queue","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var Queue = __dependency1__.Queue;
+
+    function DeferredActionQueues(queueNames, options) {
+      var queues = this.queues = {};
+      this.queueNames = queueNames = queueNames || [];
+
+      var queueName;
+      for (var i = 0, l = queueNames.length; i < l; i++) {
+        queueName = queueNames[i];
+        queues[queueName] = new Queue(this, queueName, options[queueName]);
+      }
+    }
+
+    DeferredActionQueues.prototype = {
+      queueNames: null,
+      queues: null,
+
+      schedule: function(queueName, target, method, args, onceFlag, stack) {
+        var queues = this.queues,
+            queue = queues[queueName];
+
+        if (!queue) { throw new Error("You attempted to schedule an action in a queue (" + queueName + ") that doesn't exist"); }
+
+        if (onceFlag) {
+          return queue.pushUnique(target, method, args, stack);
+        } else {
+          return queue.push(target, method, args, stack);
+        }
+      },
+
+      flush: function() {
+        var queues = this.queues,
+            queueNames = this.queueNames,
+            queueName, queue, queueItems, priorQueueNameIndex,
+            queueNameIndex = 0, numberOfQueues = queueNames.length;
+
+        outerloop:
+        while (queueNameIndex < numberOfQueues) {
+          queueName = queueNames[queueNameIndex];
+          queue = queues[queueName];
+          queueItems = queue._queue.slice();
+          queue._queue = [];
+
+          var options = queue.options,
+              before = options && options.before,
+              after = options && options.after,
+              target, method, args, stack,
+              queueIndex = 0, numberOfQueueItems = queueItems.length;
+
+          if (numberOfQueueItems && before) { before(); }
+          while (queueIndex < numberOfQueueItems) {
+            target = queueItems[queueIndex];
+            method = queueItems[queueIndex+1];
+            args   = queueItems[queueIndex+2];
+            stack  = queueItems[queueIndex+3]; // Debugging assistance
+
+            if (typeof method === 'string') { method = target[method]; }
+
+            // TODO: error handling
+            if (args && args.length > 0) {
+              method.apply(target, args);
+            } else {
+              method.call(target);
+            }
+
+            queueIndex += 4;
+          }
+          if (numberOfQueueItems && after) { after(); }
+
+          if ((priorQueueNameIndex = indexOfPriorQueueWithActions(this, queueNameIndex)) !== -1) {
+            queueNameIndex = priorQueueNameIndex;
             continue outerloop;
           }
-        }
 
-        idx++;
+          queueNameIndex++;
+        }
       }
+    };
+
+    function indexOfPriorQueueWithActions(daq, currentQueueIndex) {
+      var queueName, queue;
+
+      for (var i = 0, l = currentQueueIndex; i <= l; i++) {
+        queueName = daq.queueNames[i];
+        queue = daq.queues[queueName];
+        if (queue._queue.length) { return i; }
+      }
+
+      return -1;
     }
 
-    return this;
-  }
+    __exports__.DeferredActionQueues = DeferredActionQueues;
+  });
 
+define("backburner/queue",
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    function Queue(daq, name, options) {
+      this.daq = daq;
+      this.name = name;
+      this.options = options;
+      this._queue = [];
+    }
+
+    Queue.prototype = {
+      daq: null,
+      name: null,
+      options: null,
+      _queue: null,
+
+      push: function(target, method, args, stack) {
+        var queue = this._queue;
+        queue.push(target, method, args, stack);
+        return {queue: this, target: target, method: method};
+      },
+
+      pushUnique: function(target, method, args, stack) {
+        var queue = this._queue, currentTarget, currentMethod, i, l;
+
+        for (i = 0, l = queue.length; i < l; i += 4) {
+          currentTarget = queue[i];
+          currentMethod = queue[i+1];
+
+          if (currentTarget === target && currentMethod === method) {
+            queue[i+2] = args; // replace args
+            queue[i+3] = stack; // replace stack
+            return {queue: this, target: target, method: method}; // TODO: test this code path
+          }
+        }
+
+        this._queue.push(target, method, args, stack);
+        return {queue: this, target: target, method: method};
+      },
+
+      // TODO: remove me, only being used for Ember.run.sync
+      flush: function() {
+        var queue = this._queue,
+            options = this.options,
+            before = options && options.before,
+            after = options && options.after,
+            target, method, args, stack, i, l = queue.length;
+
+        if (l && before) { before(); }
+        for (i = 0; i < l; i += 4) {
+          target = queue[i];
+          method = queue[i+1];
+          args   = queue[i+2];
+          stack  = queue[i+3]; // Debugging assistance
+
+          // TODO: error handling
+          if (args && args.length > 0) {
+            method.apply(target, args);
+          } else {
+            method.call(target);
+          }
+        }
+        if (l && after) { after(); }
+
+        // check if new items have been added
+        if (queue.length > l) {
+          this._queue = queue.slice(l);
+          this.flush();
+        } else {
+          this._queue.length = 0;
+        }
+      },
+
+      cancel: function(actionToCancel) {
+        var queue = this._queue, currentTarget, currentMethod, i, l;
+
+        for (i = 0, l = queue.length; i < l; i += 4) {
+          currentTarget = queue[i];
+          currentMethod = queue[i+1];
+
+          if (currentTarget === actionToCancel.target && currentMethod === actionToCancel.method) {
+            queue.splice(i, 4);
+            return true;
+          }
+        }
+      }
+    };
+
+    __exports__.Queue = Queue;
+  });
+
+})();
+
+
+
+(function() {
+var onBegin = function(current) {
+  Ember.run.currentRunLoop = current;
 };
 
-Ember.RunLoop = RunLoop;
+var onEnd = function(current, next) {
+  Ember.run.currentRunLoop = next;
+};
+
+var Backburner = requireModule('backburner').Backburner,
+    backburner = new Backburner(['sync', 'actions', 'destroy'], {
+      sync: {
+        before: Ember.beginPropertyChanges,
+        after: Ember.endPropertyChanges
+      },
+      defaultQueue: 'actions',
+      onBegin: onBegin,
+      onEnd: onEnd
+    }),
+    slice = [].slice;
 
 // ..........................................................
 // Ember.run - this is ideally the only public API the dev sees
@@ -16497,20 +15230,76 @@ Ember.RunLoop = RunLoop;
   @return {Object} return value from invoking the passed function.
 */
 Ember.run = function(target, method) {
-  var args = arguments;
-  run.begin();
+  var ret;
 
-  function tryable() {
-    if (target || method) {
-      return invoke(target, method, args, 2);
+  if (Ember.onerror) {
+    try {
+      ret = backburner.run.apply(backburner, arguments);
+    } catch (e) {
+      Ember.onerror(e);
     }
+  } else {
+    ret = backburner.run.apply(backburner, arguments);
   }
 
-  return Ember.tryFinally(tryable, run.end);
+  return ret;
 };
+
+/**
+
+  If no run-loop is present, it creates a new one. If a run loop is
+  present it will queue itself to run on the existing run-loops action
+  queue.
+
+  Please note: This is not for normal usage, and should be used sparingly.
+
+  If invoked when not within a run loop:
+
+  ```javascript
+  Ember.run.join(function(){
+    // creates a new run-loop
+  });
+  ```
+
+  Alternatively, if called within an existing run loop:
+
+  ```javascript
+  Ember.run(function(){
+    // creates a new run-loop
+    Ember.run.join(function(){
+      // joins with the existing run-loop, and queues for invocation on
+      // the existing run-loops action queue.
+    });
+  });
+  ```
+
+  @method join
+  @namespace Ember
+  @param {Object} [target] target of method to call
+  @param {Function|String} method Method to invoke.
+    May be a function or a string. If you pass a string
+    then it will be looked up on the passed target.
+  @param {Object} [args*] Any additional arguments you wish to pass to the method.
+  @return {Object} return value from invoking the passed function. Please note, 
+  when called within an existing loop, no return value is possible.
+*/
+Ember.run.join = function(target, method) {
+  if (!Ember.run.currentRunLoop) {
+    return Ember.run.apply(Ember.run, arguments);
+  }
+
+  var args = slice.call(arguments);
+  args.unshift('actions');
+  Ember.run.schedule.apply(Ember.run, args);
+};
+
+Ember.run.backburner = backburner;
 
 var run = Ember.run;
 
+Ember.run.currentRunLoop = null;
+
+Ember.run.queues = backburner.queueNames;
 
 /**
   Begins a new RunLoop. Any deferred actions invoked after the begin will
@@ -16527,7 +15316,7 @@ var run = Ember.run;
   @return {void}
 */
 Ember.run.begin = function() {
-  run.currentRunLoop = new RunLoop(run.currentRunLoop);
+  backburner.begin();
 };
 
 /**
@@ -16545,12 +15334,7 @@ Ember.run.begin = function() {
   @return {void}
 */
 Ember.run.end = function() {
-  Ember.assert('must have a current run loop', run.currentRunLoop);
-
-  function tryable()   { run.currentRunLoop.end();  }
-  function finalizer() { run.currentRunLoop = run.currentRunLoop.prev(); }
-
-  Ember.tryFinally(tryable, finalizer);
+  backburner.end();
 };
 
 /**
@@ -16563,7 +15347,6 @@ Ember.run.end = function() {
   @type Array
   @default ['sync', 'actions', 'destroy']
 */
-Ember.run.queues = ['sync', 'actions', 'destroy'];
 
 /**
   Adds the passed target/method and any optional arguments to the named
@@ -16602,57 +15385,18 @@ Ember.run.queues = ['sync', 'actions', 'destroy'];
   @return {void}
 */
 Ember.run.schedule = function(queue, target, method) {
-  var loop = run.autorun();
-  loop.schedule.apply(loop, arguments);
+  checkAutoRun();
+  backburner.schedule.apply(backburner, arguments);
 };
-
-var scheduledAutorun;
-function autorun() {
-  scheduledAutorun = null;
-  if (run.currentRunLoop) { run.end(); }
-}
 
 // Used by global test teardown
 Ember.run.hasScheduledTimers = function() {
-  return !!(scheduledAutorun || scheduledLater);
+  return backburner.hasTimers();
 };
 
 // Used by global test teardown
 Ember.run.cancelTimers = function () {
-  if (scheduledAutorun) {
-    clearTimeout(scheduledAutorun);
-    scheduledAutorun = null;
-  }
-  if (scheduledLater) {
-    clearTimeout(scheduledLater);
-    scheduledLater = null;
-  }
-  timers = {};
-};
-
-/**
-  Begins a new RunLoop if necessary and schedules a timer to flush the
-  RunLoop at a later time. This method is used by parts of Ember to
-  ensure the RunLoop always finishes. You normally do not need to call this
-  method directly. Instead use `Ember.run()`
-
-  @method autorun
-  @example
-    Ember.run.autorun();
-  @return {Ember.RunLoop} the new current RunLoop
-*/
-Ember.run.autorun = function() {
-  if (!run.currentRunLoop) {
-    Ember.assert("You have turned on testing mode, which disabled the run-loop's autorun. You will need to wrap any code with asynchronous side-effects in an Ember.run", !Ember.testing);
-
-    run.begin();
-
-    if (!scheduledAutorun) {
-      scheduledAutorun = setTimeout(autorun, 1);
-    }
-  }
-
-  return run.currentRunLoop;
+  backburner.cancelTimers();
 };
 
 /**
@@ -16672,41 +15416,8 @@ Ember.run.autorun = function() {
   @return {void}
 */
 Ember.run.sync = function() {
-  run.autorun();
-  run.currentRunLoop.flush('sync');
+  backburner.currentInstance.queues.sync.flush();
 };
-
-// ..........................................................
-// TIMERS
-//
-
-var timers = {}; // active timers...
-
-var scheduledLater, scheduledLaterExpires;
-function invokeLaterTimers() {
-  scheduledLater = null;
-  run(function() {
-    var now = (+ new Date()), earliest = -1;
-    for (var key in timers) {
-      if (!timers.hasOwnProperty(key)) { continue; }
-      var timer = timers[key];
-      if (timer && timer.expires) {
-        if (now >= timer.expires) {
-          delete timers[key];
-          invoke(timer.target, timer.method, timer.args, 2);
-        } else {
-          if (earliest < 0 || (timer.expires < earliest)) { earliest = timer.expires; }
-        }
-      }
-    }
-
-    // schedule next timeout to fire when the earliest timer expires
-    if (earliest > 0) {
-      scheduledLater = setTimeout(invokeLaterTimers, earliest - now);
-      scheduledLaterExpires = earliest;
-    }
-  });
-}
 
 /**
   Invokes the passed target/method and optional arguments after a specified
@@ -16732,76 +15443,11 @@ function invokeLaterTimers() {
   @param {Object} [args*] Optional arguments to pass to the timeout.
   @param {Number} wait Number of milliseconds to wait.
   @return {String} a string you can use to cancel the timer in
-    {{#crossLink "Ember/run.cancel"}}{{/crossLink}} later.
+    `Ember.run.cancel` later.
 */
 Ember.run.later = function(target, method) {
-  var args, expires, timer, guid, wait;
-
-  // setTimeout compatibility...
-  if (arguments.length===2 && 'function' === typeof target) {
-    wait   = method;
-    method = target;
-    target = undefined;
-    args   = [target, method];
-  } else {
-    args = slice.call(arguments);
-    wait = args.pop();
-  }
-
-  expires = (+ new Date()) + wait;
-  timer   = { target: target, method: method, expires: expires, args: args };
-  guid    = Ember.guidFor(timer);
-  timers[guid] = timer;
-
-  if(scheduledLater && expires < scheduledLaterExpires) {
-    // Cancel later timer (then reschedule earlier timer below)
-    clearTimeout(scheduledLater);
-    scheduledLater = null;
-  }
-
-  if (!scheduledLater) {
-    // Schedule later timers to be run.
-    scheduledLater = setTimeout(invokeLaterTimers, wait);
-    scheduledLaterExpires = expires;
-  }
-
-  return guid;
+  return backburner.later.apply(backburner, arguments);
 };
-
-function invokeOnceTimer(guid, onceTimers) {
-  if (onceTimers[this.tguid]) { delete onceTimers[this.tguid][this.mguid]; }
-  if (timers[guid]) { invoke(this.target, this.method, this.args); }
-  delete timers[guid];
-}
-
-function scheduleOnce(queue, target, method, args) {
-  var tguid = Ember.guidFor(target),
-    mguid = Ember.guidFor(method),
-    onceTimers = run.autorun().onceTimers,
-    guid = onceTimers[tguid] && onceTimers[tguid][mguid],
-    timer;
-
-  if (guid && timers[guid]) {
-    timers[guid].args = args; // replace args
-  } else {
-    timer = {
-      target: target,
-      method: method,
-      args:   args,
-      tguid:  tguid,
-      mguid:  mguid
-    };
-
-    guid  = Ember.guidFor(timer);
-    timers[guid] = timer;
-    if (!onceTimers[tguid]) { onceTimers[tguid] = {}; }
-    onceTimers[tguid][mguid] = guid; // so it isn't scheduled more than once
-
-    run.schedule(queue, timer, invokeOnceTimer, guid, onceTimers);
-  }
-
-  return guid;
-}
 
 /**
   Schedule a function to run one time during the current RunLoop. This is equivalent
@@ -16816,7 +15462,10 @@ function scheduleOnce(queue, target, method, args) {
   @return {Object} timer
 */
 Ember.run.once = function(target, method) {
-  return scheduleOnce('actions', target, method, slice.call(arguments, 2));
+  checkAutoRun();
+  var args = slice.call(arguments);
+  args.unshift('actions');
+  return backburner.scheduleOnce.apply(backburner, args);
 };
 
 /**
@@ -16864,7 +15513,8 @@ Ember.run.once = function(target, method) {
   @return {Object} timer
 */
 Ember.run.scheduleOnce = function(queue, target, method) {
-  return scheduleOnce(queue, target, method, slice.call(arguments, 3));
+  checkAutoRun();
+  return backburner.scheduleOnce.apply(backburner, arguments);
 };
 
 /**
@@ -16926,8 +15576,8 @@ Ember.run.scheduleOnce = function(queue, target, method) {
 */
 Ember.run.next = function() {
   var args = slice.call(arguments);
-  args.push(1); // 1 millisecond wait
-  return run.later.apply(this, args);
+  args.push(1);
+  return backburner.later.apply(backburner, args);
 };
 
 /**
@@ -16956,8 +15606,15 @@ Ember.run.next = function() {
   @return {void}
 */
 Ember.run.cancel = function(timer) {
-  delete timers[timer];
+  return backburner.cancel(timer);
 };
+
+// Make sure it's not an autorun during testing
+function checkAutoRun() {
+  if (!Ember.run.currentRunLoop) {
+    Ember.assert("You have turned on testing mode, which disabled the run-loop's autorun. You will need to wrap any code with asynchronous side-effects in an Ember.run", !Ember.testing);
+  }
+}
 
 })();
 
@@ -17243,7 +15900,7 @@ function mixinProperties(to, from) {
 mixinProperties(Binding, {
 
   /**
-    See {{#crossLink "Ember.Binding/from"}}{{/crossLink}}
+    See `Ember.Binding.from`.
 
     @method from
     @static
@@ -17254,7 +15911,7 @@ mixinProperties(Binding, {
   },
 
   /**
-    See {{#crossLink "Ember.Binding/to"}}{{/crossLink}}
+    See `Ember.Binding.to`.
 
     @method to
     @static
@@ -17271,7 +15928,7 @@ mixinProperties(Binding, {
     This means that if you change the "to" side directly, the "from" side may have
     a different value.
 
-    See {{#crossLink "Binding/oneWay"}}{{/crossLink}}
+    See `Binding.oneWay`.
 
     @method oneWay
     @param {String} from from path.
@@ -17332,7 +15989,7 @@ mixinProperties(Binding, {
 
   You should consider using one way bindings anytime you have an object that
   may be created frequently and you do not intend to change a property; only
-  to monitor it for changes. (such as in the example above).
+  to monitor it for changes (such as in the example above).
 
   ## Adding Bindings Manually
 
@@ -17631,14 +16288,6 @@ function mergeMixins(mixins, m, descs, values, base, keys) {
       if (mixin._without) { a_forEach.call(mixin._without, removeKeys); }
     }
   }
-}
-
-function writableReq(obj) {
-  var m = Ember.meta(obj), req = m.required;
-  if (!req || !m.hasOwnProperty('required')) {
-    req = m.required = req ? o_create(req) : {};
-  }
-  return req;
 }
 
 var IS_BINDING = Ember.IS_BINDING = /^.+Binding$/;
@@ -18126,14 +16775,57 @@ Ember Metal
 })();
 
 (function() {
-define("rsvp",
-  [],
-  function() {
+define("rsvp/all",
+  ["rsvp/defer","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var defer = __dependency1__.defer;
+
+    function all(promises) {
+      var results = [], deferred = defer(), remaining = promises.length;
+
+      if (remaining === 0) {
+        deferred.resolve([]);
+      }
+
+      var resolver = function(index) {
+        return function(value) {
+          resolveAll(index, value);
+        };
+      };
+
+      var resolveAll = function(index, value) {
+        results[index] = value;
+        if (--remaining === 0) {
+          deferred.resolve(results);
+        }
+      };
+
+      var rejectAll = function(error) {
+        deferred.reject(error);
+      };
+
+      for (var i = 0; i < promises.length; i++) {
+        if (promises[i] && typeof promises[i].then === 'function') {
+          promises[i].then(resolver(i), rejectAll);
+        } else {
+          resolveAll(i, promises[i]);
+        }
+      }
+      return deferred.promise;
+    }
+
+    __exports__.all = all;
+  });
+
+define("rsvp/async",
+  ["exports"],
+  function(__exports__) {
     "use strict";
     var browserGlobal = (typeof window !== 'undefined') ? window : {};
 
-    var MutationObserver = browserGlobal.MutationObserver || browserGlobal.WebKitMutationObserver;
-    var RSVP, async;
+    var BrowserMutationObserver = browserGlobal.MutationObserver || browserGlobal.WebKitMutationObserver;
+    var async;
 
     if (typeof process !== 'undefined' &&
       {}.toString.call(process) === '[object process]') {
@@ -18142,10 +16834,10 @@ define("rsvp",
           callback.call(binding);
         });
       };
-    } else if (MutationObserver) {
+    } else if (BrowserMutationObserver) {
       var queue = [];
 
-      var observer = new MutationObserver(function() {
+      var observer = new BrowserMutationObserver(function() {
         var toProcess = queue.slice();
         queue = [];
 
@@ -18176,6 +16868,47 @@ define("rsvp",
       };
     }
 
+
+    __exports__.async = async;
+  });
+
+define("rsvp/config",
+  ["rsvp/async","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var async = __dependency1__.async;
+
+    var config = {};
+    config.async = async;
+
+    __exports__.config = config;
+  });
+
+define("rsvp/defer",
+  ["rsvp/promise","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var Promise = __dependency1__.Promise;
+
+    function defer() {
+      var deferred = {};
+
+      var promise = new Promise(function(resolve, reject) {
+        deferred.resolve = resolve;
+        deferred.reject = reject;
+      });
+
+      deferred.promise = promise;
+      return deferred;
+    }
+
+    __exports__.defer = defer;
+  });
+
+define("rsvp/events",
+  ["exports"],
+  function(__exports__) {
+    "use strict";
     var Event = function(type, options) {
       this.type = type;
 
@@ -18270,7 +17003,148 @@ define("rsvp",
       }
     };
 
-    var Promise = function() {
+
+    __exports__.EventTarget = EventTarget;
+  });
+
+define("rsvp/hash",
+  ["rsvp/defer","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var defer = __dependency1__.defer;
+
+    function size(object) {
+      var size = 0;
+
+      for (var prop in object) {
+        size++;
+      }
+
+      return size;
+    }
+
+    function hash(promises) {
+      var results = {}, deferred = defer(), remaining = size(promises);
+
+      if (remaining === 0) {
+        deferred.resolve({});
+      }
+
+      var resolver = function(prop) {
+        return function(value) {
+          resolveAll(prop, value);
+        };
+      };
+
+      var resolveAll = function(prop, value) {
+        results[prop] = value;
+        if (--remaining === 0) {
+          deferred.resolve(results);
+        }
+      };
+
+      var rejectAll = function(error) {
+        deferred.reject(error);
+      };
+
+      for (var prop in promises) {
+        if (promises[prop] && typeof promises[prop].then === 'function') {
+          promises[prop].then(resolver(prop), rejectAll);
+        } else {
+          resolveAll(prop, promises[prop]);
+        }
+      }
+
+      return deferred.promise;
+    }
+
+    __exports__.hash = hash;
+  });
+
+define("rsvp/node",
+  ["rsvp/promise","rsvp/all","exports"],
+  function(__dependency1__, __dependency2__, __exports__) {
+    "use strict";
+    var Promise = __dependency1__.Promise;
+    var all = __dependency2__.all;
+
+    function makeNodeCallbackFor(resolve, reject) {
+      return function (error, value) {
+        if (error) {
+          reject(error);
+        } else if (arguments.length > 2) {
+          resolve(Array.prototype.slice.call(arguments, 1));
+        } else {
+          resolve(value);
+        }
+      };
+    }
+
+    function denodeify(nodeFunc) {
+      return function()  {
+        var nodeArgs = Array.prototype.slice.call(arguments), resolve, reject;
+
+        var promise = new Promise(function(nodeResolve, nodeReject) {
+          resolve = nodeResolve;
+          reject = nodeReject;
+        });
+
+        all(nodeArgs).then(function(nodeArgs) {
+          nodeArgs.push(makeNodeCallbackFor(resolve, reject));
+
+          try {
+            nodeFunc.apply(this, nodeArgs);
+          } catch(e) {
+            reject(e);
+          }
+        });
+
+        return promise;
+      };
+    }
+
+    __exports__.denodeify = denodeify;
+  });
+
+define("rsvp/promise",
+  ["rsvp/config","rsvp/events","exports"],
+  function(__dependency1__, __dependency2__, __exports__) {
+    "use strict";
+    var config = __dependency1__.config;
+    var EventTarget = __dependency2__.EventTarget;
+
+    function objectOrFunction(x) {
+      return isFunction(x) || (typeof x === "object" && x !== null);
+    }
+
+    function isFunction(x){
+      return typeof x === "function";
+    }
+
+    var Promise = function(resolver) {
+      var promise = this,
+      resolved = false;
+
+      if (typeof resolver !== 'function') {
+        throw new TypeError('You must pass a resolver function as the sole argument to the promise constructor');
+      }
+
+      if (!(promise instanceof Promise)) {
+        return new Promise(resolver);
+      }
+
+      var resolvePromise = function(value) {
+        if (resolved) { return; }
+        resolved = true;
+        resolve(promise, value);
+      };
+
+      var rejectPromise = function(value) {
+        if (resolved) { return; }
+        resolved = true;
+        reject(promise, value);
+      };
+
       this.on('promise:resolved', function(event) {
         this.trigger('success', { detail: event.detail });
       }, this);
@@ -18278,12 +17152,16 @@ define("rsvp",
       this.on('promise:failed', function(event) {
         this.trigger('error', { detail: event.detail });
       }, this);
+
+      try {
+        resolver(resolvePromise, rejectPromise);
+      } catch(e) {
+        rejectPromise(e);
+      }
     };
 
-    var noop = function() {};
-
     var invokeCallback = function(type, promise, callback, event) {
-      var hasCallback = typeof callback === 'function',
+      var hasCallback = isFunction(callback),
           value, error, succeeded, failed;
 
       if (hasCallback) {
@@ -18299,34 +17177,34 @@ define("rsvp",
         succeeded = true;
       }
 
-      if (value && typeof value.then === 'function') {
-        value.then(function(value) {
-          promise.resolve(value);
-        }, function(error) {
-          promise.reject(error);
-        });
+      if (handleThenable(promise, value)) {
+        return;
       } else if (hasCallback && succeeded) {
-        promise.resolve(value);
+        resolve(promise, value);
       } else if (failed) {
-        promise.reject(error);
-      } else {
-        promise[type](value);
+        reject(promise, error);
+      } else if (type === 'resolve') {
+        resolve(promise, value);
+      } else if (type === 'reject') {
+        reject(promise, value);
       }
     };
 
     Promise.prototype = {
-      then: function(done, fail) {
-        var thenPromise = new Promise();
+      constructor: Promise,
 
-        if (this.isResolved) {
-          RSVP.async(function() {
-            invokeCallback('resolve', thenPromise, done, { detail: this.resolvedValue });
+      then: function(done, fail) {
+        var thenPromise = new Promise(function() {});
+
+        if (this.isFulfilled) {
+          config.async(function() {
+            invokeCallback('resolve', thenPromise, done, { detail: this.fulfillmentValue });
           }, this);
         }
 
         if (this.isRejected) {
-          RSVP.async(function() {
-            invokeCallback('reject', thenPromise, fail, { detail: this.rejectedValue });
+          config.async(function() {
+            invokeCallback('reject', thenPromise, fail, { detail: this.rejectedReason });
           }, this);
         }
 
@@ -18339,75 +17217,162 @@ define("rsvp",
         });
 
         return thenPromise;
-      },
-
-      resolve: function(value) {
-        resolve(this, value);
-
-        this.resolve = noop;
-        this.reject = noop;
-      },
-
-      reject: function(value) {
-        reject(this, value);
-
-        this.resolve = noop;
-        this.reject = noop;
       }
     };
 
+    EventTarget.mixin(Promise.prototype);
+
     function resolve(promise, value) {
-      RSVP.async(function() {
+      if (promise === value) {
+        fulfill(promise, value);
+      } else if (!handleThenable(promise, value)) {
+        fulfill(promise, value);
+      }
+    }
+
+    function handleThenable(promise, value) {
+      var then = null;
+
+      if (objectOrFunction(value)) {
+        try {
+          then = value.then;
+        } catch(e) {
+          reject(promise, e);
+          return true;
+        }
+
+        if (isFunction(then)) {
+          try {
+            then.call(value, function(val) {
+              if (value !== val) {
+                resolve(promise, val);
+              } else {
+                fulfill(promise, val);
+              }
+            }, function(val) {
+              reject(promise, val);
+            });
+          } catch (e) {
+            reject(promise, e);
+          }
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function fulfill(promise, value) {
+      config.async(function() {
         promise.trigger('promise:resolved', { detail: value });
-        promise.isResolved = true;
-        promise.resolvedValue = value;
+        promise.isFulfilled = true;
+        promise.fulfillmentValue = value;
       });
     }
 
     function reject(promise, value) {
-      RSVP.async(function() {
+      config.async(function() {
         promise.trigger('promise:failed', { detail: value });
         promise.isRejected = true;
-        promise.rejectedValue = value;
+        promise.rejectedReason = value;
       });
     }
 
-    function all(promises) {
-      var i, results = [];
-      var allPromise = new Promise();
-      var remaining = promises.length;
 
-      if (remaining === 0) {
-        allPromise.resolve([]);
-      }
+    __exports__.Promise = Promise;
+  });
 
-      var resolver = function(index) {
-        return function(value) {
-          resolve(index, value);
-        };
-      };
+define("rsvp/reject",
+  ["rsvp/promise","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var Promise = __dependency1__.Promise;
 
-      var resolve = function(index, value) {
-        results[index] = value;
-        if (--remaining === 0) {
-          allPromise.resolve(results);
-        }
-      };
 
-      var reject = function(error) {
-        allPromise.reject(error);
-      };
-
-      for (i = 0; i < remaining; i++) {
-        promises[i].then(resolver(i), reject);
-      }
-      return allPromise;
+    function objectOrFunction(x) {
+      return typeof x === "function" || (typeof x === "object" && x !== null);
     }
 
-    EventTarget.mixin(Promise.prototype);
 
-    RSVP = { async: async, Promise: Promise, Event: Event, EventTarget: EventTarget, all: all, raiseOnUncaughtExceptions: true };
-    return RSVP;
+    function reject(reason) {
+      return new Promise(function (resolve, reject) {
+        reject(reason);
+      });
+    }
+
+
+    __exports__.reject = reject;
+  });
+
+define("rsvp/resolve",
+  ["rsvp/promise","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var Promise = __dependency1__.Promise;
+
+
+    function objectOrFunction(x) {
+      return typeof x === "function" || (typeof x === "object" && x !== null);
+    }
+
+    function resolve(thenable){
+      var promise = new Promise(function(resolve, reject){
+        var then;
+
+        try {
+          if ( objectOrFunction(thenable) ) {
+            then = thenable.then;
+
+            if (typeof then === "function") {
+              then.call(thenable, resolve, reject);
+            } else {
+              resolve(thenable);
+            }
+
+          } else {
+            resolve(thenable);
+          }
+
+        } catch(error) {
+          reject(error);
+        }
+      });
+
+      return promise;
+    }
+
+
+    __exports__.resolve = resolve;
+  });
+
+define("rsvp",
+  ["rsvp/events","rsvp/promise","rsvp/node","rsvp/all","rsvp/hash","rsvp/defer","rsvp/config","rsvp/resolve","rsvp/reject","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __dependency6__, __dependency7__, __dependency8__, __dependency9__, __exports__) {
+    "use strict";
+    var EventTarget = __dependency1__.EventTarget;
+    var Promise = __dependency2__.Promise;
+    var denodeify = __dependency3__.denodeify;
+    var all = __dependency4__.all;
+    var hash = __dependency5__.hash;
+    var defer = __dependency6__.defer;
+    var config = __dependency7__.config;
+    var resolve = __dependency8__.resolve;
+    var reject = __dependency9__.reject;
+
+    function configure(name, value) {
+      config[name] = value;
+    }
+
+
+    __exports__.Promise = Promise;
+    __exports__.EventTarget = EventTarget;
+    __exports__.all = all;
+    __exports__.hash = hash;
+    __exports__.defer = defer;
+    __exports__.denodeify = denodeify;
+    __exports__.configure = configure;
+    __exports__.resolve = resolve;
+    __exports__.reject = reject;
   });
 
 })();
@@ -18582,10 +17547,6 @@ define("container",
         }
 
         this.children = [];
-
-        eachDestroyable(this, function(item) {
-          item.isDestroying = true;
-        });
 
         eachDestroyable(this, function(item) {
           item.destroy();
@@ -18958,10 +17919,15 @@ Ember.ORDER_DEFINITION = Ember.ENV.ORDER_DEFINITION || [
 */
 Ember.keys = Object.keys;
 
-if (!Ember.keys) {
+if (!Ember.keys || Ember.create.isSimulated) {
   Ember.keys = function(obj) {
     var ret = [];
     for(var key in obj) {
+      // Prevents browsers that don't respect non-enumerability from
+      // copying internal Ember properties
+      if (key.substring(0,2) === '__') continue;
+      if (key === '_super') continue;
+
       if (obj.hasOwnProperty(key)) { ret.push(key); }
     }
     return ret;
@@ -18983,7 +17949,7 @@ var errorProps = ['description', 'fileName', 'lineNumber', 'message', 'name', 'n
   @constructor
 */
 Ember.Error = function() {
-  var tmp = Error.prototype.constructor.apply(this, arguments);
+  var tmp = Error.apply(this, arguments);
 
   // Unfortunately errors are not enumerable in Chrome (at least), so `for prop in tmp` doesn't work.
   for (var idx = 0; idx < errorProps.length; idx++) {
@@ -19245,10 +18211,12 @@ Ember.String = {
   /**
     Returns the Capitalized form of a string
 
-       'innerHTML'.capitalize()         // 'InnerHTML'
-       'action_name'.capitalize()       // 'Action_name'
-       'css-class-name'.capitalize()    // 'Css-class-name'
-       'my favorite items'.capitalize() // 'My favorite items'
+    ```javascript
+    'innerHTML'.capitalize()         // 'InnerHTML'
+    'action_name'.capitalize()       // 'Action_name'
+    'css-class-name'.capitalize()    // 'Css-class-name'
+    'my favorite items'.capitalize() // 'My favorite items'
+    ```
 
     @method capitalize
     @param {String} str
@@ -19285,7 +18253,7 @@ var fmt = Ember.String.fmt,
 if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
 
   /**
-    See {{#crossLink "Ember.String/fmt"}}{{/crossLink}}
+    See `Ember.String.fmt`.
 
     @method fmt
     @for String
@@ -19295,7 +18263,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/w"}}{{/crossLink}}
+    See `Ember.String.w`.
 
     @method w
     @for String
@@ -19305,7 +18273,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/loc"}}{{/crossLink}}
+    See `Ember.String.loc`.
 
     @method loc
     @for String
@@ -19315,7 +18283,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/camelize"}}{{/crossLink}}
+    See `Ember.String.camelize`.
 
     @method camelize
     @for String
@@ -19325,7 +18293,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/decamelize"}}{{/crossLink}}
+    See `Ember.String.decamelize`.
 
     @method decamelize
     @for String
@@ -19335,7 +18303,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/dasherize"}}{{/crossLink}}
+    See `Ember.String.dasherize`.
 
     @method dasherize
     @for String
@@ -19345,7 +18313,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/underscore"}}{{/crossLink}}
+    See `Ember.String.underscore`.
 
     @method underscore
     @for String
@@ -19355,7 +18323,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/classify"}}{{/crossLink}}
+    See `Ember.String.classify`.
 
     @method classify
     @for String
@@ -19365,7 +18333,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
   };
 
   /**
-    See {{#crossLink "Ember.String/capitalize"}}{{/crossLink}}
+    See `Ember.String.capitalize`.
 
     @method capitalize
     @for String
@@ -19441,8 +18409,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.Function) {
     will instead clear the cache so that it is updated when the next `get`
     is called on the property.
 
-    See {{#crossLink "Ember.ComputedProperty"}}{{/crossLink}},
-      {{#crossLink "Ember/computed"}}{{/crossLink}}
+    See `Ember.ComputedProperty`, `Ember.computed`.
 
     @method property
     @for Function
@@ -19469,7 +18436,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.Function) {
     });
     ```
 
-    See {{#crossLink "Ember.Observable/observes"}}{{/crossLink}}
+    See `Ember.Observable.observes`.
 
     @method observes
     @for Function
@@ -19496,7 +18463,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.Function) {
     });
     ```
 
-    See {{#crossLink "Ember.Observable/observesBefore"}}{{/crossLink}}
+    See `Ember.Observable.observesBefore`.
 
     @method observesBefore
     @for Function
@@ -20393,9 +19360,7 @@ Ember.Enumerable = Ember.Mixin.create({
 // HELPERS
 //
 
-var get = Ember.get, set = Ember.set, map = Ember.EnumerableUtils.map, cacheFor = Ember.cacheFor;
-
-function none(obj) { return obj===null || obj===undefined; }
+var get = Ember.get, set = Ember.set, isNone = Ember.isNone, map = Ember.EnumerableUtils.map, cacheFor = Ember.cacheFor;
 
 // ..........................................................
 // ARRAY
@@ -20418,7 +19383,7 @@ function none(obj) { return obj===null || obj===undefined; }
 
   You can use the methods defined in this module to access and modify array
   contents in a KVO-friendly way. You can also be notified whenever the
-  membership if an array changes by changing the syntax of the property to
+  membership of an array changes by changing the syntax of the property to
   `.observes('*myProperty.[]')`.
 
   To support `Ember.Array` in your own class, you must override two
@@ -20434,9 +19399,6 @@ function none(obj) { return obj===null || obj===undefined; }
   @since Ember 0.9.0
 */
 Ember.Array = Ember.Mixin.create(Ember.Enumerable, /** @scope Ember.Array.prototype */ {
-
-  // compatibility
-  isSCArray: true,
 
   /**
     Your array must support the `length` property. Your replace methods should
@@ -20477,7 +19439,7 @@ Ember.Array = Ember.Mixin.create(Ember.Enumerable, /** @scope Ember.Array.protot
     This returns the objects at the specified indexes, using `objectAt`.
 
     ```javascript
-    var arr = ['a', 'b', 'c', 'd'];
+    var arr =� ['a', 'b', 'c', 'd'];
     arr.objectsAt([0, 1, 2]);  // ["a", "b", "c"]
     arr.objectsAt([2, 3, 4]);  // ["c", "d", undefined]
     ```
@@ -20545,8 +19507,8 @@ Ember.Array = Ember.Mixin.create(Ember.Enumerable, /** @scope Ember.Array.protot
   slice: function(beginIndex, endIndex) {
     var ret = Ember.A([]);
     var length = get(this, 'length') ;
-    if (none(beginIndex)) beginIndex = 0 ;
-    if (none(endIndex) || (endIndex > length)) endIndex = length ;
+    if (isNone(beginIndex)) beginIndex = 0 ;
+    if (isNone(endIndex) || (endIndex > length)) endIndex = length ;
 
     if (beginIndex < 0) beginIndex = length + beginIndex;
     if (endIndex < 0) endIndex = length + endIndex;
@@ -20706,7 +19668,7 @@ Ember.Array = Ember.Mixin.create(Ember.Enumerable, /** @scope Ember.Array.protot
     @param {Number} startIdx The starting index in the array that will change.
     @param {Number} removeAmt The number of items that will be removed. If you
       pass `null` assumes 0
-    @param {Number} addAmt The number of items that will be added  If you
+    @param {Number} addAmt The number of items that will be added. If you
       pass `null` assumes 0.
     @return {Ember.Array} receiver
   */
@@ -20740,6 +19702,20 @@ Ember.Array = Ember.Mixin.create(Ember.Enumerable, /** @scope Ember.Array.protot
     return this;
   },
 
+  /**
+    If you are implementing an object that supports `Ember.Array`, call this
+    method just after the array content changes to notify any observers and
+    invalidate any related properties. Pass the starting index of the change
+    as well as a delta of the amounts to change.
+
+    @method arrayContentDidChange
+    @param {Number} startIdx The starting index in the array that did change.
+    @param {Number} removeAmt The number of items that were removed. If you
+      pass `null` assumes 0
+    @param {Number} addAmt The number of items that were added. If you
+      pass `null` assumes 0.
+    @return {Ember.Array} receiver
+  */
   arrayContentDidChange: function(startIdx, removeAmt, addAmt) {
 
     // if no args are passed assume everything changes
@@ -20880,8 +19856,7 @@ var get = Ember.get, set = Ember.set;
   @extends Ember.Mixin
   @since Ember 0.9
 */
-Ember.Copyable = Ember.Mixin.create(
-/** @scope Ember.Copyable.prototype */ {
+Ember.Copyable = Ember.Mixin.create(/** @scope Ember.Copyable.prototype */ {
 
   /**
     Override to return a copy of the receiver. Default implementation raises
@@ -20986,8 +19961,7 @@ var get = Ember.get, set = Ember.set;
   @extends Ember.Mixin
   @since Ember 0.9
 */
-Ember.Freezable = Ember.Mixin.create(
-/** @scope Ember.Freezable.prototype */ {
+Ember.Freezable = Ember.Mixin.create(/** @scope Ember.Freezable.prototype */ {
 
   /**
     Set to `true` when the object is frozen. Use this property to detect
@@ -21168,8 +20142,7 @@ var get = Ember.get, set = Ember.set;
   @uses Ember.Array
   @uses Ember.MutableEnumerable
 */
-Ember.MutableArray = Ember.Mixin.create(Ember.Array, Ember.MutableEnumerable,
-  /** @scope Ember.MutableArray.prototype */ {
+Ember.MutableArray = Ember.Mixin.create(Ember.Array, Ember.MutableEnumerable,/** @scope Ember.MutableArray.prototype */ {
 
   /**
     __Required.__ You must implement this method to apply this mixin.
@@ -21440,7 +20413,6 @@ Ember.MutableArray = Ember.Mixin.create(Ember.Array, Ember.MutableEnumerable,
 
 });
 
-
 })();
 
 
@@ -21488,7 +20460,7 @@ var get = Ember.get, set = Ember.set;
   For example:
 
   ```javascript
-  Ember.Object.create({
+  Ember.Object.extend({
     valueObserver: function() {
       // Executes whenever the "value" property changes
     }.observes('value')
@@ -21507,8 +20479,8 @@ var get = Ember.get, set = Ember.set;
   object.addObserver('propertyKey', targetObject, targetAction)
   ```
 
-  This will call the `targetAction` method on the `targetObject` to be called
-  whenever the value of the `propertyKey` changes.
+  This will call the `targetAction` method on the `targetObject` whenever
+  the value of the `propertyKey` changes.
 
   Note that if `propertyKey` is a computed property, the observer will be
   called when any of the property dependencies are changed, even if the
@@ -21768,8 +20740,8 @@ Ember.Observable = Ember.Mixin.create(/** @scope Ember.Observable.prototype */ {
 
     This is the core method used to register an observer for a property.
 
-    Once you call this method, anytime the key's value is set, your observer
-    will be notified. Note that the observers are triggered anytime the
+    Once you call this method, any time the key's value is set, your observer
+    will be notified. Note that the observers are triggered any time the
     value is set, regardless of whether it has actually changed. Your
     observer should be prepared to handle that.
 
@@ -21894,11 +20866,11 @@ Ember.Observable = Ember.Mixin.create(/** @scope Ember.Observable.prototype */ {
 
     @method incrementProperty
     @param {String} keyName The name of the property to increment
-    @param {Object} increment The amount to increment by. Defaults to 1
-    @return {Object} The new property value
+    @param {Number} increment The amount to increment by. Defaults to 1
+    @return {Number} The new property value
   */
   incrementProperty: function(keyName, increment) {
-    if (!increment) { increment = 1; }
+    if (Ember.isNone(increment)) { increment = 1; }
     set(this, keyName, (get(this, keyName) || 0)+increment);
     return get(this, keyName);
   },
@@ -21913,12 +20885,12 @@ Ember.Observable = Ember.Mixin.create(/** @scope Ember.Observable.prototype */ {
 
     @method decrementProperty
     @param {String} keyName The name of the property to decrement
-    @param {Object} increment The amount to decrement by. Defaults to 1
-    @return {Object} The new property value
+    @param {Number} decrement The amount to decrement by. Defaults to 1
+    @return {Number} The new property value
   */
-  decrementProperty: function(keyName, increment) {
-    if (!increment) { increment = 1; }
-    set(this, keyName, (get(this, keyName) || 0)-increment);
+  decrementProperty: function(keyName, decrement) {
+    if (Ember.isNone(decrement)) { decrement = 1; }
+    set(this, keyName, (get(this, keyName) || 0)-decrement);
     return get(this, keyName);
   },
 
@@ -21927,7 +20899,7 @@ Ember.Observable = Ember.Mixin.create(/** @scope Ember.Observable.prototype */ {
     current value.
 
     ```javascript
-    starship.toggleProperty('warpDriveEnaged');
+    starship.toggleProperty('warpDriveEngaged');
     ```
 
     @method toggleProperty
@@ -21958,7 +20930,6 @@ Ember.Observable = Ember.Mixin.create(/** @scope Ember.Observable.prototype */ {
     return Ember.observersFor(this, keyName);
   }
 });
-
 
 })();
 
@@ -22254,9 +21225,9 @@ Ember.Evented = Ember.Mixin.create({
 (function() {
 var RSVP = requireModule("rsvp");
 
-RSVP.async = function(callback, binding) {
+RSVP.configure('async', function(callback, binding) {
   Ember.run.schedule('actions', binding, callback);
-};
+});
 
 /**
 @module ember
@@ -22278,9 +21249,22 @@ Ember.DeferredMixin = Ember.Mixin.create({
     @param {Function} doneCallback a callback function to be called when done
     @param {Function} failCallback a callback function to be called when failed
   */
-  then: function(doneCallback, failCallback) {
-    var promise = get(this, 'promise');
-    return promise.then.apply(promise, arguments);
+  then: function(resolve, reject) {
+    var deferred, promise, entity;
+
+    entity = this;
+    deferred = get(this, '_deferred');
+    promise = deferred.promise;
+
+    function fulfillmentHandler(fulfillment) {
+      if (fulfillment === promise) {
+        return resolve(entity);
+      } else {
+        return resolve(fulfillment);
+      }
+    }
+
+    return promise.then(resolve && fulfillmentHandler, reject);
   },
 
   /**
@@ -22289,7 +21273,16 @@ Ember.DeferredMixin = Ember.Mixin.create({
     @method resolve
   */
   resolve: function(value) {
-    get(this, 'promise').resolve(value);
+    var deferred, promise;
+
+    deferred = get(this, '_deferred');
+    promise = deferred.promise;
+
+    if (value === this){
+      deferred.resolve(promise);
+    } else {
+      deferred.resolve(value);
+    }
   },
 
   /**
@@ -22298,11 +21291,11 @@ Ember.DeferredMixin = Ember.Mixin.create({
     @method reject
   */
   reject: function(value) {
-    get(this, 'promise').reject(value);
+    get(this, '_deferred').reject(value);
   },
 
-  promise: Ember.computed(function() {
-    return new RSVP.Promise();
+  _deferred: Ember.computed(function() {
+    return RSVP.defer();
   })
 });
 
@@ -22615,21 +21608,23 @@ CoreObject.PrototypeMixin = Mixin.create({
     raised.
 
     Note that destruction is scheduled for the end of the run loop and does not
-    happen immediately.
+    happen immediately.  It will set an isDestroying flag immediately.
 
     @method destroy
     @return {Ember.Object} receiver
   */
   destroy: function() {
-    if (this._didCallDestroy) { return; }
-
+    if (this.isDestroying) { return; }
     this.isDestroying = true;
-    this._didCallDestroy = true;
 
+    schedule('actions', this, this.willDestroy);
     schedule('destroy', this, this._scheduledDestroy);
     return this;
   },
 
+  /**
+    Override to implement teardown.
+   */
   willDestroy: Ember.K,
 
   /**
@@ -22641,10 +21636,9 @@ CoreObject.PrototypeMixin = Mixin.create({
     @method _scheduledDestroy
   */
   _scheduledDestroy: function() {
-    if (this.willDestroy) { this.willDestroy(); }
+    if (this.isDestroyed) { return; }
     destroy(this);
     this.isDestroyed = true;
-    if (this.didDestroy) { this.didDestroy(); }
   },
 
   bind: function(to, from) {
@@ -23135,8 +22129,7 @@ var get = Ember.get, set = Ember.set;
   @extends Ember.Object
   @uses Ember.MutableArray
 */
-Ember.ArrayProxy = Ember.Object.extend(Ember.MutableArray,
-/** @scope Ember.ArrayProxy.prototype */ {
+Ember.ArrayProxy = Ember.Object.extend(Ember.MutableArray,/** @scope Ember.ArrayProxy.prototype */ {
 
   /**
     The content array. Must be an object that implements `Ember.Array` and/or
@@ -23412,7 +22405,6 @@ Ember.ArrayProxy = Ember.Object.extend(Ember.MutableArray,
   }
 });
 
-
 })();
 
 
@@ -23512,8 +22504,7 @@ function contentPropertyDidChange(content, contentKey) {
   @namespace Ember
   @extends Ember.Object
 */
-Ember.ObjectProxy = Ember.Object.extend(
-/** @scope Ember.ObjectProxy.prototype */ {
+Ember.ObjectProxy = Ember.Object.extend(/** @scope Ember.ObjectProxy.prototype */ {
   /**
     The object whose properties will be forwarded.
 
@@ -23951,7 +22942,7 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.Array) {
 @submodule ember-runtime
 */
 
-var get = Ember.get, set = Ember.set, guidFor = Ember.guidFor, none = Ember.isNone, fmt = Ember.String.fmt;
+var get = Ember.get, set = Ember.set, guidFor = Ember.guidFor, isNone = Ember.isNone, fmt = Ember.String.fmt;
 
 /**
   An unordered collection of objects.
@@ -24309,7 +23300,7 @@ Ember.Set = Ember.CoreObject.extend(Ember.MutableEnumerable, Ember.Copyable, Emb
   // implements Ember.MutableEnumerable
   addObject: function(obj) {
     if (get(this, 'isFrozen')) throw new Error(Ember.FROZEN_ERROR);
-    if (none(obj)) return this; // nothing to do
+    if (isNone(obj)) return this; // nothing to do
 
     var guid = guidFor(obj),
         idx  = this[guid],
@@ -24337,7 +23328,7 @@ Ember.Set = Ember.CoreObject.extend(Ember.MutableEnumerable, Ember.Copyable, Emb
   // implements Ember.MutableEnumerable
   removeObject: function(obj) {
     if (get(this, 'isFrozen')) throw new Error(Ember.FROZEN_ERROR);
-    if (none(obj)) return this; // nothing to do
+    if (isNone(obj)) return this; // nothing to do
 
     var guid = guidFor(obj),
         idx  = this[guid],
@@ -24412,7 +23403,7 @@ Deferred.reopenClass({
   promise: function(callback, binding) {
     var deferred = Deferred.create();
     callback.call(binding, deferred);
-    return get(deferred, 'promise');
+    return deferred;
   }
 });
 
@@ -24423,6 +23414,8 @@ Ember.Deferred = Deferred;
 
 
 (function() {
+var forEach = Ember.ArrayPolyfills.forEach;
+
 /**
 @module ember
 @submodule ember-runtime
@@ -24455,12 +23448,10 @@ Ember.onLoad = function(name, callback) {
 @param object {Object} object to pass to callbacks
 */
 Ember.runLoadHooks = function(name, object) {
-  var hooks;
-
   loaded[name] = object;
 
-  if (hooks = loadHooks[name]) {
-    loadHooks[name].forEach(function(callback) {
+  if (loadHooks[name]) {
+    forEach.call(loadHooks[name], function(callback) {
       callback(object);
     });
   }
@@ -24533,6 +23524,8 @@ Ember.ControllerMixin = Ember.Mixin.create({
   target: null,
 
   container: null,
+
+  parentController: null,
 
   store: null,
 
@@ -24876,6 +23869,10 @@ var get = Ember.get, set = Ember.set, forEach = Ember.EnumerableUtils.forEach,
   });
   ```
 
+  The itemController instances will have a `parentController` property set to
+  either the the `parentController` property of the `ArrayController`
+  or to the `ArrayController` instance itself.
+
   @class ArrayController
   @namespace Ember
   @extends Ember.ArrayProxy
@@ -24986,6 +23983,7 @@ Ember.ArrayController = Ember.ArrayProxy.extend(Ember.ControllerMixin,
     }
 
     subController.set('target', this);
+    subController.set('parentController', get(this, 'parentController') || this);
     subController.set('content', object);
 
     return subController;
@@ -25059,7 +24057,7 @@ Ember Runtime
 */
 
 var jQuery = Ember.imports.jQuery;
-Ember.assert("Ember Views require jQuery 1.8, 1.9 or 2.0", jQuery && (jQuery().jquery.match(/^((1\.(8|9))|2.0)(\.\d+)?(pre|rc\d?)?/) || Ember.ENV.FORCE_JQUERY));
+Ember.assert("Ember Views require jQuery 1.8, 1.9, 1.10, or 2.0", jQuery && (jQuery().jquery.match(/^((1\.(8|9|10))|2.0)(\.\d+)?(pre|rc\d?)?/) || Ember.ENV.FORCE_JQUERY));
 
 /**
   Alias for jQuery
@@ -25099,7 +24097,7 @@ if (Ember.$) {
 @submodule ember-views
 */
 
-/*** BEGIN METAMORPH HELPERS ***/
+/* BEGIN METAMORPH HELPERS */
 
 // Internet Explorer prior to 9 does not allow setting innerHTML if the first element
 // is a "zero-scope" element. This problem can be worked around by making
@@ -25172,7 +24170,7 @@ var setInnerHTMLWithoutFix = function(element, html) {
   }
 };
 
-/*** END METAMORPH HELPERS */
+/* END METAMORPH HELPERS */
 
 
 var innerHTMLTags = {};
@@ -25755,8 +24753,7 @@ var get = Ember.get, set = Ember.set, fmt = Ember.String.fmt;
   @private
   @extends Ember.Object
 */
-Ember.EventDispatcher = Ember.Object.extend(
-/** @scope Ember.EventDispatcher.prototype */{
+Ember.EventDispatcher = Ember.Object.extend(/** @scope Ember.EventDispatcher.prototype */{
 
   /**
     @private
@@ -25788,7 +24785,7 @@ Ember.EventDispatcher = Ember.Object.extend(
     @method setup
     @param addedEvents {Hash}
   */
-  setup: function(addedEvents) {
+  setup: function(addedEvents, rootElement) {
     var event, events = {
       touchstart  : 'touchStart',
       touchmove   : 'touchMove',
@@ -25821,7 +24818,12 @@ Ember.EventDispatcher = Ember.Object.extend(
 
     Ember.$.extend(events, addedEvents || {});
 
-    var rootElement = Ember.$(get(this, 'rootElement'));
+
+    if (!Ember.isNone(rootElement)) {
+      set(this, 'rootElement', rootElement);
+    }
+
+    rootElement = Ember.$(get(this, 'rootElement'));
 
     Ember.assert(fmt('You cannot use the same root element (%@) multiple times in an Ember.Application', [rootElement.selector || rootElement[0].tagName]), !rootElement.is('.ember-application'));
     Ember.assert('You cannot make a new Ember.Application using a root element that is a descendent of an existing Ember.Application', !rootElement.closest('.ember-application').length);
@@ -25863,7 +24865,7 @@ Ember.EventDispatcher = Ember.Object.extend(
   setupHandler: function(rootElement, event, eventName) {
     var self = this;
 
-    rootElement.delegate('.ember-view', event + '.ember', function(evt, triggeringManager) {
+    rootElement.on(event + '.ember', '.ember-view', function(evt, triggeringManager) {
       return Ember.handleErrors(function() {
         var view = Ember.View.views[this.id],
             result = true, manager = null;
@@ -25882,7 +24884,7 @@ Ember.EventDispatcher = Ember.Object.extend(
       }, this);
     });
 
-    rootElement.delegate('[data-ember-action]', event + '.ember', function(evt) {
+    rootElement.on(event + '.ember', '[data-ember-action]', function(evt) {
       return Ember.handleErrors(function() {
         var actionId = Ember.$(evt.currentTarget).attr('data-ember-action'),
             action   = Ember.Handlebars.ActionHelper.registeredActions[actionId];
@@ -25934,7 +24936,7 @@ Ember.EventDispatcher = Ember.Object.extend(
 
   destroy: function() {
     var rootElement = get(this, 'rootElement');
-    Ember.$(rootElement).undelegate('.ember').removeClass('ember-application');
+    Ember.$(rootElement).off('.ember', '**').removeClass('ember-application');
     return this._super();
   }
 });
@@ -26737,7 +25739,7 @@ class:
     eventManager: Ember.Object.create({
       mouseEnter: function(event, view){
         // view might be instance of either
-        // OutsideView or InnerView depending on
+        // OuterView or InnerView depending on
         // where on the page the user interaction occured
       }
     })
@@ -26931,6 +25933,8 @@ Ember.View = Ember.CoreView.extend(
   templateForName: function(name, type) {
     if (!name) { return; }
     Ember.assert("templateNames are not allowed to contain periods: "+name, name.indexOf('.') === -1);
+
+    // the defaultContainer is deprecated
     var container = this.container || (Ember.Container && Ember.Container.defaultContainer);
     return container && container.lookup('template:' + name);
   },
@@ -28401,7 +27405,7 @@ Ember.View.reopenClass({
 
     // If the value is not false, undefined, or null, return the current
     // value of the property.
-    } else if (val !== false && val !== undefined && val !== null) {
+    } else if (val !== false && val != null) {
       return val;
 
     // Nothing to display. Return null so that the old class is removed
@@ -29049,6 +28053,8 @@ Ember.ContainerView = Ember.View.extend(Ember.MutableArray, {
 
   replace: function(idx, removedCount, addedViews) {
     var addedCount = addedViews ? get(addedViews, 'length') : 0;
+    var self = this;
+    Ember.assert("You can't add a child to a container that is already a child of another view", Ember.A(addedViews).every(function(item) { return !get(item, '_parentView') || get(item, '_parentView') === self; }));
 
     this.arrayContentWillChange(idx, removedCount, addedCount);
     this.childViewsWillChange(this._childViews, idx, removedCount);
@@ -29089,7 +28095,7 @@ Ember.ContainerView = Ember.View.extend(Ember.MutableArray, {
     });
   },
 
-  instrumentName: 'render.container',
+  instrumentName: 'container',
 
   /**
     @private
@@ -29169,6 +28175,7 @@ Ember.ContainerView = Ember.View.extend(Ember.MutableArray, {
   _currentViewDidChange: Ember.observer(function() {
     var currentView = get(this, 'currentView');
     if (currentView) {
+      Ember.assert("You tried to set a current view that already has a parent. Make sure you don't have multiple outlets in the same view.", !get(currentView, '_parentView'));
       this.pushObject(currentView);
     }
   }, 'currentView'),
@@ -29258,7 +28265,7 @@ var get = Ember.get, set = Ember.set, fmt = Ember.String.fmt;
 
 /**
   `Ember.CollectionView` is an `Ember.View` descendent responsible for managing
-  a collection (an array or array-like object) by maintaing a child view object
+  a collection (an array or array-like object) by maintaining a child view object
   and associated DOM representation for each item in the array and ensuring
   that child views and their associated rendered HTML are updated when items in
   the array are added, removed, or replaced.
@@ -29409,8 +28416,7 @@ var get = Ember.get, set = Ember.set, fmt = Ember.String.fmt;
   @extends Ember.ContainerView
   @since Ember 0.9
 */
-Ember.CollectionView = Ember.ContainerView.extend(
-/** @scope Ember.CollectionView.prototype */ {
+Ember.CollectionView = Ember.ContainerView.extend(/** @scope Ember.CollectionView.prototype */ {
 
   /**
     A list of items to be displayed by the `Ember.CollectionView`.
@@ -29536,9 +28542,10 @@ Ember.CollectionView = Ember.ContainerView.extend(
     This array observer is added in `contentDidChange`.
 
     @method arrayDidChange
-    @param {Array} addedObjects the objects that were added to the content
-    @param {Array} removedObjects the objects that were removed from the content
-    @param {Number} changeIndex the index at which the changes occurred
+    @param {Array} content the managed collection of objects
+    @param {Number} start the index at which the changes occurred
+    @param {Number} removed number of object removed from content
+    @param {Number} added number of object added to content
   */
   arrayDidChange: function(content, start, removed, added) {
     var itemViewClass = get(this, 'itemViewClass'),
@@ -29703,7 +28710,7 @@ define("metamorph",
     "use strict";
     // ==========================================================================
     // Project:   metamorph
-    // Copyright: �2011 My Company Inc. All rights reserved.
+    // Copyright: ©2011 My Company Inc. All rights reserved.
     // ==========================================================================
 
     var K = function(){},
@@ -30176,7 +29183,8 @@ if(!Handlebars && typeof require === 'function') {
   Handlebars = require('handlebars');
 }
 
-Ember.assert("Ember Handlebars requires Handlebars 1.0.0-rc.3 or greater. Include a SCRIPT tag in the HTML HEAD linking to the Handlebars file before you link to Ember.", Handlebars && Handlebars.COMPILER_REVISION === 2);
+Ember.assert("Ember Handlebars requires Handlebars version 1.0.0-rc.4. Include a SCRIPT tag in the HTML HEAD linking to the Handlebars file before you link to Ember.", Handlebars)
+Ember.assert("Ember Handlebars requires Handlebars version 1.0.0-rc.4, COMPILER_REVISION expected: 3, got: " +  Handlebars.COMPILER_REVISION + " – Please note: Builds of master may have other COMPILER_REVISION values.", Handlebars.COMPILER_REVISION === 3);
 
 /**
   Prepares the Handlebars templating library for use inside Ember's view
@@ -30194,10 +29202,25 @@ Ember.assert("Ember Handlebars requires Handlebars 1.0.0-rc.3 or greater. Includ
 */
 Ember.Handlebars = objectCreate(Handlebars);
 
+function makeBindings(options) {
+  var hash = options.hash,
+      hashType = options.hashTypes;
+
+  for (var prop in hash) {
+    if (hashType[prop] === 'ID') {
+      hash[prop + 'Binding'] = hash[prop];
+      hashType[prop + 'Binding'] = 'STRING';
+      delete hash[prop];
+      delete hashType[prop];
+    }
+  }
+}
+
 Ember.Handlebars.helper = function(name, value) {
   if (Ember.View.detect(value)) {
-    Ember.Handlebars.registerHelper(name, function(name, options) {
+    Ember.Handlebars.registerHelper(name, function(options) {
       Ember.assert("You can only pass attributes as parameters to a application-defined helper", arguments.length < 3);
+      makeBindings(options);
       return Ember.Handlebars.helpers.view.call(this, value, options);
     });
   } else {
@@ -30573,15 +29596,15 @@ Ember.Handlebars.registerHelper('helperMissing', function(path, options) {
   });
   ```
 
-  Which allows for template syntax such as {{concatenate prop1 prop2}} or
-  {{concatenate prop1 prop2 prop3}}. If any of the properties change,
+  Which allows for template syntax such as `{{concatenate prop1 prop2}}` or
+  `{{concatenate prop1 prop2 prop3}}`. If any of the properties change,
   the helpr will re-render.  Note that dependency keys cannot be
   using in conjunction with multi-property helpers, since it is ambiguous
   which property the dependent keys would belong to.
 
   ## Use with unbound helper
 
-  The {{unbound}} helper can be used with bound helper invocations
+  The `{{unbound}}` helper can be used with bound helper invocations
   to render them in their unbound form, e.g.
 
   ```handlebars
@@ -30591,6 +29614,10 @@ Ember.Handlebars.registerHelper('helperMissing', function(path, options) {
   In this example, if the name property changes, the helper
   will not re-render.
 
+  ## Use with blocks not supported
+
+  Bound helpers do not support use with Handlebars blocks or
+  the addition of child views of any kind.
 
   @method registerBoundHelper
   @for Ember.Handlebars
@@ -30613,6 +29640,8 @@ Ember.Handlebars.registerBoundHelper = function(name, fn) {
       normalized,
       pathRoot, path,
       loc, hashOption;
+
+    Ember.assert("registerBoundHelper-generated helpers do not support use with Handlebars blocks.", !options.fn);
 
     // Detect bound options (e.g. countBinding="otherCount")
     hash.boundOptions = {};
@@ -30774,7 +29803,6 @@ Ember.Handlebars.template = function(spec){
   return t;
 };
 
-
 })();
 
 
@@ -30794,7 +29822,7 @@ var htmlSafe = Ember.String.htmlSafe;
 if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.String) {
 
   /**
-    See {{#crossLink "Ember.String/htmlSafe"}}{{/crossLink}}
+    See `Ember.String.htmlSafe`.
 
     @method htmlSafe
     @for String
@@ -30910,7 +29938,7 @@ Ember._Metamorph = Ember.Mixin.create({
   isVirtual: true,
   tagName: '',
 
-  instrumentName: 'render.metamorph',
+  instrumentName: 'metamorph',
 
   init: function() {
     this._super();
@@ -31099,7 +30127,7 @@ merge(states.inDOM, {
   @private
 */
 Ember._HandlebarsBoundView = Ember._MetamorphView.extend({
-  instrumentName: 'render.boundHandlebars',
+  instrumentName: 'boundHandlebars',
   states: states,
 
   /**
@@ -31708,7 +30736,7 @@ EmberHandlebars.registerHelper('unless', function(context, options) {
   ```
 
   All three strategies - string return value, boolean return value, and
-  hard-coded value � can be combined in a single declaration:
+  hard-coded value – can be combined in a single declaration:
 
   ```handlebars
   <img {{bindAttr class=":class-name-to-always-apply view.someBool:class-name-if-true view.someProperty"}}>
@@ -31736,7 +30764,7 @@ EmberHandlebars.registerHelper('bindAttr', function(options) {
 
   // Handle classes differently, as we can bind multiple classes
   var classBindings = attrs['class'];
-  if (classBindings !== null && classBindings !== undefined) {
+  if (classBindings != null) {
     var classResults = EmberHandlebars.bindClasses(this, classBindings, view, dataId, options);
 
     ret.push('class="' + Handlebars.Utils.escapeExpression(classResults.join(' ')) + '"');
@@ -32588,6 +31616,7 @@ Ember.Handlebars.EachView = Ember.CollectionView.extend(Ember._Metamorph, {
       set(controller, 'container', get(this, 'controller.container'));
       set(controller, '_eachView', this);
       set(controller, 'target', get(this, 'controller'));
+      set(controller, 'parentController', get(this, 'controller'));
 
       this.disableContentObservers(function() {
         set(this, 'content', controller);
@@ -32861,6 +31890,9 @@ GroupedEach.prototype = {
   {{/each}}
   ```
 
+  Each itemController will receive a reference to the current controller as
+  a `parentController` property.
+
   @method each
   @for Ember.Handlebars.helpers
   @param [name] {String} name for item (used with `in`)
@@ -32880,6 +31912,11 @@ Ember.Handlebars.registerHelper('each', function(path, options) {
     if (path === '') { path = "this"; }
 
     options.hash.keyword = keywordName;
+  }
+
+  if (arguments.length === 1) {
+    options = path;
+    path = 'this';
   }
 
   options.hash.dataSourceBinding = path;
@@ -33000,7 +32037,7 @@ Ember.Handlebars.registerHelper('partial', function(name, options) {
   var view = options.data.view,
       underscoredName = nameParts.join("/"),
       template = view.templateForName(underscoredName),
-      deprecatedTemplate = view.templateForName(name);
+      deprecatedTemplate = !template && view.templateForName(name);
 
   Ember.deprecate("You tried to render the partial " + name + ", which should be at '" + underscoredName + "', but Ember found '" + name + "'. Please use a leading underscore in your partials", template);
   Ember.assert("Unable to find partial with name '"+name+"'.", template || deprecatedTemplate);
@@ -33126,7 +32163,7 @@ var set = Ember.set, get = Ember.get;
   You can add a `label` tag yourself in the template where the `Ember.Checkbox`
   is being used.
 
-  ```html
+  ```handlebars
   <label>
     {{view Ember.Checkbox classNames="applicaton-specific-checkbox"}}
     Some Title
@@ -33346,7 +32383,7 @@ Ember.TextField = Ember.View.extend(Ember.TextSupport,
     * `enter`: the user pressed enter
     * `keypress`: the user pressed a key
 
-    @property on
+    @property onEvent
     @type String
     @default enter
   */
@@ -33913,37 +32950,41 @@ Ember.Select = Ember.View.extend(
   tagName: 'select',
   classNames: ['ember-select'],
   defaultTemplate: Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [2,'>= 1.0.0-rc.3'];
+this.compilerInfo = [3,'>= 1.0.0-rc.4'];
 helpers = helpers || Ember.Handlebars.helpers; data = data || {};
-  var buffer = '', stack1, hashTypes, escapeExpression=this.escapeExpression, self=this;
+  var buffer = '', stack1, hashTypes, hashContexts, escapeExpression=this.escapeExpression, self=this;
 
 function program1(depth0,data) {
-
-  var buffer = '', hashTypes;
+  
+  var buffer = '', hashTypes, hashContexts;
   data.buffer.push("<option value=\"\">");
   hashTypes = {};
-  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "view.prompt", {hash:{},contexts:[depth0],types:["ID"],hashTypes:hashTypes,data:data})));
+  hashContexts = {};
+  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "view.prompt", {hash:{},contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data})));
   data.buffer.push("</option>");
   return buffer;
   }
 
 function program3(depth0,data) {
-
-  var hashTypes;
+  
+  var hashContexts, hashTypes;
+  hashContexts = {'contentBinding': depth0};
   hashTypes = {'contentBinding': "STRING"};
   data.buffer.push(escapeExpression(helpers.view.call(depth0, "view.optionView", {hash:{
     'contentBinding': ("this")
-  },contexts:[depth0],types:["ID"],hashTypes:hashTypes,data:data})));
+  },contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data})));
   }
 
   hashTypes = {};
-  stack1 = helpers['if'].call(depth0, "view.prompt", {hash:{},inverse:self.noop,fn:self.program(1, program1, data),contexts:[depth0],types:["ID"],hashTypes:hashTypes,data:data});
+  hashContexts = {};
+  stack1 = helpers['if'].call(depth0, "view.prompt", {hash:{},inverse:self.noop,fn:self.program(1, program1, data),contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data});
   if(stack1 || stack1 === 0) { data.buffer.push(stack1); }
   hashTypes = {};
-  stack1 = helpers.each.call(depth0, "view.content", {hash:{},inverse:self.noop,fn:self.program(3, program3, data),contexts:[depth0],types:["ID"],hashTypes:hashTypes,data:data});
+  hashContexts = {};
+  stack1 = helpers.each.call(depth0, "view.content", {hash:{},inverse:self.noop,fn:self.program(3, program3, data),contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data});
   if(stack1 || stack1 === 0) { data.buffer.push(stack1); }
   return buffer;
-
+  
 }),
   attributeBindings: ['multiple', 'disabled', 'tabindex', 'name'],
 
@@ -34078,9 +33119,9 @@ function program3(depth0,data) {
         selection;
 
     if (value !== selectedValue) {
-      selection = content.find(function(obj) {
+      selection = content ? content.find(function(obj) {
         return value === (valuePath ? get(obj, valuePath) : obj);
-      });
+      }) : null;
 
       this.set('selection', selection);
     }
@@ -34102,7 +33143,7 @@ function program3(depth0,data) {
         content = get(this, 'content'),
         prompt = get(this, 'prompt');
 
-    if (!get(content, 'length')) { return; }
+    if (!content || !get(content, 'length')) { return; }
     if (prompt && selectedIndex === 0) { set(this, 'selection', null); return; }
 
     if (prompt) { selectedIndex -= 1; }
@@ -34183,6 +33224,15 @@ function normalizeHash(hash, hashTypes) {
   }
 }
 
+/**
+ * `{{input}}` inserts a new instance of either Ember.TextField or
+ * Ember.Checkbox, depending on the `type` option passed in. If no `type`
+ * is supplied it defaults to Ember.TextField.
+ *
+ * @method input
+ * @for Ember.Handlebars.helpers
+ * @param {Hash} options
+ */
 Ember.Handlebars.registerHelper('input', function(options) {
   Ember.assert('You can only pass attributes to the `input` helper, not arguments', arguments.length < 2);
 
@@ -34205,6 +33255,14 @@ Ember.Handlebars.registerHelper('input', function(options) {
   }
 });
 
+/**
+ * `{{textarea}}` inserts a new instance of Ember.TextArea into the template
+ * passing its options to `Ember.TextArea`'s `create` method.
+ *
+ * @method textarea
+ * @for Ember.Handlebars.helpers
+ * @param {Hash} options
+ */
 Ember.Handlebars.registerHelper('textarea', function(options) {
   Ember.assert('You can only pass attributes to the `textarea` helper, not arguments', arguments.length < 2);
 
@@ -34678,14 +33736,14 @@ define("route-recognizer",
       },
 
       recognize: function(path) {
-        var states = [ this.rootState ], i, l;
+        var states = [ this.rootState ],
+            pathLen, i, l;
 
         // DEBUG GROUP path
 
-        var pathLen = path.length;
-
         if (path.charAt(0) !== "/") { path = "/" + path; }
 
+        pathLen = path.length;
         if (pathLen > 1 && path.charAt(pathLen - 1) === "/") {
           path = path.substr(0, pathLen - 1);
         }
@@ -34867,6 +33925,21 @@ define("router",
 
       hasRoute: function(route) {
         return this.recognizer.hasRoute(route);
+      },
+
+      /**
+        Clears the current and target route handlers and triggers exit
+        on each of them starting at the leaf and traversing up through
+        its ancestors.
+      */
+      reset: function() {
+        eachHandler(this.currentHandlerInfos, function(handler) {
+          if (handler.exit) {
+            handler.exit();
+          }
+        });
+        this.currentHandlerInfos = null;
+        this.targetHandlerInfos = null;
       },
 
       /**
@@ -35061,11 +34134,13 @@ define("router",
       isActive: function(handlerName) {
         var contexts = [].slice.call(arguments, 1);
 
-        var currentHandlerInfos = this.currentHandlerInfos,
-            found = false, object, handlerInfo;
+        var targetHandlerInfos = this.targetHandlerInfos,
+            found = false, names, object, handlerInfo, handlerObj;
 
-        for (var i=currentHandlerInfos.length-1; i>=0; i--) {
-          handlerInfo = currentHandlerInfos[i];
+        if (!targetHandlerInfos) { return; }
+
+        for (var i=targetHandlerInfos.length-1; i>=0; i--) {
+          handlerInfo = targetHandlerInfos[i];
           if (handlerInfo.name === handlerName) { found = true; }
 
           if (found) {
@@ -35156,7 +34231,10 @@ define("router",
     function failure(router, error) {
       loaded(router);
       var handler = router.getHandler('failure');
-      if (handler && handler.setup) { handler.setup(error); }
+      if (handler) {
+        if (handler.enter) { handler.enter(); }
+        if (handler.setup) { handler.setup(error); }
+      }
     }
 
     /**
@@ -35283,20 +34361,24 @@ define("router",
       var partition =
         partitionHandlers(router.currentHandlerInfos || [], handlerInfos);
 
-      router.currentHandlerInfos = handlerInfos;
+      router.targetHandlerInfos = handlerInfos;
 
       eachHandler(partition.exited, function(handler, context) {
         delete handler.context;
         if (handler.exit) { handler.exit(); }
       });
 
-      eachHandler(partition.updatedContext, function(handler, context) {
+      var currentHandlerInfos = partition.unchanged.slice();
+      router.currentHandlerInfos = currentHandlerInfos;
+
+      eachHandler(partition.updatedContext, function(handler, context, handlerInfo) {
         setContext(handler, context);
         if (handler.setup) { handler.setup(context); }
+        currentHandlerInfos.push(handlerInfo);
       });
 
       var aborted = false;
-      eachHandler(partition.entered, function(handler, context) {
+      eachHandler(partition.entered, function(handler, context, handlerInfo) {
         if (aborted) { return; }
         if (handler.enter) { handler.enter(); }
         setContext(handler, context);
@@ -35304,6 +34386,10 @@ define("router",
           if (false === handler.setup(context)) {
             aborted = true;
           }
+        }
+
+        if (!aborted) {
+          currentHandlerInfos.push(handlerInfo);
         }
       });
 
@@ -35327,7 +34413,7 @@ define("router",
             handler = handlerInfo.handler,
             context = handlerInfo.context;
 
-        callback(handler, context);
+        callback(handler, context, handlerInfo);
       }
     }
 
@@ -35353,7 +34439,7 @@ define("router",
       * entered: the handler was not active in the old URL, but
         is now active.
 
-      The PartitionedHandlers structure has three fields:
+      The PartitionedHandlers structure has four fields:
 
       * `updatedContext`: a list of `HandlerInfo` objects that
         represent handlers that remain active but have a changed
@@ -35362,6 +34448,7 @@ define("router",
         handlers that are newly active
       * `exited`: a list of `HandlerInfo` objects that are no
         longer active.
+      * `unchanged`: a list of `HanderInfo` objects that remain active.
 
       @param {Array[HandlerInfo]} oldHandlers a list of the handler
         information for the previous URL (or `[]` if this is the
@@ -35375,7 +34462,8 @@ define("router",
       var handlers = {
             updatedContext: [],
             exited: [],
-            entered: []
+            entered: [],
+            unchanged: []
           };
 
       var handlerChanged, contextChanged, i, l;
@@ -35393,6 +34481,8 @@ define("router",
         } else if (contextChanged || oldHandler.context !== newHandler.context) {
           contextChanged = true;
           handlers.updatedContext.push(newHandler);
+        } else {
+          handlers.unchanged.push(oldHandler);
         }
       }
 
@@ -35412,17 +34502,24 @@ define("router",
         throw new Error("Could not trigger event '" + name + "'. There are no active handlers");
       }
 
+      var eventWasHandled = false;
+
       for (var i=currentHandlerInfos.length-1; i>=0; i--) {
         var handlerInfo = currentHandlerInfos[i],
             handler = handlerInfo.handler;
 
         if (handler.events && handler.events[name]) {
-          handler.events[name].apply(handler, args);
-          return;
+          if (handler.events[name].apply(handler, args) === true) {
+            eventWasHandled = true;
+          } else {
+            return;
+          }
         }
       }
 
-      throw new Error("Nothing handled the event '" + name + "'.");
+      if (!eventWasHandled) {
+        throw new Error("Nothing handled the event '" + name + "'.");
+      }
     }
 
     function setContext(handler, context) {
@@ -35524,6 +34621,8 @@ Ember.RouterDSL = DSL;
 
 
 (function() {
+var get = Ember.get;
+
 /**
 @module ember
 @submodule ember-routing
@@ -35540,7 +34639,7 @@ Ember.controllerFor = function(container, controllerName, context, lookupOptions
   `App.ObjectController` and `App.ArrayController`
 */
 Ember.generateController = function(container, controllerName, context) {
-  var controller, DefaultController, fullName;
+  var controller, DefaultController, fullName, instance;
 
   if (context && Ember.isArray(context)) {
     DefaultController = container.resolve('controller:array');
@@ -35561,10 +34660,16 @@ Ember.generateController = function(container, controllerName, context) {
     return "(generated " + controllerName + " controller)";
   };
 
-
   fullName = 'controller:' + controllerName;
   container.register(fullName, controller);
-  return container.lookup(fullName);
+
+  instance = container.lookup(fullName);
+
+  if (get(instance, 'namespace.LOG_ACTIVE_GENERATION')) {
+    Ember.Logger.info("generated -> " + fullName, { fullName: fullName });
+  }
+
+  return instance;
 };
 
 })();
@@ -35579,6 +34684,7 @@ Ember.generateController = function(container, controllerName, context) {
 
 var Router = requireModule("router");
 var get = Ember.get, set = Ember.set;
+var defineProperty = Ember.defineProperty;
 
 var DefaultView = Ember._MetamorphView;
 function setupLocation(router) {
@@ -35642,6 +34748,9 @@ Ember.Router = Ember.Object.extend({
     var appController = this.container.lookup('controller:application'),
         path = routePath(infos);
 
+    if (!('currentPath' in appController)) {
+      defineProperty(appController, 'currentPath');
+    }
     set(appController, 'currentPath', path);
     this.notifyPropertyChange('url');
 
@@ -35653,6 +34762,22 @@ Ember.Router = Ember.Object.extend({
   handleURL: function(url) {
     this.router.handleURL(url);
     this.notifyPropertyChange('url');
+  },
+
+  /**
+    Transition to another route via the `routeTo` event which
+    will by default be handled by ApplicationRoute.
+
+    @method routeTo
+    @param {TransitionEvent} transitionEvent
+   */
+  routeTo: function(transitionEvent) {
+    var handlerInfos = this.router.currentHandlerInfos;
+    if (handlerInfos) {
+      transitionEvent.sourceRoute = handlerInfos[handlerInfos.length - 1].handler;
+    }
+
+    this.send('routeTo', transitionEvent);
   },
 
   transitionTo: function(name) {
@@ -35681,6 +34806,18 @@ Ember.Router = Ember.Object.extend({
 
   hasRoute: function(route) {
     return this.router.hasRoute(route);
+  },
+
+  /**
+    @private
+
+    Resets the state of the router by clearing the current route
+    handlers and deactivating them.
+
+    @method reset
+   */
+  reset: function() {
+    this.router.reset();
   },
 
   _lookupActiveView: function(templateName) {
@@ -35733,6 +34870,16 @@ function getHandlerFunction(router) {
 
       container.register(routeName, DefaultRoute.extend());
       handler = container.lookup(routeName);
+
+      if (get(router, 'namespace.LOG_ACTIVE_GENERATION')) {
+        Ember.Logger.info("generated -> " + routeName, { fullName: routeName });
+      }
+    }
+
+    if (name === 'application') {
+      // Inject default `routeTo` handler.
+      handler.events = handler.events || {};
+      handler.events.routeTo = handler.events.routeTo || Ember.TransitionEvent.defaultHandler;
     }
 
     handler.routeName = name;
@@ -35856,15 +35003,16 @@ Ember.Route = Ember.Object.extend({
   },
 
   /**
-    The collection of functions keyed by name available on this route as
+    The collection of functions, keyed by name, available on this route as
     action targets.
 
     These functions will be invoked when a matching `{{action}}` is triggered
     from within a template and the application's current route is this route.
 
-    Events can also be invoked from other parts of your application via `Route#send`.
+    Events can also be invoked from other parts of your application via `Route#send`
+    or `Controller#send`.
 
-    The context of event will be the this route.
+    The context of the event will be this route.
 
     @see {Ember.Route#send}
     @see {Handlebars.helpers.action}
@@ -35890,6 +35038,17 @@ Ember.Route = Ember.Object.extend({
     @method activate
   */
   activate: Ember.K,
+
+  /**
+    Transition to another route via the `routeTo` event which
+    will by default be handled by ApplicationRoute.
+
+    @method routeTo
+    @param {TransitionEvent} transitionEvent
+   */
+  routeTo: function(transitionEvent) {
+    this.router.routeTo(transitionEvent);
+  },
 
   /**
     Transition into another route. Optionally supply a model for the
@@ -36007,10 +35166,9 @@ Ember.Route = Ember.Object.extend({
 
     var controller = this.controllerFor(this.routeName, context);
 
-    if (controller) {
-      this.controller = controller;
-      set(controller, 'model', context);
-    }
+    // Assign the route's controller so that it can more easily be
+    // referenced in event handlers
+    this.controller = controller;
 
     if (this.setupControllers) {
       Ember.deprecate("Ember.Route.setupControllers is deprecated. Please use Ember.Route.setupController(controller, model) instead.");
@@ -36167,30 +35325,41 @@ Ember.Route = Ember.Object.extend({
     This method is called with the controller for the current route and the
     model supplied by the `model` hook.
 
+    By default, the `setupController` hook sets the `content` property of
+    the controller to the `model`.
+
+    This means that your template will get a proxy for the model as its
+    context, and you can act as though the model itself was the context.
+
+    The provided controller will be one resolved based on the name
+    of this route.
+
+    If no explicit controller is defined, Ember will automatically create
+    an appropriate controller for the model.
+
+    * if the model is an `Ember.Array` (including record arrays from Ember
+      Data), the controller is an `Ember.ArrayController`.
+    * otherwise, the controller is an `Ember.ObjectController`.
+
+    As an example, consider the router:
+
     ```js
     App.Router.map(function() {
       this.resource('post', {path: '/posts/:post_id'});
     });
     ```
 
-    For the `post` route, the controller is `App.PostController`.
-
-    By default, the `setupController` hook sets the `content` property of
-    the controller to the `model`.
-
-    If no explicit controller is defined, the route will automatically create
-    an appropriate controller for the model:
-
-    * if the model is an `Ember.Array` (including record arrays from Ember
-      Data), the controller is an `Ember.ArrayController`.
-    * otherwise, the controller is an `Ember.ObjectController`.
-
-    This means that your template will get a proxy for the model as its
-    context, and you can act as though the model itself was the context.
+    For the `post` route, a controller named `App.PostController` would
+    be used if it is defined. If it is not defined, an `Ember.ObjectController`
+    instance would be used.
 
     @method setupController
   */
-  setupController: Ember.K,
+  setupController: function(controller, context){
+    if (controller && (context !== undefined)) {
+      set(controller, 'model', context);
+    }
+  },
 
   /**
     Returns the controller for a particular route.
@@ -36325,7 +35494,12 @@ Ember.Route = Ember.Object.extend({
         view = container.lookup('view:' + name),
         template = container.lookup('template:' + name);
 
-    if (!view && !template) { return; }
+    if (!view && !template) {
+      if (get(this.router, 'namespace.LOG_VIEW_LOOKUPS')) {
+        Ember.Logger.info("Could not find \"" + name + "\" template or view. Nothing will be rendered", { fullName: 'template:' + name });
+      }
+      return;
+    }
 
     options = normalizeOptions(this, name, template, options);
     view = setupView(view, container, options);
@@ -36341,7 +35515,7 @@ Ember.Route = Ember.Object.extend({
 });
 
 function parentRoute(route) {
-  var handlerInfos = route.router.router.currentHandlerInfos;
+  var handlerInfos = route.router.router.targetHandlerInfos;
 
   var parent, current;
 
@@ -36357,7 +35531,7 @@ function parentTemplate(route, isRecursive) {
 
   if (!parent) { return; }
 
-  Ember.warn(fmt("The immediate parent route ('%@') did not render into the main outlet and the default 'into' option ('%@') may not be expected", get(parent, 'routeName'), get(route, 'routeName')), !isRecursive);
+  Ember.warn(fmt("The immediate parent route ('%@') did not render into the main outlet and the default 'into' option ('%@') may not be expected", [get(parent, 'routeName'), get(route, 'routeName')]), !isRecursive);
 
   if (template = parent.lastRenderedTemplate) {
     return template;
@@ -36372,6 +35546,7 @@ function normalizeOptions(route, name, template, options) {
   options.outlet = options.outlet || 'main';
   options.name = name;
   options.template = template;
+  options.LOG_VIEW_LOOKUPS = get(route.router, 'namespace.LOG_VIEW_LOOKUPS');
 
   Ember.assert("An outlet ("+options.outlet+") was specified but this view will render at the root level.", options.outlet === 'main' || options.into);
 
@@ -36395,9 +35570,17 @@ function normalizeOptions(route, name, template, options) {
 }
 
 function setupView(view, container, options) {
-  var defaultView = options.into ? 'view:default' : 'view:toplevel';
-
-  view = view || container.lookup(defaultView);
+  if (view) {
+    if (options.LOG_VIEW_LOOKUPS) {
+      Ember.Logger.info("Rendering " + options.name + " with " + view, { fullName: 'view:' + options.name });
+    }
+  } else {
+    var defaultView = options.into ? 'view:default' : 'view:toplevel';
+    view = container.lookup(defaultView);
+    if (options.LOG_VIEW_LOOKUPS) {
+      Ember.Logger.info("Rendering " + options.name + " with default view " + view, { fullName: 'view:' + options.name });
+    }
+  }
 
   if (!get(view, 'templateName')) {
     set(view, 'template', options.template);
@@ -36442,6 +35625,65 @@ function teardownView(route) {
   delete route.teardownView;
   delete route.lastRenderedTemplate;
 }
+
+})();
+
+
+
+(function() {
+/**
+@module ember
+@submodule ember-routing
+*/
+
+
+/*
+  A TransitionEvent is passed as the argument for `transitionTo`
+  events and contains information about an attempted transition 
+  that can be modified or decorated by leafier `transitionTo` event
+  handlers before the actual transition is committed by ApplicationRoute.
+
+  @class TransitionEvent
+  @namespace Ember
+  @extends Ember.Deferred
+ */
+Ember.TransitionEvent = Ember.Object.extend({
+
+  /*
+    The Ember.Route method used to perform the transition.  Presently, 
+    the only valid values are 'transitionTo' and 'replaceWith'.
+   */
+  transitionMethod: 'transitionTo',
+  destinationRouteName: null,
+  sourceRoute: null,
+  contexts: null,
+
+  init: function() {
+    this._super();
+    this.contexts = this.contexts || [];
+  },
+
+  /*
+    Convenience method that returns an array that can be used for
+    legacy `transitionTo` and `replaceWith`.
+   */
+  transitionToArgs: function() {
+    return [this.destinationRouteName].concat(this.contexts);
+  }
+});
+
+
+Ember.TransitionEvent.reopenClass({
+  /*
+    This is the default transition event handler that will be injected
+    into ApplicationRoute. The context, like all route event handlers in
+    the events hash, will be an `Ember.Route`.
+   */
+  defaultHandler: function(transitionEvent) {
+    var router = this.router;
+    router[transitionEvent.transitionMethod].apply(router, transitionEvent.transitionToArgs());
+  }
+});
 
 })();
 
@@ -36520,6 +35762,87 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
   }
 
   /**
+    @class LinkView
+    @namespace Ember
+    @extends Ember.View
+  **/
+  var LinkView = Ember.LinkView = Ember.View.extend({
+    tagName: 'a',
+    namedRoute: null,
+    currentWhen: null,
+    title: null,
+    activeClass: 'active',
+    disabledClass: 'disabled',
+    _isDisabled: false,
+    replace: false,
+    attributeBindings: ['href', 'title'],
+    classNameBindings: ['active', 'disabled'],
+
+    // Even though this isn't a virtual view, we want to treat it as if it is
+    // so that you can access the parent with {{view.prop}}
+    concreteView: Ember.computed(function() {
+      return get(this, 'parentView');
+    }).property('parentView'),
+
+    disabled: Ember.computed(function(key, value) {
+      if (value !== undefined) { this.set('_isDisabled', value); }
+      
+      return value ? this.get('disabledClass') : false;
+    }),
+
+    active: Ember.computed(function() {
+      var router = this.get('router'),
+          params = resolvedPaths(this.parameters),
+          currentWithIndex = this.currentWhen + '.index',
+          isActive = router.isActive.apply(router, [this.currentWhen].concat(params)) ||
+                     router.isActive.apply(router, [currentWithIndex].concat(params));
+
+      if (isActive) { return get(this, 'activeClass'); }
+    }).property('namedRoute', 'router.url'),
+
+    router: Ember.computed(function() {
+      return this.get('controller').container.lookup('router:main');
+    }),
+
+    click: function(event) {
+      if (!isSimpleClick(event)) { return true; }
+
+      event.preventDefault();
+      if (this.bubbles === false) { event.stopPropagation(); }
+      
+      if (get(this, '_isDisabled')) { return false; }
+
+      var router = this.get('router');
+
+      if (Ember.ENV.ENABLE_ROUTE_TO) {
+
+        var routeArgs = args(this, router);
+
+        router.routeTo(Ember.TransitionEvent.create({
+          transitionMethod: this.get('replace') ? 'replaceWith' : 'transitionTo',
+          destinationRouteName: routeArgs[0],
+          contexts: routeArgs.slice(1)
+        }));
+      } else {
+        if (this.get('replace')) {
+          router.replaceWith.apply(router, args(this, router));
+        } else {
+          router.transitionTo.apply(router, args(this, router));
+        }
+      }
+    },
+
+    href: Ember.computed(function() {
+      if (this.get('tagName') !== 'a') { return false; }
+
+      var router = this.get('router');
+      return router.generate.apply(router, args(this, router));
+    })
+  });
+
+  LinkView.toString = function() { return "LinkView"; };
+
+  /**
     The `{{linkTo}}` helper renders a link to the supplied
     `routeName` passing an optionally supplied model to the
     route as its `model` context of the route. The block
@@ -36538,12 +35861,12 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     </a>
     ```
 
-    ## Supplying a tagName
-    By default `{{linkTo}} renders an `<a>` element. This can
+    ### Supplying a tagName
+    By default `{{linkTo}}` renders an `<a>` element. This can
     be overridden for a single use of `{{linkTo}}` by supplying
     a `tagName` option:
 
-    ```
+    ```handlebars
     {{#linkTo photoGallery tagName="li"}}
       Great Hamster Photos
     {{/linkTo}}
@@ -36555,24 +35878,24 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     </li>
     ```
 
-    To override this option for your entire application, see
+    To override this option for your entire application, see 
     "Overriding Application-wide Defaults".
 
-    ## Handling `href`
+    ### Handling `href`
     `{{linkTo}}` will use your application's Router to
     fill the element's `href` property with a url that
     matches the path to the supplied `routeName` for your
     routers's configured `Location` scheme, which defaults
     to Ember.HashLocation.
 
-    ## Handling current route
+    ### Handling current route
     `{{linkTo}}` will apply a CSS class name of 'active'
     when the application's current route matches
     the supplied routeName. For example, if the application's
     current route is 'photoGallery.recent' the following
     use of `{{linkTo}}`:
 
-    ```
+    ```handlebars
     {{#linkTo photoGallery.recent}}
       Great Hamster Photos from the last week
     {{/linkTo}}
@@ -36590,7 +35913,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     for a single use of `{{linkTo}}` by passing an `activeClass`
     option:
 
-    ```
+    ```handlebars
     {{#linkTo photoGallery.recent activeClass="current-url"}}
       Great Hamster Photos from the last week
     {{/linkTo}}
@@ -36602,10 +35925,10 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     </a>
     ```
 
-    To override this option for your entire application, see
+    To override this option for your entire application, see 
     "Overriding Application-wide Defaults".
 
-    ## Supplying a model
+    ### Supplying a model
     An optional model argument can be used for routes whose
     paths contain dynamic segments. This argument will become
     the model context of the linked route:
@@ -36628,7 +35951,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     </a>
     ```
 
-    ## Supplying multiple models
+    ### Supplying multiple models
     For deep-linking to route paths that contain multiple
     dynamic segments, multiple model arguments can be used.
     As the router transitions through the route path, each
@@ -36656,7 +35979,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     </a>
     ```
 
-    ## Overriding Application-wide Defaults
+    ### Overriding Application-wide Defaults
     ``{{linkTo}}`` creates an instance of Ember.LinkView
     for rendering. To override options for your entire
     application, reopen Ember.LinkView and supply the
@@ -36669,66 +35992,6 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     })
     ```
 
-    @class LinkView
-    @namespace Ember
-    @extends Ember.View
-  **/
-  var LinkView = Ember.LinkView = Ember.View.extend({
-    tagName: 'a',
-    namedRoute: null,
-    currentWhen: null,
-    title: null,
-    activeClass: 'active',
-    replace: false,
-    attributeBindings: ['href', 'title'],
-    classNameBindings: 'active',
-
-    // Even though this isn't a virtual view, we want to treat it as if it is
-    // so that you can access the parent with {{view.prop}}
-    concreteView: Ember.computed(function() {
-      return get(this, 'parentView');
-    }).property('parentView'),
-
-    active: Ember.computed(function() {
-      var router = this.get('router'),
-          params = resolvedPaths(this.parameters),
-          currentWithIndex = this.currentWhen + '.index',
-          isActive = router.isActive.apply(router, [this.currentWhen].concat(params)) ||
-                     router.isActive.apply(router, [currentWithIndex].concat(params));
-
-      if (isActive) { return get(this, 'activeClass'); }
-    }).property('namedRoute', 'router.url'),
-
-    router: Ember.computed(function() {
-      return this.get('controller').container.lookup('router:main');
-    }),
-
-    click: function(event) {
-      if (!isSimpleClick(event)) { return true; }
-
-      event.preventDefault();
-      if (this.bubbles === false) { event.stopPropagation(); }
-
-      var router = this.get('router');
-
-      if (this.get('replace')) {
-        router.replaceWith.apply(router, args(this, router));
-      } else {
-        router.transitionTo.apply(router, args(this, router));
-      }
-    },
-
-    href: Ember.computed(function() {
-      if (this.get('tagName') !== 'a') { return false; }
-
-      var router = this.get('router');
-      return router.generate.apply(router, args(this, router));
-    })
-  });
-
-  LinkView.toString = function() { return "LinkView"; };
-
-  /**
     @method linkTo
     @for Ember.Handlebars.helpers
     @param {String} routeName
@@ -36743,6 +36006,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
 
     hash.namedRoute = name;
     hash.currentWhen = hash.currentWhen || name;
+    hash.disabledBinding = hash.disabledWhen;
 
     hash.parameters = {
       context: this,
@@ -36818,13 +36082,27 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     });
     ```
 
+    You can specify the view class that the outlet uses to contain and manage the
+    templates rendered into it.
+
+    ``` handlebars
+    {{outlet viewClass=App.SectionContainer}}
+    ```
+
+    ``` javascript
+    App.SectionContainer = Ember.ContainerView.extend({
+      tagName: 'section',
+      classNames: ['special']
+    });
+    ```
+
     @method outlet
     @for Ember.Handlebars.helpers
     @param {String} property the property on the controller
       that holds the view for this outlet
   */
   Handlebars.registerHelper('outlet', function(property, options) {
-    var outletSource;
+    var outletSource, outletContainerClass;
 
     if (property && property.data && property.data.isRenderData) {
       options = property;
@@ -36836,10 +36114,12 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
       outletSource = outletSource.get('_parentView');
     }
 
+    outletContainerClass = options.hash.viewClass || Handlebars.OutletView;
+
     options.data.view.set('outletSource', outletSource);
     options.hash.currentViewBinding = '_view.outletSource._outlets.' + property;
 
-    return Handlebars.helpers.view.call(this, Handlebars.OutletView, options);
+    return Handlebars.helpers.view.call(this, outletContainerClass, options);
   });
 });
 
@@ -36857,15 +36137,23 @@ var get = Ember.get, set = Ember.set;
 Ember.onLoad('Ember.Handlebars', function(Handlebars) {
 
   /**
-    Renders the named template in the current context using the singleton
-    instance of the same-named controller.
+    Renders the named template in the current context with the same-named
+    controller.
 
-    If a view class with the same name exists, uses the view class.
+    If a view class with the same name exists, the view class will be used.
 
-    If a `model` is specified, it becomes the model for that controller.
+    The optional second argument is a property path that will be bound
+    to the `model` property of the controller.
+
+    If a `model` property path is specified, then a new instance of the
+    controller will be created.
+
+    If no `model` property path is provided, then the helper will use the
+    singleton instance of the controller. A given controller may only be used
+    one time in your app in this manner.
 
     The default target for `{{action}}`s in the rendered template is the
-    named controller.
+    controller.
 
     @method render
     @for Ember.Handlebars.helpers
@@ -36945,6 +36233,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
   var EmberHandlebars = Ember.Handlebars,
       handlebarsGet = EmberHandlebars.get,
       SafeString = EmberHandlebars.SafeString,
+      forEach = Ember.ArrayPolyfills.forEach,
       get = Ember.get,
       a_slice = Array.prototype.slice;
 
@@ -36971,7 +36260,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
 
     var allowed = true;
 
-    keys.forEach(function(key) {
+    forEach.call(keys, function(key) {
       if (event[key + "Key"] && allowedKeys.indexOf(key) === -1) {
         allowed = false;
       }
@@ -37057,7 +36346,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
     aView.appendTo('body');
     ```
 
-    Will results in the following rendered HTML
+    Will result in the following rendered HTML
 
     ```html
     <div class="ember-view">
@@ -37356,7 +36645,7 @@ Ember.ControllerMixin.reopen({
     Optionally supply a model for the route in question. The model
     will be serialized into the URL using the `serialize` hook of
     the route:
-
+    
     ```javascript
       aController.transitionToRoute('blogPost', aPost);
     ```
@@ -37420,6 +36709,15 @@ Ember.View.reopen({
   },
 
   connectOutlet: function(outletName, view) {
+    if (this._pendingDisconnections) {
+      delete this._pendingDisconnections[outletName];
+    }
+
+    if (this._hasEquivalentView(outletName, view)) {
+      view.destroy();
+      return;
+    }
+
     var outlets = get(this, '_outlets'),
         container = get(this, 'container'),
         router = container && container.lookup('router:main'),
@@ -37432,10 +36730,30 @@ Ember.View.reopen({
     }
   },
 
-  disconnectOutlet: function(outletName) {
-    var outlets = get(this, '_outlets');
+  _hasEquivalentView: function(outletName, view) {
+    var existingView = get(this, '_outlets.'+outletName);
+    return existingView &&
+      existingView.prototype === view.prototype &&
+      existingView.get('template') === view.get('template') &&
+      existingView.get('context') === view.get('context');
+  },
 
-    set(outlets, outletName, null);
+  disconnectOutlet: function(outletName) {
+    if (!this._pendingDisconnections) {
+      this._pendingDisconnections = {};
+    }
+    this._pendingDisconnections[outletName] = true;
+    Ember.run.once(this, '_finishDisconnections');
+  },
+
+  _finishDisconnections: function() {
+    var outlets = get(this, '_outlets');
+    var pendingDisconnections = this._pendingDisconnections;
+    this._pendingDisconnections = null;
+
+    for (var outletName in pendingDisconnections) {
+      set(outlets, outletName, null);
+    }
   }
 });
 
@@ -37621,7 +36939,7 @@ Ember.HashLocation = Ember.Object.extend({
     var self = this;
     var guid = Ember.guidFor(this);
 
-    Ember.$(window).bind('hashchange.ember-location-'+guid, function() {
+    Ember.$(window).on('hashchange.ember-location-'+guid, function() {
       Ember.run(function() {
         var path = location.hash.substr(1);
         if (get(self, 'lastSetURL') === path) { return; }
@@ -37808,7 +37126,7 @@ Ember.HistoryLocation = Ember.Object.extend({
     var guid = Ember.guidFor(this),
         self = this;
 
-    Ember.$(window).bind('popstate.ember-location-'+guid, function(e) {
+    Ember.$(window).on('popstate.ember-location-'+guid, function(e) {
       // Ignore initial page load popstate event in Chrome
       if(!popstateFired) {
         popstateFired = true;
@@ -38196,6 +37514,26 @@ Ember.DefaultResolver = Ember.Object.extend({
 
 var get = Ember.get, set = Ember.set;
 
+function DeprecatedContainer(container) {
+  this._container = container;
+}
+
+DeprecatedContainer.deprecate = function(method) {
+  return function() {
+    var container = this._container;
+
+    Ember.deprecate('Using the defaultContainer is no longer supported. [defaultContainer#' + method + '] see: http://git.io/EKPpnA', false);
+    return container[method].apply(container, arguments);
+  };
+};
+
+DeprecatedContainer.prototype = {
+  _container: null,
+  lookup: DeprecatedContainer.deprecate('lookup'),
+  resolve: DeprecatedContainer.deprecate('resolve'),
+  register: DeprecatedContainer.deprecate('register')
+};
+
 /**
   An instance of `Ember.Application` is the starting point for every Ember
   application. It helps to instantiate, initialize and coordinate the many
@@ -38323,17 +37661,6 @@ var get = Ember.get, set = Ember.set;
   If there is any setup required before routing begins, you can implement a
   `ready()` method on your app that will be invoked immediately before routing
   begins.
-
-  To begin routing, you must have at a minimum a top-level controller and view.
-  You define these as `App.ApplicationController` and `App.ApplicationView`,
-  respectively. Your application will not work if you do not define these two
-  mandatory classes. For example:
-
-  ```javascript
-  App.ApplicationView = Ember.View.extend({
-    templateName: 'application'
-  });
-  App.ApplicationController = Ember.Controller.extend();
   ```
 
   @class Application
@@ -38455,10 +37782,10 @@ var Application = Ember.Application = Ember.Namespace.extend(Ember.DeferredMixin
     This allows application developers to do:
 
     ```javascript
-    App = Ember.Application.create();
+    var App = Ember.Application.create();
 
-    App.Router.map(function(match) {
-      match("/").to("index");
+    App.Router.map(function() {
+      this.resource('posts');
     });
     ```
 
@@ -38633,21 +37960,93 @@ var Application = Ember.Application = Ember.Namespace.extend(Ember.DeferredMixin
     return this;
   },
 
+  /**
+    Reset the application. This is typically used only in tests. It cleans up
+    the application in the following order:
+
+    1. Deactivate existing routes
+    2. Destroy all objects in the container
+    3. Create a new application container
+    4. Re-route to the existing url
+
+    Typical Example:
+
+    ```javascript
+
+    var App;
+
+    Ember.run(function(){
+      App = Ember.Application.create();
+    });
+
+    module("acceptance test", {
+      setup: function() {
+        App.reset();
+      }
+    });
+
+    test("first test", function(){
+      // App is freshly reset
+    });
+
+    test("first test", function(){
+      // App is again freshly reset
+    });
+    ```
+
+    Advanced Example:
+
+    Occasionally you may want to prevent the app from initializing during
+    setup. This could enable extra configuration, or enable asserting prior
+    to the app becoming ready.
+
+    ```javascript
+
+    var App;
+
+    Ember.run(function(){
+      App = Ember.Application.create();
+    });
+
+    module("acceptance test", {
+      setup: function() {
+        Ember.run(function() {
+          App.reset();
+          App.deferReadiness();
+        });
+      }
+    });
+
+    test("first test", function(){
+      ok(true, 'something before app is initialized');
+
+      Ember.run(function(){
+        App.advanceReadiness();
+      });
+      ok(true, 'something after app is initialized');
+    });
+    ```
+
+    @method reset
+  **/
   reset: function() {
-    Ember.assert('App#reset no longer rneeds to be wrapped in a run-loop', !Ember.run.currentRunLoop);
-    Ember.run(this, function(){
-      Ember.run(get(this,'__container__'), 'destroy');
+    this._readinessDeferrals = 1;
+
+    function handleReset() {
+      var router = this.__container__.lookup('router:main');
+      router.reset();
+
+      Ember.run(this.__container__, 'destroy');
 
       this.buildContainer();
-
-      this._readinessDeferrals = 1;
-      this.$(this.rootElement).removeClass('ember-application');
 
       Ember.run.schedule('actions', this, function(){
         this._initialize();
         this.startRouting();
       });
-    });
+    }
+
+    Ember.run.join(this, handleReset);
   },
 
   /**
@@ -38701,27 +38100,12 @@ var Application = Ember.Application = Ember.Namespace.extend(Ember.DeferredMixin
     @method setupEventDispatcher
   */
   setupEventDispatcher: function() {
-    var eventDispatcher = this.createEventDispatcher(),
-        customEvents    = get(this, 'customEvents');
+    var customEvents = get(this, 'customEvents'),
+        rootElement = get(this, 'rootElement'),
+        dispatcher = this.__container__.lookup('event_dispatcher:main');
 
-    eventDispatcher.setup(customEvents);
-  },
-
-  /**
-    @private
-
-    Create an event dispatcher for the application's `rootElement`.
-
-    @method createEventDispatcher
-  */
-  createEventDispatcher: function() {
-    var rootElement = get(this, 'rootElement'),
-        eventDispatcher = Ember.EventDispatcher.create({
-          rootElement: rootElement
-        });
-
-    set(this, 'eventDispatcher', eventDispatcher);
-    return eventDispatcher;
+    set(this, 'eventDispatcher', dispatcher);
+    dispatcher.setup(customEvents, rootElement);
   },
 
   /**
@@ -38764,10 +38148,7 @@ var Application = Ember.Application = Ember.Namespace.extend(Ember.DeferredMixin
   willDestroy: function() {
     Ember.BOOTED = false;
 
-    var eventDispatcher = get(this, 'eventDispatcher');
-    if (eventDispatcher) { eventDispatcher.destroy(); }
-
-    get(this, '__container__').destroy();
+    this.__container__.destroy();
   },
 
   initializer: function(options) {
@@ -38816,7 +38197,8 @@ Ember.Application.reopenClass({
   */
   buildContainer: function(namespace) {
     var container = new Ember.Container();
-    Ember.Container.defaultContainer = Ember.Container.defaultContainer || container;
+
+    Ember.Container.defaultContainer = new DeprecatedContainer(container);
 
     container.set = Ember.set;
     container.normalize = normalize;
@@ -38829,13 +38211,14 @@ Ember.Application.reopenClass({
     container.register('controller:object', Ember.ObjectController, { instantiate: false });
     container.register('controller:array', Ember.ArrayController, { instantiate: false });
     container.register('route:basic', Ember.Route, { instantiate: false });
+    container.register('event_dispatcher:main', Ember.EventDispatcher);
 
     container.injection('router:main', 'namespace', 'application:main');
 
-    container.typeInjection('controller', 'target', 'router:main');
-    container.typeInjection('controller', 'namespace', 'application:main');
+    container.injection('controller', 'target', 'router:main');
+    container.injection('controller', 'namespace', 'application:main');
 
-    container.typeInjection('route', 'router', 'router:main');
+    container.injection('route', 'router', 'router:main');
 
     return container;
   }
@@ -38950,6 +38333,31 @@ function verifyDependencies(controller) {
 
 Ember.ControllerMixin.reopen({
   concatenatedProperties: ['needs'],
+
+  /**
+    An array of other controller objects available inside
+    instances of this controller via the `controllers`
+    property:
+
+    For example, when you define a controller:
+
+    ```javascript
+    App.CommentsController = Ember.ArrayController.extend({
+      needs: ['post']
+    });
+    ```
+    
+    The application's single instance of these other
+    controllers are accessible by name through the
+    `controllers` property:
+    
+    ```javascript
+    this.get('controllers.post'); // instance of App.PostController
+    ```
+
+    @property {Array} needs
+    @default []
+  */
   needs: [],
 
   init: function() {
@@ -40257,61 +39665,162 @@ Ember States
 })();
 
 (function() {
-/*globals EMBER_APP_BEING_TESTED */
+var slice = [].slice,
+    helpers = {},
+    originalMethods = {},
+    injectHelpersCallbacks = [];
 
-var Promise = Ember.RSVP.Promise,
-    pendingAjaxRequests = 0,
-    originalFind;
+/**
+  @class Test
+  @namespace Ember
+*/
+Ember.Test = {
 
-function visit(url) {
-  var promise = new Promise();
-  Ember.run(EMBER_APP_BEING_TESTED, EMBER_APP_BEING_TESTED.handleURL, url);
-  wait(promise, promise.resolve);
-  return promise;
-}
+  /**
+    @public
 
-function click(selector) {
-  var promise = new Promise();
-  Ember.run(function() {
-    Ember.$(selector).click();
-  });
-  wait(promise, promise.resolve);
-  return promise;
-}
+    `registerHelper` is used to register a
+    test helper that will be injected when
+    `App.injectTestHelpers` is called.
 
-function fillIn(selector, text) {
-  var promise = new Promise();
-  var $el = find(selector);
-  Ember.run(function() {
-    $el.val(text);
-  });
+    The helper method will always be called
+    with the current Application as the first
+    parameter.
 
-  wait(promise, promise.resolve);
-  return promise;
-}
+    For example:
+    ```javascript
+    Ember.Test.registerHelper('boot', function(app)) {
+      Ember.run(app, app.deferReadiness);
+    }
+    ```
 
-function find(selector) {
-  return Ember.$('.ember-application').find(selector);
-}
+    This helper can later be called without arguments
+    because it will be called with `app` as the
+    first parameter.
 
-function wait(target, method) {
-  if (!method) {
-    method = target;
-    target = null;
-  }
-  stop();
-  var watcher = setInterval(function() {
-    var routerIsLoading = EMBER_APP_BEING_TESTED.__container__.lookup('router:main').router.isLoading;
-    if (routerIsLoading) { return; }
-    if (pendingAjaxRequests) { return; }
-    if (Ember.run.hasScheduledTimers() || Ember.run.currentRunLoop) { return; }
-    clearInterval(watcher);
-    start();
-    Ember.run(target, method);
-  }, 200);
+    ```javascript
+      App = Ember.Application.create();
+      App.injectTestHelpers();
+      boot();
+    ```
+
+    Whenever you register a helper that
+    performs async operations,
+    make sure you `return wait();` at the
+    end of the helper.
+
+    If an async helper also needs to return a value,
+    pass it to the `wait` helper as a first argument:
+    `return wait(val);`
+
+    @method registerHelper
+    @param name {String}
+    @param helperMethod {Function}
+  */
+  registerHelper: function(name, helperMethod) {
+    helpers[name] = helperMethod;
+  },
+  /**
+    @public
+    @method unregisterHelper
+    @param name {String}
+  */
+  unregisterHelper: function(name) {
+    delete helpers[name];
+    if (originalMethods[name]) {
+      window[name] = originalMethods[name];
+    }
+    delete originalMethods[name];
+  },
+
+  /**
+    @public
+
+    Used to register callbacks to be fired
+    whenever `App.injectTestHelpers` is called
+
+    The callback will receive the current application
+    as an argument.
+
+    @method unregisterHelper
+    @param name {String}
+  */
+  onInjectHelpers: function(callback) {
+    injectHelpersCallbacks.push(callback);
+  },
+
+  /**
+    @public
+
+    This returns a thenable tailored
+    for testing.  It catches failed
+    `onSuccess` callbacks and invokes
+    the `Ember.Test.adapter.exception`
+    callback in the last chained then.
+
+    This method should be returned
+    by async helpers such as `wait`.
+
+    @method promise
+    @param resolver {Function}
+  */
+  promise: function(resolver) {
+    var promise = new Ember.RSVP.Promise(resolver);
+    var thenable = {
+      chained: false
+    };
+    thenable.then = function(onSuccess, onFailure) {
+      var self = this, thenPromise, nextPromise;
+      thenable.chained = true;
+      thenPromise = promise.then(onSuccess, onFailure);
+      // this is to ensure all downstream fulfillment
+      // handlers are wrapped in the error handling
+      nextPromise = Ember.Test.promise(function(resolve) {
+        resolve(thenPromise);
+      });
+      thenPromise.then(null, function(reason) {
+        // ensure this is the last promise in the chain
+        // if not, ignore and the exception will propagate
+        // this prevents the same error from being fired multiple times
+        if (!nextPromise.chained) {
+          Ember.Test.adapter.exception(reason);
+        }
+      });
+      return nextPromise;
+    };
+    return thenable;
+  },
+
+  /**
+   @public
+
+   Used to allow ember-testing
+   to communicate with a specific
+   testing framework.
+
+   You can manually set it before calling
+   `App.setupForTesting()`.
+
+   Example:
+   'Ember.Test.adapter = MyCustomAdapter.create()'
+
+   If you do not set it, ember-testing
+   will default to `Ember.Test.QUnitAdapter`.
+  */
+  adapter: null
+};
+
+function curry(app, fn) {
+  return function() {
+    var args = slice.call(arguments);
+    args.unshift(app);
+    return fn.apply(app, args);
+  };
 }
 
 Ember.Application.reopen({
+  testHelpers: {},
+
   setupForTesting: function() {
     this.deferReadiness();
 
@@ -40319,32 +39828,249 @@ Ember.Application.reopen({
       location: 'none'
     });
 
-    window.EMBER_APP_BEING_TESTED = this;
+   // if adapter is not manually set
+    // default to QUnit
+    if (!Ember.Test.adapter) {
+       Ember.Test.adapter = Ember.Test.QUnitAdapter.create();
+    }
   },
 
   injectTestHelpers: function() {
-    Ember.$(document).ajaxStart(function() {
-      pendingAjaxRequests++;
-    });
+    this.testHelpers = {};
+    for (var name in helpers) {
+      originalMethods[name] = window[name];
+      this.testHelpers[name] = window[name] = curry(this, helpers[name]);
+    }
 
-    Ember.$(document).ajaxStop(function() {
-      pendingAjaxRequests--;
-    });
-
-    window.visit = visit;
-    window.click = click;
-    window.fillIn = fillIn;
-    originalFind = window.find;
-    window.find = find;
+    for(var i = 0, l = injectHelpersCallbacks.length; i < l; i++) {
+      injectHelpersCallbacks[i](this);
+    }
   },
 
   removeTestHelpers: function() {
-    window.visit = null;
-    window.click = null;
-    window.fillIn = null;
-    window.find = originalFind;
+    for (var name in helpers) {
+      window[name] = originalMethods[name];
+      delete this.testHelpers[name];
+      delete originalMethods[name];
+    }
   }
 });
+
+})();
+
+
+
+(function() {
+var Test = Ember.Test;
+
+/**
+  @class Adapter
+  @namespace Ember.Test
+*/
+Test.Adapter = Ember.Object.extend({
+  /**
+    @public
+
+    This callback will be called
+    whenever an async operation
+    is about to start.
+
+    Override this to call your
+    framework's methods
+    that handle async operations
+
+    @method asyncStart
+  */
+  asyncStart: Ember.K,
+
+  /**
+    @public
+
+    This callback will be called
+    whenever an async operation
+    has completed.
+
+    @method asyncEnd
+  */
+  asyncEnd: Ember.K,
+
+  /**
+   @public
+
+    Override this method with your
+    testing framework's false assertion
+    This function is called whenever
+    an exception occurs causing the testing
+    promise to fail.
+
+    QUnit example:
+
+    ```javascript
+    exception: function(error) {
+      ok(false, error);
+    }
+    ```
+
+    @method exception
+    @param reason {String}
+  */
+  exception: function(error) {
+    setTimeout(function() {
+      throw error;
+    });
+  }
+});
+
+/**
+  @class QUnitAdapter
+  @namespace Ember.Test
+*/
+Test.QUnitAdapter = Test.Adapter.extend({
+  asyncStart: function() {
+    stop();
+  },
+  asyncEnd: function() {
+    start();
+  },
+  exception: function(error) {
+    ok(false, error);
+  }
+});
+
+})();
+
+
+
+(function() {
+var get = Ember.get,
+    helper = Ember.Test.registerHelper,
+    pendingAjaxRequests = 0,
+    countAsync = 0;
+
+
+Ember.Test.onInjectHelpers(function() {
+  Ember.$(document).ajaxStart(function() {
+    pendingAjaxRequests++;
+  });
+
+  Ember.$(document).ajaxStop(function() {
+    pendingAjaxRequests--;
+  });
+});
+
+
+function visit(app, url) {
+  Ember.run(app, app.handleURL, url);
+  app.__container__.lookup('router:main').location.setURL(url);
+  return wait(app);
+}
+
+function click(app, selector, context) {
+  var $el = find(app, selector, context);
+  Ember.run(function() {
+    $el.click();
+  });
+  return wait(app);
+}
+
+function fillIn(app, selector, context, text) {
+  var $el;
+  if (typeof text === 'undefined') {
+    text = context;
+    context = null;
+  }
+  $el = find(app, selector, context);
+  Ember.run(function() {
+    $el.val(text).change();
+  });
+  return wait(app);
+}
+
+function find(app, selector, context) {
+  var $el;
+  context = context || get(app, 'rootElement');
+  $el = app.$(selector, context);
+  if ($el.length === 0) {
+    throw("Element " + selector + " not found.");
+  }
+  return $el;
+}
+
+function wait(app, value) {
+  var promise, obj = {}, helperName;
+
+  promise = Ember.Test.promise(function(resolve) {
+    if (++countAsync === 1) {
+      Ember.Test.adapter.asyncStart();
+    }
+    var watcher = setInterval(function() {
+      var routerIsLoading = app.__container__.lookup('router:main').router.isLoading;
+      if (routerIsLoading) { return; }
+      if (pendingAjaxRequests) { return; }
+      if (Ember.run.hasScheduledTimers() || Ember.run.currentRunLoop) { return; }
+      clearInterval(watcher);
+      if (--countAsync === 0) {
+        Ember.Test.adapter.asyncEnd();
+      }
+      Ember.run(function() {
+        resolve(value);
+      });
+    }, 10);
+  });
+
+  return buildChainObject(app, promise);
+}
+
+/**
+ Builds an object that contains
+ all helper methods. This object will be
+ returned by helpers and then-promises.
+
+ This allows us to chain helpers:
+
+ ```javascript
+  visit('posts/new')
+  .click('.add-btn')
+  .fillIn('.title', 'Post')
+  .click('.submit')
+  .then(function() {
+    equal('.post-title', 'Post');
+  })
+  .visit('comments')
+  .then(function() {
+    equal(find('.comments'),length, 0);
+  });
+ ```
+*/
+function buildChainObject(app, promise) {
+  var helperName, obj = {};
+  for(helperName in app.testHelpers) {
+    obj[helperName] = chain(app, promise, app.testHelpers[helperName]);
+  }
+  obj.then = function(fn) {
+    var thenPromise = promise.then(fn);
+    return buildChainObject(app, thenPromise);
+  };
+  return obj;
+}
+
+function chain(app, promise, fn) {
+  return function() {
+    var args = arguments, chainedPromise;
+    chainedPromise = promise.then(function() {
+      return fn.apply(null, args);
+    });
+    return buildChainObject(app, chainedPromise);
+  };
+}
+
+// expose these methods as test helpers
+helper('visit', visit);
+helper('click', click);
+helper('fillIn', fillIn);
+helper('find', find);
+helper('wait', wait);
+
 })();
 
 
@@ -40355,8 +40081,8 @@ Ember.Application.reopen({
 
 
 })();
-// Version: v1.0.0-rc.2-186-ga488a58
-// Last commit: a488a58 (2013-04-20 22:49:17 -0700)
+// Version: v1.0.0-rc.4
+// Last commit: 1acec81 (2013-05-27 20:18:28 -0500)
 
 
 (function() {
@@ -40368,7 +40094,9 @@ Ember
 
 })();
 
-// Last commit: 
+
+// Last commit: 3981a7c (2013-05-28 05:00:14 -0700)
+
 
 (function() {
 var define, requireModule;
@@ -40403,119 +40131,78 @@ var define, requireModule;
   };
 })();
 (function() {
-define("json-normalizer/hash-utils",
-  ["json-normalizer/string-utils","exports"],
-  function(__dependency1__, __exports__) {
-    "use strict";
-    var camelize = __dependency1__.camelize;
-    var decamelize = __dependency1__.decamelize;
-
-    function map(object, callback, binding) {
-      var ret = {};
-
-      for (var prop in object) {
-        callback.call(binding, ret, prop, object[prop]);
-      }
-
-      return ret;
-    }
-
-
-    var __export1__ = function camelizeKeys(object) {
-      return map(object, function(hash, key, value) {
-        hash[camelize(key)] = value;
-      });
-    }
-
-    var __export2__ = function decamelizeKeys(object) {
-      return map(object, function(hash, key, value) {
-        hash[decamelize(key)] = value;
-      });
-    }
-    __exports__.map = map;
-    __exports__.camelizeKeys = __export1__;
-    __exports__.decamelizeKeys = __export2__;
-  });
-
-define("json-normalizer/processor",
-  ["json-normalizer/hash-utils","exports"],
-  function(__dependency1__, __exports__) {
-    "use strict";
-    var camelizeKeys = __dependency1__.camelizeKeys;
-
-    function Processor(json) {
-    	this.json = json;
-    }
-
-    Processor.prototype = {
-      constructor: Processor,
-
-      camelizeKeys: function() {
-        this.json = camelizeKeys(this.json);
-        return this;
-      }
-    }
-
-    __exports__.Processor = Processor;
-  });
-
-define("json-normalizer/string-utils",
-  ["exports"],
-  function(__exports__) {
-    "use strict";
-    var STRING_CAMELIZE_REGEXP = (/(\-|_|\.|\s)+(.)?/g);
-
-    var __export1__ = function camelize(str) {
-      return str.replace(STRING_CAMELIZE_REGEXP, function(match, separator, chr) {
-        return chr ? chr.toUpperCase() : '';
-      }).replace(/^([A-Z])/, function(match, separator, chr) {
-        return match.toLowerCase();
-      });
-    }
-
-    var STRING_DECAMELIZE_REGEXP = (/([a-z])([A-Z])/g);
-
-    var __export2__ = function decamelize(str) {
-      return str.replace(STRING_DECAMELIZE_REGEXP, '$1_$2').toLowerCase();
-    }
-    __exports__.camelize = __export1__;
-    __exports__.decamelize = __export2__;
-  });
-
-define("json-normalizer",
-  ["json-normalizer/string-utils","json-normalizer/hash-utils","json-normalizer/processor","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
-    "use strict";
-    var camelize = __dependency1__.camelize;
-    var decamelize = __dependency1__.decamelize;
-    var map = __dependency2__.map;
-    var camelizeKeys = __dependency2__.camelizeKeys;
-    var decamelizeKeys = __dependency2__.decamelizeKeys;
-    var Processor = __dependency3__.Processor;
-
-    var mapKeys = map;
-
-
-    __exports__.camelize = camelize;
-    __exports__.decamelize = decamelize;
-    __exports__.mapKeys = mapKeys;
-    __exports__.camelizeKeys = camelizeKeys;
-    __exports__.decamelizeKeys = decamelizeKeys;
-    __exports__.Processor = Processor;
-  });
-
-})();
-
-(function() {
 /**
   @module data
-
   @main data
 */
 
-window.DS = Ember.Namespace.create({
-  // this one goes past 11
-  CURRENT_API_REVISION: 12
+/**
+  All Ember Data methods and functions are defined inside of this namespace. 
+
+  @class DS
+  @static
+*/
+
+window.DS = Ember.Namespace.create();
+
+})();
+
+
+
+(function() {
+var set = Ember.set;
+
+/**
+  This code registers an injection for Ember.Application.
+
+  If an Ember.js developer defines a subclass of DS.Store on their application,
+  this code will automatically instantiate it and make it available on the
+  router.
+
+  Additionally, after an application's controllers have been injected, they will
+  each have the store made available to them.
+
+  For example, imagine an Ember.js application with the following classes:
+
+  App.Store = DS.Store.extend({
+    adapter: 'App.MyCustomAdapter'
+  });
+
+  App.PostsController = Ember.ArrayController.extend({
+    // ...
+  });
+
+  When the application is initialized, `App.Store` will automatically be
+  instantiated, and the instance of `App.PostsController` will have its `store`
+  property set to that instance.
+
+  Note that this code will only be run if the `ember-application` package is
+  loaded. If Ember Data is being used in an environment other than a
+  typical application (e.g., node.js where only `ember-runtime` is available),
+  this code will be ignored.
+*/
+
+Ember.onLoad('Ember.Application', function(Application) {
+  Application.initializer({
+    name: "store",
+
+    initialize: function(container, application) {
+      application.register('store:main', application.Store);
+
+      // Eagerly generate the store so defaultStore is populated.
+      // TODO: Do this in a finisher hook
+      container.lookup('store:main');
+    }
+  });
+
+  Application.initializer({
+    name: "injectStore",
+
+    initialize: function(container, application) {
+      application.inject('controller', 'store', 'store:main');
+      application.inject('route', 'store', 'store:main');
+    }
+  });
 });
 
 })();
@@ -40525,7 +40212,7 @@ window.DS = Ember.Namespace.create({
 (function() {
 /**
  * Date.parse with progressive enhancement for ISO 8601 <https://github.com/csnover/js-iso8601>
- * © 2011 Colin Snover <http://zetafleet.com>
+ * Â© 2011 Colin Snover <http://zetafleet.com>
  * Released under MIT license.
  */
 
@@ -40535,12 +40222,12 @@ var origParse = Date.parse, numericKeys = [ 1, 4, 5, 6, 7, 10, 11 ];
 Ember.Date.parse = function (date) {
     var timestamp, struct, minutesOffset = 0;
 
-    // ES5 §15.9.4.2 states that the string should attempt to be parsed as a Date Time String Format string
-    // before falling back to any implementation-specific date parsing, so that’s what we do, even if native
+    // ES5 Â§15.9.4.2 states that the string should attempt to be parsed as a Date Time String Format string
+    // before falling back to any implementation-specific date parsing, so thatâ€™s what we do, even if native
     // implementations could be faster
-    //              1 YYYY                2 MM       3 DD           4 HH    5 mm       6 ss        7 msec        8 Z 9 ±    10 tzHH    11 tzmm
+    //              1 YYYY                2 MM       3 DD           4 HH    5 mm       6 ss        7 msec        8 Z 9 Â±    10 tzHH    11 tzmm
     if ((struct = /^(\d{4}|[+\-]\d{6})(?:-(\d{2})(?:-(\d{2}))?)?(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{3}))?)?(?:(Z)|([+\-])(\d{2})(?::(\d{2}))?)?)?$/.exec(date))) {
-        // avoid NaN timestamps caused by “undefined” values being passed to Date.UTC
+        // avoid NaN timestamps caused by â€œundefinedâ€ values being passed to Date.UTC
         for (var i = 0, k; (k = numericKeys[i]); ++i) {
             struct[k] = +struct[k] || 0;
         }
@@ -40581,16 +40268,21 @@ if (Ember.EXTEND_PROTOTYPES === true || Ember.EXTEND_PROTOTYPES.Date) {
 
 
 (function() {
-var DeferredMixin = Ember.DeferredMixin,  // ember-runtime/mixins/deferred
-    Evented = Ember.Evented,              // ember-runtime/mixins/evented
+var Evented = Ember.Evented,              // ember-runtime/mixins/evented
+    Deferred = Ember.DeferredMixin,       // ember-runtime/mixins/evented
     run = Ember.run,                      // ember-metal/run-loop
     get = Ember.get;                      // ember-metal/accessors
 
-var LoadPromise = Ember.Mixin.create(Evented, DeferredMixin, {
+var LoadPromise = Ember.Mixin.create(Evented, Deferred, {
   init: function() {
     this._super.apply(this, arguments);
-    this.one('didLoad', function() {
+
+    this.one('didLoad', this, function() {
       run(this, 'resolve', this);
+    });
+
+    this.one('becameError', this, function() {
+      run(this, 'reject', this);
     });
 
     if (get(this, 'isLoaded')) {
@@ -40631,7 +40323,7 @@ var LoadPromise = DS.LoadPromise; // system/mixins/load_promise
   @uses DS.LoadPromise
 */
 
-DS.RecordArray = Ember.ArrayProxy.extend(Ember.Evented, LoadPromise, {
+DS.RecordArray = Ember.ArrayProxy.extend(LoadPromise, {
   /**
     The model type contained by this record array.
 
@@ -40685,213 +40377,6 @@ DS.RecordArray = Ember.ArrayProxy.extend(Ember.Evented, LoadPromise, {
 
   removeReference: function(reference) {
     get(this, 'content').removeObject(reference);
-  }
-});
-
-})();
-
-
-
-(function() {
-var get = Ember.get, set = Ember.set;
-var once = Ember.run.once;
-var forEach = Ember.EnumerableUtils.forEach;
-
-DS.RecordArrayManager = Ember.Object.extend({
-  init: function() {
-    this.filteredRecordArrays = Ember.MapWithDefault.create({
-      defaultValue: function() { return []; }
-    });
-
-    this.changedReferences = [];
-  },
-
-  referenceDidChange: function(reference) {
-    this.changedReferences.push(reference);
-    once(this, this.updateRecordArrays);
-  },
-
-  recordArraysForReference: function(reference) {
-    reference.recordArrays = reference.recordArrays || Ember.OrderedSet.create();
-    return reference.recordArrays;
-  },
-
-  /**
-    @private
-
-    This method is invoked whenever data is loaded into the store
-    by the adapter or updated by the adapter, or when an attribute
-    changes on a record.
-
-    It updates all filters that a record belongs to.
-
-    To avoid thrashing, it only runs once per run loop per record.
-
-    @param {Class} type
-    @param {Number|String} clientId
-  */
-  updateRecordArrays: function() {
-    forEach(this.changedReferences, function(reference) {
-      var type = reference.type,
-          recordArrays = this.filteredRecordArrays.get(type),
-          filter;
-
-      recordArrays.forEach(function(array) {
-        filter = get(array, 'filterFunction');
-        this.updateRecordArray(array, filter, type, reference);
-      }, this);
-
-      // loop through all manyArrays containing an unloaded copy of this
-      // clientId and notify them that the record was loaded.
-      var manyArrays = reference.loadingRecordArrays;
-
-      if (manyArrays) {
-        for (var i=0, l=manyArrays.length; i<l; i++) {
-          manyArrays[i].loadedRecord();
-        }
-
-        reference.loadingRecordArrays = [];
-      }
-    }, this);
-  },
-
-  /**
-    @private
-
-    Update an individual filter.
-
-    @param {DS.FilteredRecordArray} array
-    @param {Function} filter
-    @param {Class} type
-    @param {Number|String} clientId
-  */
-  updateRecordArray: function(array, filter, type, reference) {
-    var shouldBeInArray, record;
-
-    if (!filter) {
-      shouldBeInArray = true;
-    } else {
-      record = this.store.recordForReference(reference);
-      shouldBeInArray = filter(record);
-    }
-
-    var recordArrays = this.recordArraysForReference(reference);
-
-    if (shouldBeInArray) {
-      recordArrays.add(array);
-      array.addReference(reference);
-    } else if (!shouldBeInArray) {
-      recordArrays.remove(array);
-      array.removeReference(reference);
-    }
-  },
-
-  /**
-    @private
-
-    When a record is deleted, it is removed from all its
-    record arrays.
-
-    @param {DS.Model} record
-  */
-  remove: function(record) {
-    var reference = get(record, 'reference');
-    var recordArrays = reference.recordArrays || [];
-
-    recordArrays.forEach(function(array) {
-      array.removeReference(reference);
-    });
-  },
-
-  /**
-    @private
-
-    This method is invoked if the `filterFunction` property is
-    changed on a `DS.FilteredRecordArray`.
-
-    It essentially re-runs the filter from scratch. This same
-    method is invoked when the filter is created in th first place.
-  */
-  updateFilter: function(array, type, filter) {
-    var typeMap = this.store.typeMapFor(type),
-        references = typeMap.references,
-        reference, data, shouldFilter, record;
-
-    for (var i=0, l=references.length; i<l; i++) {
-      reference = references[i];
-      shouldFilter = false;
-
-      data = reference.data;
-
-      if (typeof data === 'object') {
-        if (record = reference.record) {
-          if (!get(record, 'isDeleted')) { shouldFilter = true; }
-        } else {
-          shouldFilter = true;
-        }
-
-        if (shouldFilter) {
-          this.updateRecordArray(array, filter, type, reference);
-        }
-      }
-    }
-  },
-
-  /**
-    @private
-
-    Create a `DS.ManyArray` for a type and list of record references, and index
-    the `ManyArray` under each reference. This allows us to efficiently remove
-    records from `ManyArray`s when they are deleted.
-
-    @param {Class} type
-    @param {Array} references
-
-    @return {DS.ManyArray}
-  */
-  createManyArray: function(type, references) {
-    var manyArray = DS.ManyArray.create({
-      type: type,
-      content: references,
-      store: this.store
-    });
-
-    references.forEach(function(reference) {
-      var arrays = this.recordArraysForReference(reference);
-      arrays.add(manyArray);
-    }, this);
-
-    return manyArray;
-  },
-
-  /**
-    @private
-
-    Register a RecordArray for a given type to be backed by
-    a filter function. This will cause the array to update
-    automatically when records of that type change attribute
-    values or states.
-
-    @param {DS.RecordArray} array
-    @param {Class} type
-    @param {Function} filter
-  */
-  registerFilteredRecordArray: function(array, type, filter) {
-    var recordArrays = this.filteredRecordArrays.get(type);
-    recordArrays.push(array);
-
-    this.updateFilter(array, type, filter);
-  },
-
-  // Internally, we maintain a map of all unloaded IDs requested by
-  // a ManyArray. As the adapter loads data into the store, the
-  // store notifies any interested ManyArrays. When the ManyArray's
-  // total number of loading records drops to zero, it becomes
-  // `isLoaded` and fires a `didLoad` event.
-  registerWaitingRecordArray: function(array, reference) {
-    var loadingRecordArrays = reference.loadingRecordArrays || [];
-    loadingRecordArrays.push(array);
-    reference.loadingRecordArrays = loadingRecordArrays;
   }
 });
 
@@ -40955,16 +40440,13 @@ DS.AdapterPopulatedRecordArray = DS.RecordArray.extend({
   },
 
   load: function(references) {
-    this.beginPropertyChanges();
-    set(this, 'content', Ember.A(references));
-    set(this, 'isLoaded', true);
-    this.endPropertyChanges();
-
-    var self = this;
-    // TODO: does triggering didLoad event should be the last action of the runLoop?
-    Ember.run.once(function() {
-      self.trigger('didLoad');
+    this.setProperties({
+      content: Ember.A(references),
+      isLoaded: true
     });
+
+    // TODO: does triggering didLoad event should be the last action of the runLoop?
+    Ember.run.once(this, 'trigger', 'didLoad');
   }
 });
 
@@ -41068,7 +40550,7 @@ DS.ManyArray = DS.RecordArray.extend({
     // Map the array of record objects into an array of  client ids.
     added = added.map(function(record) {
       Ember.assert("You can only add records of " + (get(this, 'type') && get(this, 'type').toString()) + " to this relationship.", !get(this, 'type') || (get(this, 'type').detectInstance(record)) );
-      return get(record, 'reference');
+      return get(record, '_reference');
     }, this);
 
     this._super(index, removed, added);
@@ -41095,7 +40577,7 @@ DS.ManyArray = DS.RecordArray.extend({
       for (var i=index; i<index+removed; i++) {
         var reference = get(this, 'content').objectAt(i);
 
-        var change = DS.RelationshipChange.createChange(owner.get('reference'), reference, get(this, 'store'), {
+        var change = DS.RelationshipChange.createChange(owner.get('_reference'), reference, get(this, 'store'), {
           parentType: owner.constructor,
           changeType: "remove",
           kind: "hasMany",
@@ -41124,7 +40606,7 @@ DS.ManyArray = DS.RecordArray.extend({
       for (var i=index; i<index+added; i++) {
         var reference = get(this, 'content').objectAt(i);
 
-        var change = DS.RelationshipChange.createChange(owner.get('reference'), reference, store, {
+        var change = DS.RelationshipChange.createChange(owner.get('_reference'), reference, store, {
           parentType: owner.constructor,
           changeType: "add",
           kind:"hasMany",
@@ -41276,8 +40758,6 @@ DS.Transaction = Ember.Object.extend({
   */
   init: function() {
     set(this, 'records', Ember.OrderedSet.create());
-
-    set(this, 'relationships', Ember.OrderedSet.create());
   },
 
   /**
@@ -41304,7 +40784,7 @@ DS.Transaction = Ember.Object.extend({
 
   isDefault: Ember.computed(function() {
     return this === get(this, 'store.defaultTransaction');
-  }),
+  }).volatile(),
 
   /**
     Adds an existing record to this transaction. Only records without
@@ -41316,16 +40796,57 @@ DS.Transaction = Ember.Object.extend({
   add: function(record) {
     Ember.assert("You must pass a record into transaction.add()", record instanceof DS.Model);
 
+    var store = get(this, 'store');
+    var adapter = get(store, '_adapter');
+    var serializer = get(adapter, 'serializer');
+    serializer.eachEmbeddedRecord(record, function(embeddedRecord, embeddedType) {
+      if (embeddedType === 'load') { return; }
+
+      this.add(embeddedRecord);
+    }, this);
+
     this.adoptRecord(record);
   },
 
-  relationshipBecameDirty: function(relationship) {
-    get(this, 'relationships').add(relationship);
-  },
+  relationships: Ember.computed(function() {
+    var relationships = Ember.OrderedSet.create(),
+        records = get(this, 'records'),
+        store = get(this, 'store');
 
-  relationshipBecameClean: function(relationship) {
-    get(this, 'relationships').remove(relationship);
-  },
+    records.forEach(function(record) {
+      var reference = get(record, '_reference');
+      var changes = store.relationshipChangesFor(reference);
+      for(var i = 0; i < changes.length; i++) {
+        relationships.add(changes[i]);
+      }
+    });
+
+    return relationships;
+  }).volatile(),
+
+  commitDetails: Ember.computed(function() {
+    var commitDetails = Ember.MapWithDefault.create({
+      defaultValue: function() {
+        return {
+          created: Ember.OrderedSet.create(),
+          updated: Ember.OrderedSet.create(),
+          deleted: Ember.OrderedSet.create()
+        };
+      }
+    });
+
+    var records = get(this, 'records'),
+        store = get(this, 'store');
+
+    records.forEach(function(record) {
+      if(!get(record, 'isDirty')) return;
+      record.send('willCommit');
+      var adapter = store.adapterForType(record.constructor);
+      commitDetails.get(adapter)[get(record, 'dirtyType')].add(record);
+    });
+
+    return commitDetails;
+  }).volatile(),
 
   /**
     Commits the transaction, which causes all of the modified records that
@@ -41338,25 +40859,22 @@ DS.Transaction = Ember.Object.extend({
   */
   commit: function() {
     var store = get(this, 'store');
-    var adapter = get(store, '_adapter');
-    var defaultTransaction = get(store, 'defaultTransaction');
 
-    if (this === defaultTransaction) {
+    if (get(this, 'isDefault')) {
       set(store, 'defaultTransaction', store.transaction());
     }
 
     this.removeCleanRecords();
-    var relationships = get(this, 'relationships');
 
-    var commitDetails = this._commitDetails();
+    var commitDetails = get(this, 'commitDetails'),
+        relationships = get(this, 'relationships');
 
-    if (!commitDetails.created.isEmpty() || !commitDetails.updated.isEmpty() || !commitDetails.deleted.isEmpty() || !commitDetails.relationships.isEmpty()) {
-
+    commitDetails.forEach(function(adapter, commitDetails) {
       Ember.assert("You tried to commit records but you have no adapter", adapter);
       Ember.assert("You tried to commit records but your adapter does not implement `commit`", adapter.commit);
 
       adapter.commit(store, commitDetails);
-    }
+    });
 
     // Once we've committed the transaction, there is no need to
     // keep the OneToManyChanges around. Destroy them so they
@@ -41364,26 +40882,6 @@ DS.Transaction = Ember.Object.extend({
     relationships.forEach(function(relationship) {
       relationship.destroy();
     });
-  },
-
-  _commitDetails: function() {
-    var relationships = get(this, 'relationships');
-    var commitDetails = {
-      created: Ember.OrderedSet.create(),
-      updated: Ember.OrderedSet.create(),
-      deleted: Ember.OrderedSet.create(),
-      relationships: relationships
-    };
-
-    var records = get(this, 'records');
-
-    records.forEach(function(record) {
-      if(!get(record, 'isDirty')) return;
-      record.send('willCommit');
-      commitDetails[get(record, 'dirtyType')].add(record);
-    });
-
-    return commitDetails;
   },
 
   /**
@@ -41411,7 +40909,6 @@ DS.Transaction = Ember.Object.extend({
       references.add(r.secondRecordReference);
       r.destroy();
     });
-    relationships.clear();
 
     var records = get(this, 'records');
     records.forEach(function(record) {
@@ -41426,7 +40923,6 @@ DS.Transaction = Ember.Object.extend({
     // Remaining associated references are not part of the transaction, but
     // can still have hasMany's which have not been reloaded
     references.forEach(function(r) {
-
       if (r && r.record) {
         var record = r.record;
         record.suspendRelationshipObservers(function() {
@@ -41611,7 +41107,7 @@ var transformMapValue = function(key, value) {
 
 DS._Mappable = Ember.Mixin.create({
   createInstanceMapFor: function(mapName) {
-    var instanceMeta = Ember.metaPath(this, ['DS.Mappable'], true);
+    var instanceMeta = getMappableMeta(this);
 
     instanceMeta.values = instanceMeta.values || {};
 
@@ -41631,7 +41127,7 @@ DS._Mappable = Ember.Mixin.create({
   },
 
   _copyMap: function(mapName, klass, instanceMap) {
-    var classMeta = Ember.metaPath(klass, ['DS.Mappable'], true);
+    var classMeta = getMappableMeta(klass);
 
     var classMap = classMeta[mapName];
     if (classMap) {
@@ -41658,7 +41154,8 @@ DS._Mappable = Ember.Mixin.create({
 
 DS._Mappable.generateMapFunctionFor = function(mapName, transform) {
   return function(key, value) {
-    var meta = Ember.metaPath(this, ['DS.Mappable'], true);
+    var meta = getMappableMeta(this);
+
     var map = meta[mapName] || Ember.MapWithDefault.create({
       defaultValue: function() { return {}; }
     });
@@ -41668,6 +41165,20 @@ DS._Mappable.generateMapFunctionFor = function(mapName, transform) {
     meta[mapName] = map;
   };
 };
+
+function getMappableMeta(obj) {
+  var meta = Ember.meta(obj, true),
+      keyName = 'DS.Mappable',
+      value = meta[keyName];
+
+  if (!value) { meta[keyName] = {}; }
+
+  if (!meta.hasOwnProperty(keyName)) {
+    meta[keyName] = Ember.create(meta[keyName]);
+  }
+
+  return meta[keyName];
+}
 
 })();
 
@@ -41774,13 +41285,6 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     The init method registers this store as the default if none is specified.
   */
   init: function() {
-    // Enforce API revisioning. See BREAKING_CHANGES.md for more.
-    var revision = get(this, 'revision');
-
-    if (revision !== DS.CURRENT_API_REVISION && !Ember.ENV.TESTING) {
-      throw new Error("Error: The Ember Data library has had breaking API changes since the last time you updated the library. Please review the list of breaking changes at https://github.com/emberjs/data/blob/master/BREAKING_CHANGES.md, then update your store's `revision` property to " + DS.CURRENT_API_REVISION);
-    }
-
     if (!get(DS, 'defaultStore') || get(this, 'isDefaultStore')) {
       set(DS, 'defaultStore', this);
     }
@@ -41835,7 +41339,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     @param {DS.Model} record
   */
   materializeData: function(record) {
-    var reference = get(record, 'reference'),
+    var reference = get(record, '_reference'),
         data = reference.data,
         adapter = this.adapterForType(record.constructor);
 
@@ -41860,7 +41364,10 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     @property {DS.Adapter|String}
   */
   adapter: Ember.computed(function(){
-    Ember.debug("A custom DS.Adapter was not provided as the 'Adapter' property of your application's Store. The default (DS.RESTAdapter) will be used.");
+    if (!Ember.testing) {
+      Ember.debug("A custom DS.Adapter was not provided as the 'Adapter' property of your application's Store. The default (DS.RESTAdapter) will be used.");
+    }
+
     return 'DS.RESTAdapter';
   }).property(),
 
@@ -41994,7 +41501,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
 
     // Now that we have a reference, attach it to the record we
     // just created.
-    set(record, 'reference', reference);
+    set(record, '_reference', reference);
     reference.record = record;
 
     // Move the record out of its initial `empty` state into
@@ -42144,12 +41651,19 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
 
     if (reference.data === LOADING) {
       // let the adapter set the data, possibly async
-      var adapter = this.adapterForType(type);
+      var adapter = this.adapterForType(type),
+          store = this;
 
       Ember.assert("You tried to find a record but you have no adapter (for " + type + ")", adapter);
       Ember.assert("You tried to find a record but your adapter does not implement `find`", adapter.find);
 
-      adapter.find(this, type, id);
+      var thenable = adapter.find(this, type, id);
+
+      if (thenable && thenable.then) {
+        thenable.then(null /* for future use */, function(error) {
+          store.recordWasError(record);
+        });
+      }
     }
 
     return record;
@@ -42158,13 +41672,20 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
   reloadRecord: function(record) {
     var type = record.constructor,
         adapter = this.adapterForType(type),
+        store = this,
         id = get(record, 'id');
 
     Ember.assert("You cannot update a record without an ID", id);
     Ember.assert("You tried to update a record but you have no adapter (for " + type + ")", adapter);
     Ember.assert("You tried to update a record but your adapter does not implement `find`", adapter.find);
 
-    adapter.find(this, type, id);
+    var thenable = adapter.find(this, type, id);
+
+    if (thenable && thenable.then) {
+      thenable.then(null /* for future use */, function(error) {
+        store.recordWasError(record);
+      });
+    }
   },
 
   /**
@@ -42172,7 +41693,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
 
     This method returns a record for a given record refeence.
 
-    If no record for the reference has yet been materialzed, this method will
+    If no record for the reference has yet been materialized, this method will
     materialize a new `DS.Model` instance. This allows adapters to eagerly load
     large amounts of data into the store, and avoid incurring the cost of
     creating models until they are requested.
@@ -42580,9 +42101,26 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     }
   },
 
-  // .................
-  // . BASIC ADAPTER .
-  // .................
+  // ..............
+  // . PERSISTING .
+  // ..............
+
+  /**
+    This method delegates saving to the store's implicit
+    transaction.
+
+    Calling this method is essentially a request to persist
+    any changes to records that were not explicitly added to
+    a transaction.
+  */
+  save: function() {
+    once(this, 'commitDefaultTransaction');
+  },
+  commit: Ember.aliasMethod('save'),
+
+  commitDefaultTransaction: function() {
+    get(this, 'defaultTransaction').commit();
+  },
 
   scheduleSave: function(record) {
     get(this, 'currentTransaction').add(record);
@@ -42592,33 +42130,6 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
   flushSavedRecords: function() {
     get(this, 'currentTransaction').commit();
     set(this, 'currentTransaction', this.transaction());
-  },
-
-  // ..............
-  // . PERSISTING .
-  // ..............
-
-  /**
-    This method schedule a save of records in the default transaction.
-
-    Calling this method is essentially a request to persist
-    any changes to records that were not explicitly added to
-    a transaction.
-  */
-  save: function() {
-    once(this, 'commit');
-  },
-
-  /**
-    This method delegates committing to the store's implicit
-    transaction.
-
-    Calling this method is essentially a request to persist
-    any changes to records that were not explicitly added to
-    a transaction.
-  */
-  commit: function() {
-    get(this, 'defaultTransaction').commit();
   },
 
   /**
@@ -42656,14 +42167,14 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     @param {Object} data optional data (see above)
   */
   didSaveRecord: function(record, data) {
-    record.adapterDidCommit();
-
     if (data) {
       this.updateId(record, data);
       this.updateRecordData(record, data);
     } else {
       this.didUpdateAttributes(record);
     }
+
+    record.adapterDidCommit();
   },
 
   /**
@@ -42833,7 +42344,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     @param {DS.Model} relationshipName
   */
   didUpdateRelationship: function(record, relationshipName) {
-    var clientId = get(record, 'reference').clientId;
+    var clientId = get(record, '_reference').clientId;
 
     var relationship = this.relationshipChangeFor(clientId, relationshipName);
     //TODO(Igor)
@@ -42849,7 +42360,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     `didUpdateRelationship` API.
   */
   didUpdateRelationships: function(record) {
-    var changes = this.relationshipChangesFor(get(record, 'reference'));
+    var changes = this.relationshipChangesFor(get(record, '_reference'));
 
     for (var name in changes) {
       if (!changes.hasOwnProperty(name)) { continue; }
@@ -42900,7 +42411,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     @param {Object} data
   */
   updateRecordData: function(record, data) {
-    get(record, 'reference').data = data;
+    get(record, '_reference').data = data;
     record.didChangeData();
   },
 
@@ -42917,7 +42428,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
   updateId: function(record, data) {
     var type = record.constructor,
         typeMap = this.typeMapFor(type),
-        reference = get(record, 'reference'),
+        reference = get(record, '_reference'),
         oldId = get(record, 'id'),
         id = this.preprocessData(type, data);
 
@@ -43090,7 +42601,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     var record = reference.type._create({
       id: reference.id,
       store: this,
-      reference: reference
+      _reference: reference
     });
 
     reference.record = record;
@@ -43107,7 +42618,7 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
   },
 
   dematerializeRecord: function(record) {
-    var reference = get(record, 'reference'),
+    var reference = get(record, '_reference'),
         type = reference.type,
         id = reference.id,
         typeMap = this.typeMapFor(type);
@@ -43158,7 +42669,9 @@ DS.Store = Ember.Object.extend(DS._Mappable, {
     delete changes[clientId][parentClientId][key][type];
   },
 
-  relationshipChangeFor: function(clientId, childKey, parentClientId, parentKey, type) {
+  relationshipChangeFor: function(clientReference, childKey, parentReference, parentKey, type) {
+    var clientId = clientReference.clientId,
+        parentClientId = parentReference ? parentReference.clientId : parentReference;
     var changes = this.relationshipChanges;
     var key = childKey + parentKey;
     if (!(clientId in changes) || !(parentClientId in changes[clientId])){
@@ -43607,6 +43120,12 @@ var DirtyState = DS.State.extend({
     },
 
     // EVENTS
+
+    materializingData: function(manager) {
+      set(manager, 'lastDirtyType', get(this, 'dirtyType'));
+      manager.transitionTo('materializing');
+    },
+
     didCommit: function(manager) {
       var dirtyType = get(this, 'dirtyType'),
           record = get(manager, 'record');
@@ -43618,6 +43137,8 @@ var DirtyState = DS.State.extend({
       manager.transitionTo('saved');
       manager.send('invokeLifecycleCallbacks', dirtyType);
     },
+
+    didChangeData: didChangeData,
 
     becameInvalid: function(manager, errors) {
       var record = get(manager, 'record');
@@ -43643,7 +43164,7 @@ var DirtyState = DS.State.extend({
 
     exit: function(manager) {
        var record = get(manager, 'record');
- 
+
        record.withTransaction(function (t) {
          t.remove(record);
        });
@@ -43775,6 +43296,11 @@ var states = {
 
       materializingData: function(manager) {
         manager.transitionTo('loaded.materializing.firstTime');
+      },
+
+      becameError: function(manager) {
+        manager.transitionTo('error');
+        manager.send('invokeLifecycleCallbacks');
       }
     }),
 
@@ -43877,6 +43403,16 @@ var states = {
           manager.transitionTo('deleted.saved');
         },
 
+        didCommit: function(manager) {
+          var record = get(manager, 'record');
+
+          record.withTransaction(function(t) {
+            t.remove(record);
+          });
+
+          manager.send('invokeLifecycleCallbacks', get(manager, 'lastDirtyType'));
+        },
+
         invokeLifecycleCallbacks: function(manager, dirtyType) {
           var record = get(manager, 'record');
           if (dirtyType === 'created') {
@@ -43968,7 +43504,7 @@ var states = {
           record.withTransaction(function(t) {
             t.remove(record);
           });
-      
+
           manager.transitionTo('saved');
 
           manager.send('invokeLifecycleCallbacks');
@@ -44045,7 +43581,7 @@ var retrieveFromCurrentState = Ember.computed(function(key, value) {
 }).property('stateManager.currentState').readOnly();
 
 /**
-  
+
   The model class that all Ember Data records descend from.
 
   @module data
@@ -44057,6 +43593,7 @@ var retrieveFromCurrentState = Ember.computed(function(key, value) {
   @extends Ember.Object
   @constructor
 */
+
 DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
   isLoading: retrieveFromCurrentState,
   isLoaded: retrieveFromCurrentState,
@@ -44139,14 +43676,14 @@ DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
 
   /**
     Fired when the record is deleted.
-    
+
     @event didDelete
   */
   didDelete: Ember.K,
 
   /**
     Fired when the record becomes invalid.
-    
+
     @event becameInvalid
   */
   becameInvalid: Ember.K,
@@ -44160,7 +43697,7 @@ DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
 
   data: Ember.computed(function() {
     if (!this._data) {
-      this.materializeData();
+      this.setupData();
     }
 
     return this._data;
@@ -44190,7 +43727,6 @@ DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
   },
 
   _setup: function() {
-    this._relationshipChanges = {};
     this._changesToSync = {};
   },
 
@@ -44213,19 +43749,6 @@ DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
 
   didChangeData: function() {
     this.send('didChangeData');
-  },
-
-  /**
-    Reload the record from the adapter.
-
-    This will only work if the record has already finished loading
-    and has not yet been modified (`isLoaded` but not `isDirty`,
-    or `isSaving`).
-
-    @method reload
-  */
-  reload: function() {
-    this.send('reloadRecord');
   },
 
   deleteRecord: function() {
@@ -44251,7 +43774,7 @@ DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
   updateRecordArrays: function() {
     var store = get(this, 'store');
     if (store) {
-      store.dataWasUpdated(this.constructor, get(this, 'reference'), this);
+      store.dataWasUpdated(this.constructor, get(this, '_reference'), this);
     }
   },
 
@@ -44320,7 +43843,7 @@ DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
     Ember.run.once(this, this.updateRecordArrays);
   },
 
-  setupData: function(prematerialized) {
+  setupData: function() {
     this._data = {
       attributes: {},
       belongsTo: {},
@@ -44425,18 +43948,54 @@ DS.Model = Ember.Object.extend(Ember.Evented, LoadPromise, {
   becameInFlight: function() {
   },
 
-  // FOR USE BY THE BASIC ADAPTER
+  /**
+    @private
 
+  */
+  resolveOn: function(successEvent) {
+    var model = this;
+
+    return new Ember.RSVP.Promise(function(resolve, reject) {
+      function success() {
+        this.off('becameError', error);
+        this.off('becameInvalid', error);
+        resolve(this);
+      }
+      function error() {
+        this.off(successEvent, success);
+        reject(this);
+      }
+
+      model.one(successEvent, success);
+      model.one('becameError', error);
+      model.one('becameInvalid', error);
+    });
+  },
+
+  /**
+    Save the record.
+
+    @method save
+  */
   save: function() {
     this.get('store').scheduleSave(this);
 
-    var promise = new Ember.RSVP.Promise();
+    return this.resolveOn('didCommit');
+  },
 
-    this.one('didCommit', this, function() {
-      promise.resolve(this);
-    });
+  /**
+    Reload the record from the adapter.
 
-    return promise;
+    This will only work if the record has already finished loading
+    and has not yet been modified (`isLoaded` but not `isDirty`,
+    or `isSaving`).
+
+    @method reload
+  */
+  reload: function() {
+    this.send('reloadRecord');
+
+    return this.resolveOn('didReload');
   },
 
   // FOR USE DURING COMMIT PROCESS
@@ -44494,7 +44053,23 @@ var storeAlias = function(methodName) {
 };
 
 DS.Model.reopenClass({
-  isLoaded: storeAlias('recordIsLoaded'),
+
+  /** @private
+    Alias DS.Model's `create` method to `_create`. This allows us to create DS.Model
+    instances from within the store, but if end users accidentally call `create()`
+    (instead of `createRecord()`), we can raise an error.
+  */
+  _create: DS.Model.create,
+
+  /** @private
+
+    Override the class' `create()` method to raise an error. This prevents end users
+    from inadvertently calling `create()` instead of `createRecord()`. The store is
+    still able to create instances by calling the `_create()` method.
+  */
+  create: function() {
+    throw new Ember.Error("You should not call `create` on a model. Instead, call `createRecord` with the attributes you would like to set.");
+  },
 
   /**
     See {{#crossLink "DS.Store/find:method"}}`DS.Store.find()`{{/crossLink}}.
@@ -44530,12 +44105,6 @@ DS.Model.reopenClass({
     @return {DS.FilteredRecordArray}
   */
   filter: storeAlias('filter'),
-
-  _create: DS.Model.create,
-
-  create: function() {
-    throw new Ember.Error("You should not call `create` on a model. Instead, call `createRecord` with the attributes you would like to set.");
-  },
 
   /**
     See {{#crossLink "DS.Store/createRecord:method"}}`DS.Store.createRecord()`{{/crossLink}}.
@@ -44577,29 +44146,6 @@ DS.Model.reopenClass({
   })
 });
 
-var AttributeChange = DS.AttributeChange = function(options) {
-  this.reference = options.reference;
-  this.store = options.store;
-  this.name = options.name;
-  this.oldValue = options.oldValue;
-};
-
-AttributeChange.createChange = function(options) {
-  return new AttributeChange(options);
-};
-
-AttributeChange.prototype = {
-  sync: function() {
-    this.store.recordAttributeDidChange(this.reference, this.name, this.value, this.oldValue);
-
-    // TODO: Use this object in the commit process
-    this.destroy();
-  },
-
-  destroy: function() {
-    delete this.store.recordForReference(this.reference)._changesToSync[this.name];
-  }
-};
 
 DS.Model.reopen({
   eachAttribute: function(callback, binding) {
@@ -44609,7 +44155,7 @@ DS.Model.reopen({
   },
 
   attributeWillChange: Ember.beforeObserver(function(record, key) {
-    var reference = get(record, 'reference'),
+    var reference = get(record, '_reference'),
         store = get(record, 'store');
 
     record.send('willSetProperty', { reference: reference, store: store, name: key });
@@ -44674,6 +44220,549 @@ DS.attr = function(type, options) {
 
 
 (function() {
+/**
+  An AttributeChange object is created whenever a record's
+  attribute changes value. It is used to track changes to a
+  record between transaction commits.
+*/
+
+var AttributeChange = DS.AttributeChange = function(options) {
+  this.reference = options.reference;
+  this.store = options.store;
+  this.name = options.name;
+  this.oldValue = options.oldValue;
+};
+
+AttributeChange.createChange = function(options) {
+  return new AttributeChange(options);
+};
+
+AttributeChange.prototype = {
+  sync: function() {
+    this.store.recordAttributeDidChange(this.reference, this.name, this.value, this.oldValue);
+
+    // TODO: Use this object in the commit process
+    this.destroy();
+  },
+
+  /**
+   If the AttributeChange is destroyed (either by being rolled back
+   or being committed), remove it from the list of pending changes
+   on the record.
+  */
+  destroy: function() {
+    var record = this.reference.record;
+
+    delete record._changesToSync[this.name];
+  }
+};
+
+})();
+
+
+
+(function() {
+var get = Ember.get, set = Ember.set;
+var forEach = Ember.EnumerableUtils.forEach;
+
+DS.RelationshipChange = function(options) {
+  this.parentReference = options.parentReference;
+  this.childReference = options.childReference;
+  this.firstRecordReference = options.firstRecordReference;
+  this.firstRecordKind = options.firstRecordKind;
+  this.firstRecordName = options.firstRecordName;
+  this.secondRecordReference = options.secondRecordReference;
+  this.secondRecordKind = options.secondRecordKind;
+  this.secondRecordName = options.secondRecordName;
+  this.changeType = options.changeType;
+  this.store = options.store;
+
+  this.committed = {};
+};
+
+DS.RelationshipChangeAdd = function(options){
+  DS.RelationshipChange.call(this, options);
+};
+
+DS.RelationshipChangeRemove = function(options){
+  DS.RelationshipChange.call(this, options);
+};
+
+/** @private */
+DS.RelationshipChange.create = function(options) {
+  return new DS.RelationshipChange(options);
+};
+
+/** @private */
+DS.RelationshipChangeAdd.create = function(options) {
+  return new DS.RelationshipChangeAdd(options);
+};
+
+/** @private */
+DS.RelationshipChangeRemove.create = function(options) {
+  return new DS.RelationshipChangeRemove(options);
+};
+
+DS.OneToManyChange = {};
+DS.OneToNoneChange = {};
+DS.ManyToNoneChange = {};
+DS.OneToOneChange = {};
+DS.ManyToManyChange = {};
+
+DS.RelationshipChange._createChange = function(options){
+  if(options.changeType === "add"){
+    return DS.RelationshipChangeAdd.create(options);
+  }
+  if(options.changeType === "remove"){
+    return DS.RelationshipChangeRemove.create(options);
+  }
+};
+
+
+DS.RelationshipChange.determineRelationshipType = function(recordType, knownSide){
+  var knownKey = knownSide.key, key, otherKind;
+  var knownKind = knownSide.kind;
+
+  var inverse = recordType.inverseFor(knownKey);
+
+  if (inverse){
+    key = inverse.name;
+    otherKind = inverse.kind;
+  }
+
+  if (!inverse){
+    return knownKind === "belongsTo" ? "oneToNone" : "manyToNone";
+  }
+  else{
+    if(otherKind === "belongsTo"){
+      return knownKind === "belongsTo" ? "oneToOne" : "manyToOne";
+    }
+    else{
+      return knownKind === "belongsTo" ? "oneToMany" : "manyToMany";
+    }
+  } 
+ 
+};
+
+DS.RelationshipChange.createChange = function(firstRecordReference, secondRecordReference, store, options){
+  // Get the type of the child based on the child's client ID
+  var firstRecordType = firstRecordReference.type, changeType;
+  changeType = DS.RelationshipChange.determineRelationshipType(firstRecordType, options);
+  if (changeType === "oneToMany"){
+    return DS.OneToManyChange.createChange(firstRecordReference, secondRecordReference, store, options);
+  }
+  else if (changeType === "manyToOne"){
+    return DS.OneToManyChange.createChange(secondRecordReference, firstRecordReference, store, options);
+  }
+  else if (changeType === "oneToNone"){
+    return DS.OneToNoneChange.createChange(firstRecordReference, secondRecordReference, store, options);
+  }
+  else if (changeType === "manyToNone"){
+    return DS.ManyToNoneChange.createChange(firstRecordReference, secondRecordReference, store, options);
+  }
+  else if (changeType === "oneToOne"){
+    return DS.OneToOneChange.createChange(firstRecordReference, secondRecordReference, store, options);
+  }
+  else if (changeType === "manyToMany"){
+    return DS.ManyToManyChange.createChange(firstRecordReference, secondRecordReference, store, options);
+  }
+};
+
+/** @private */
+DS.OneToNoneChange.createChange = function(childReference, parentReference, store, options) {
+  var key = options.key;
+  var change = DS.RelationshipChange._createChange({
+      parentReference: parentReference,
+      childReference: childReference,
+      firstRecordReference: childReference,
+      store: store,
+      changeType: options.changeType,
+      firstRecordName: key,
+      firstRecordKind: "belongsTo"
+  });
+
+  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
+
+  return change;
+};
+
+/** @private */
+DS.ManyToNoneChange.createChange = function(childReference, parentReference, store, options) {
+  var key = options.key;
+  var change = DS.RelationshipChange._createChange({
+      parentReference: childReference,
+      childReference: parentReference,
+      secondRecordReference: childReference,
+      store: store,
+      changeType: options.changeType,
+      secondRecordName: options.key,
+      secondRecordKind: "hasMany"
+  });
+
+  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
+  return change;
+};
+
+
+/** @private */
+DS.ManyToManyChange.createChange = function(childReference, parentReference, store, options) {
+  // If the name of the belongsTo side of the relationship is specified,
+  // use that
+  // If the type of the parent is specified, look it up on the child's type
+  // definition.
+  var key = options.key;
+
+  var change = DS.RelationshipChange._createChange({
+      parentReference: parentReference,
+      childReference: childReference,
+      firstRecordReference: childReference,
+      secondRecordReference: parentReference,
+      firstRecordKind: "hasMany",
+      secondRecordKind: "hasMany",
+      store: store,
+      changeType: options.changeType,
+      firstRecordName:  key
+  });
+
+  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
+
+
+  return change;
+};
+
+/** @private */
+DS.OneToOneChange.createChange = function(childReference, parentReference, store, options) {
+  var key;
+
+  // If the name of the belongsTo side of the relationship is specified,
+  // use that
+  // If the type of the parent is specified, look it up on the child's type
+  // definition.
+  if (options.parentType) {
+    key = options.parentType.inverseFor(options.key).name;
+  } else if (options.key) {
+    key = options.key;
+  } else {
+    Ember.assert("You must pass either a parentType or belongsToName option to OneToManyChange.forChildAndParent", false);
+  }
+
+  var change = DS.RelationshipChange._createChange({
+      parentReference: parentReference,
+      childReference: childReference,
+      firstRecordReference: childReference,
+      secondRecordReference: parentReference,
+      firstRecordKind: "belongsTo",
+      secondRecordKind: "belongsTo",
+      store: store,
+      changeType: options.changeType,
+      firstRecordName:  key
+  });
+
+  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
+
+
+  return change;
+};
+
+DS.OneToOneChange.maintainInvariant = function(options, store, childReference, key){
+  if (options.changeType === "add" && store.recordIsMaterialized(childReference)) {
+    var child = store.recordForReference(childReference);
+    var oldParent = get(child, key);
+    if (oldParent){
+      var correspondingChange = DS.OneToOneChange.createChange(childReference, oldParent.get('_reference'), store, {
+          parentType: options.parentType,
+          hasManyName: options.hasManyName,
+          changeType: "remove",
+          key: options.key
+        });
+      store.addRelationshipChangeFor(childReference, key, options.parentReference , null, correspondingChange);
+     correspondingChange.sync();
+    }
+  }
+};
+
+/** @private */
+DS.OneToManyChange.createChange = function(childReference, parentReference, store, options) {
+  var key;
+
+  // If the name of the belongsTo side of the relationship is specified,
+  // use that
+  // If the type of the parent is specified, look it up on the child's type
+  // definition.
+  if (options.parentType) {
+    key = options.parentType.inverseFor(options.key).name;
+    DS.OneToManyChange.maintainInvariant( options, store, childReference, key );
+  } else if (options.key) {
+    key = options.key;
+  } else {
+    Ember.assert("You must pass either a parentType or belongsToName option to OneToManyChange.forChildAndParent", false);
+  }
+
+  var change = DS.RelationshipChange._createChange({
+      parentReference: parentReference,
+      childReference: childReference,
+      firstRecordReference: childReference,
+      secondRecordReference: parentReference,
+      firstRecordKind: "belongsTo",
+      secondRecordKind: "hasMany",
+      store: store,
+      changeType: options.changeType,
+      firstRecordName:  key
+  });
+
+  store.addRelationshipChangeFor(childReference, key, parentReference, change.getSecondRecordName(), change);
+
+
+  return change;
+};
+
+
+DS.OneToManyChange.maintainInvariant = function(options, store, childReference, key){
+  var child = childReference.record;
+
+  if (options.changeType === "add" && child) {
+    var oldParent = get(child, key);
+    if (oldParent){
+      var correspondingChange = DS.OneToManyChange.createChange(childReference, oldParent.get('_reference'), store, {
+          parentType: options.parentType,
+          hasManyName: options.hasManyName,
+          changeType: "remove",
+          key: options.key
+        });
+      store.addRelationshipChangeFor(childReference, key, options.parentReference, correspondingChange.getSecondRecordName(), correspondingChange);
+      correspondingChange.sync();
+    }
+  }
+};
+
+DS.OneToManyChange.ensureSameTransaction = function(changes){
+  var records = Ember.A();
+  forEach(changes, function(change){
+    records.addObject(change.getSecondRecord());
+    records.addObject(change.getFirstRecord());
+  });
+
+  return DS.Transaction.ensureSameTransaction(records);
+};
+
+DS.RelationshipChange.prototype = {
+
+  getSecondRecordName: function() {
+    var name = this.secondRecordName, parent;
+
+    if (!name) {
+      parent = this.secondRecordReference;
+      if (!parent) { return; }
+
+      var childType = this.firstRecordReference.type;
+      var inverse = childType.inverseFor(this.firstRecordName);
+      this.secondRecordName = inverse.name;
+    }
+
+    return this.secondRecordName;
+  },
+
+  /**
+    Get the name of the relationship on the belongsTo side.
+
+    @return {String}
+  */
+  getFirstRecordName: function() {
+    var name = this.firstRecordName;
+    return name;
+  },
+
+  /** @private */
+  destroy: function() {
+    var childReference = this.childReference,
+        belongsToName = this.getFirstRecordName(),
+        hasManyName = this.getSecondRecordName(),
+        store = this.store;
+
+    store.removeRelationshipChangeFor(childReference, belongsToName, this.parentReference, hasManyName, this.changeType);
+  },
+
+  /** @private */
+  getByReference: function(reference) {
+    var store = this.store;
+
+    // return null or undefined if the original reference was null or undefined
+    if (!reference) { return reference; }
+
+    if (reference.record) {
+      return reference.record;
+    }
+  },
+
+  getSecondRecord: function(){
+    return this.getByReference(this.secondRecordReference);
+  },
+
+  /** @private */
+  getFirstRecord: function() {
+    return this.getByReference(this.firstRecordReference);
+  },
+
+  /**
+    @private
+
+    Make sure that all three parts of the relationship change are part of
+    the same transaction. If any of the three records is clean and in the
+    default transaction, and the rest are in a different transaction, move
+    them all into that transaction.
+  */
+  ensureSameTransaction: function() {
+    var child = this.getFirstRecord(),
+      parentRecord = this.getSecondRecord();
+
+    var transaction = DS.Transaction.ensureSameTransaction([child, parentRecord]);
+
+    this.transaction = transaction;
+    return transaction;
+  },
+
+  callChangeEvents: function(){
+    var child = this.getFirstRecord(),
+        parentRecord = this.getSecondRecord();
+
+    var dirtySet = new Ember.OrderedSet();
+
+    // TODO: This implementation causes a race condition in key-value
+    // stores. The fix involves buffering changes that happen while
+    // a record is loading. A similar fix is required for other parts
+    // of ember-data, and should be done as new infrastructure, not
+    // a one-off hack. [tomhuda]
+    if (parentRecord && get(parentRecord, 'isLoaded')) {
+      this.store.recordHasManyDidChange(dirtySet, parentRecord, this);
+    }
+
+    if (child) {
+      this.store.recordBelongsToDidChange(dirtySet, child, this);
+    }
+
+    dirtySet.forEach(function(record) {
+      record.adapterDidDirty();
+    });
+  },
+
+  coalesce: function(){
+    var relationshipPairs = this.store.relationshipChangePairsFor(this.firstRecordReference);
+    forEach(relationshipPairs, function(pair){
+      var addedChange = pair["add"];
+      var removedChange = pair["remove"];
+      if(addedChange && removedChange) {
+        addedChange.destroy();
+        removedChange.destroy();
+      }
+    });
+  }
+};
+
+DS.RelationshipChangeAdd.prototype = Ember.create(DS.RelationshipChange.create({}));
+DS.RelationshipChangeRemove.prototype = Ember.create(DS.RelationshipChange.create({}));
+
+DS.RelationshipChangeAdd.prototype.changeType = "add";
+DS.RelationshipChangeAdd.prototype.sync = function() {
+  var secondRecordName = this.getSecondRecordName(),
+      firstRecordName = this.getFirstRecordName(),
+      firstRecord = this.getFirstRecord(),
+      secondRecord = this.getSecondRecord();
+
+  //Ember.assert("You specified a hasMany (" + hasManyName + ") on " + (!belongsToName && (newParent || oldParent || this.lastParent).constructor) + " but did not specify an inverse belongsTo on " + child.constructor, belongsToName);
+  //Ember.assert("You specified a belongsTo (" + belongsToName + ") on " + child.constructor + " but did not specify an inverse hasMany on " + (!hasManyName && (newParent || oldParent || this.lastParentRecord).constructor), hasManyName);
+
+  this.ensureSameTransaction();
+
+  this.callChangeEvents();
+
+  if (secondRecord && firstRecord) {
+    if(this.secondRecordKind === "belongsTo"){
+      secondRecord.suspendRelationshipObservers(function(){
+        set(secondRecord, secondRecordName, firstRecord);
+      });
+
+     }
+     else if(this.secondRecordKind === "hasMany"){
+      secondRecord.suspendRelationshipObservers(function(){
+        get(secondRecord, secondRecordName).addObject(firstRecord);
+      });
+    }
+  }
+
+  if (firstRecord && secondRecord && get(firstRecord, firstRecordName) !== secondRecord) {
+    if(this.firstRecordKind === "belongsTo"){
+      firstRecord.suspendRelationshipObservers(function(){
+        set(firstRecord, firstRecordName, secondRecord);
+      });
+    }
+    else if(this.firstRecordKind === "hasMany"){
+      firstRecord.suspendRelationshipObservers(function(){
+        get(firstRecord, firstRecordName).addObject(secondRecord);
+      });
+    }
+  }
+
+  this.coalesce();
+};
+
+DS.RelationshipChangeRemove.prototype.changeType = "remove";
+DS.RelationshipChangeRemove.prototype.sync = function() {
+  var secondRecordName = this.getSecondRecordName(),
+      firstRecordName = this.getFirstRecordName(),
+      firstRecord = this.getFirstRecord(),
+      secondRecord = this.getSecondRecord();
+
+  //Ember.assert("You specified a hasMany (" + hasManyName + ") on " + (!belongsToName && (newParent || oldParent || this.lastParent).constructor) + " but did not specify an inverse belongsTo on " + child.constructor, belongsToName);
+  //Ember.assert("You specified a belongsTo (" + belongsToName + ") on " + child.constructor + " but did not specify an inverse hasMany on " + (!hasManyName && (newParent || oldParent || this.lastParentRecord).constructor), hasManyName);
+
+  this.ensureSameTransaction(firstRecord, secondRecord, secondRecordName, firstRecordName);
+
+  this.callChangeEvents();
+
+  if (secondRecord && firstRecord) {
+    if(this.secondRecordKind === "belongsTo"){
+      secondRecord.suspendRelationshipObservers(function(){
+        set(secondRecord, secondRecordName, null);
+      });
+     }
+     else if(this.secondRecordKind === "hasMany"){
+       secondRecord.suspendRelationshipObservers(function(){
+        get(secondRecord, secondRecordName).removeObject(firstRecord);
+      });
+    }
+  }
+
+  if (firstRecord && get(firstRecord, firstRecordName)) {
+    if(this.firstRecordKind === "belongsTo"){
+      firstRecord.suspendRelationshipObservers(function(){
+        set(firstRecord, firstRecordName, null);
+      });
+     }
+     else if(this.firstRecordKind === "hasMany"){
+       firstRecord.suspendRelationshipObservers(function(){
+        get(firstRecord, firstRecordName).removeObject(secondRecord);
+      });
+    }
+  }
+
+  this.coalesce();
+};
+
+})();
+
+
+
+(function() {
+/**
+  @module data
+  @submodule data-changes
+*/
+
+})();
+
+
+
+(function() {
 var get = Ember.get, set = Ember.set,
     isNone = Ember.isNone;
 
@@ -44695,17 +44784,33 @@ DS.belongsTo = function(type, options) {
     }
 
     var data = get(this, 'data').belongsTo,
-        store = get(this, 'store'), id;
+        store = get(this, 'store'), belongsTo;
 
-    id = data[key];
+    belongsTo = data[key];
 
-    if(isNone(id)) {
+    // TODO (tomdale) The value of the belongsTo in the data hash can be
+    // one of:
+    // 1. null/undefined
+    // 2. a record reference
+    // 3. a tuple returned by the serializer's polymorphism code
+    //
+    // We should really normalize #3 to be the same as #2 to reduce the
+    // complexity here.
+
+    if (isNone(belongsTo)) {
       return null;
-    } else if (id.clientId) {
-      return store.recordForReference(id);
-    } else {
-      return store.findById(id.type, id.id);
     }
+
+    // The data has been normalized to a record reference, so
+    // just ask the store for the record for that reference,
+    // materializing it if necessary.
+    if (belongsTo.clientId) {
+      return store.recordForReference(belongsTo);
+    }
+
+    // The data has been normalized into a type/id pair by the
+    // serializer's polymorphism code.
+    return store.findById(belongsTo.type, belongsTo.id);
   }).property('data').meta(meta);
 };
 
@@ -44721,10 +44826,10 @@ DS.Model.reopen({
     if (get(record, 'isLoaded')) {
       var oldParent = get(record, key);
 
-      var childReference = get(record, 'reference'),
+      var childReference = get(record, '_reference'),
           store = get(record, 'store');
       if (oldParent){
-        var change = DS.RelationshipChange.createChange(childReference, get(oldParent, 'reference'), store, { key: key, kind:"belongsTo", changeType: "remove" });
+        var change = DS.RelationshipChange.createChange(childReference, get(oldParent, '_reference'), store, { key: key, kind:"belongsTo", changeType: "remove" });
         change.sync();
         this._changesToSync[key] = change;
       }
@@ -44736,9 +44841,9 @@ DS.Model.reopen({
     if (get(record, 'isLoaded')) {
       var newParent = get(record, key);
       if(newParent){
-        var childReference = get(record, 'reference'),
+        var childReference = get(record, '_reference'),
             store = get(record, 'store');
-        var change = DS.RelationshipChange.createChange(childReference, get(newParent, 'reference'), store, { key: key, kind:"belongsTo", changeType: "add" });
+        var change = DS.RelationshipChange.createChange(childReference, get(newParent, '_reference'), store, { key: key, kind:"belongsTo", changeType: "add" });
         change.sync();
         if(this._changesToSync[key]){
           DS.OneToManyChange.ensureSameTransaction([change, this._changesToSync[key]], store);
@@ -44754,7 +44859,7 @@ DS.Model.reopen({
 
 
 (function() {
-var get = Ember.get, set = Ember.set, forEach = Ember.ArrayPolyfills.forEach;
+var get = Ember.get, set = Ember.set, forEach = Ember.EnumerableUtils.forEach;
 var hasRelationship = function(type, options) {
   options = options || {};
 
@@ -44795,18 +44900,19 @@ function clearUnmaterializedHasMany(record, relationship) {
 
   if (!references) { return; }
 
-  var inverseName = record.constructor.inverseFor(relationship.key).name;
+  var inverse = record.constructor.inverseFor(relationship.key);
 
+  if (inverse) {
+    forEach(references, function(reference) {
+      var childRecord;
 
-  forEach.call(references, function(reference) {
-    var childRecord;
-
-    if (childRecord = reference.record) {
-      record.suspendRelationshipObservers(function() {
-        set(childRecord, inverseName, null);
-      });
-    }
-  });
+      if (childRecord = reference.record) {
+        record.suspendRelationshipObservers(function() {
+          set(childRecord, inverse.name, null);
+        });
+      }
+    });
+  }
 }
 
 DS.Model.reopen({
@@ -45233,506 +45339,6 @@ DS.Model.reopen({
 
 
 (function() {
-var get = Ember.get, set = Ember.set;
-var forEach = Ember.EnumerableUtils.forEach;
-
-DS.RelationshipChange = function(options) {
-  this.parentReference = options.parentReference;
-  this.childReference = options.childReference;
-  this.firstRecordReference = options.firstRecordReference;
-  this.firstRecordKind = options.firstRecordKind;
-  this.firstRecordName = options.firstRecordName;
-  this.secondRecordReference = options.secondRecordReference;
-  this.secondRecordKind = options.secondRecordKind;
-  this.secondRecordName = options.secondRecordName;
-  this.store = options.store;
-  this.committed = {};
-  this.changeType = options.changeType;
-};
-
-DS.RelationshipChangeAdd = function(options){
-  DS.RelationshipChange.call(this, options);
-};
-
-DS.RelationshipChangeRemove = function(options){
-  DS.RelationshipChange.call(this, options);
-};
-
-/** @private */
-DS.RelationshipChange.create = function(options) {
-  return new DS.RelationshipChange(options);
-};
-
-/** @private */
-DS.RelationshipChangeAdd.create = function(options) {
-  return new DS.RelationshipChangeAdd(options);
-};
-
-/** @private */
-DS.RelationshipChangeRemove.create = function(options) {
-  return new DS.RelationshipChangeRemove(options);
-};
-
-DS.OneToManyChange = {};
-DS.OneToNoneChange = {};
-DS.ManyToNoneChange = {};
-DS.OneToOneChange = {};
-DS.ManyToManyChange = {};
-
-DS.RelationshipChange._createChange = function(options){
-  if(options.changeType === "add"){
-    return DS.RelationshipChangeAdd.create(options);
-  }
-  if(options.changeType === "remove"){
-    return DS.RelationshipChangeRemove.create(options);
-  }
-};
-
-
-DS.RelationshipChange.determineRelationshipType = function(recordType, knownSide){
-  var knownKey = knownSide.key, key, otherKind;
-  var knownKind = knownSide.kind;
-
-  var inverse = recordType.inverseFor(knownKey);
-
-  if (inverse){
-    key = inverse.name;
-    otherKind = inverse.kind;
-  }
-
-  if (!inverse){
-    return knownKind === "belongsTo" ? "oneToNone" : "manyToNone";
-  }
-  else{
-    if(otherKind === "belongsTo"){
-      return knownKind === "belongsTo" ? "oneToOne" : "manyToOne";
-    }
-    else{
-      return knownKind === "belongsTo" ? "oneToMany" : "manyToMany";
-    }
-  } 
- 
-};
-
-DS.RelationshipChange.createChange = function(firstRecordReference, secondRecordReference, store, options){
-  // Get the type of the child based on the child's client ID
-  var firstRecordType = firstRecordReference.type, changeType;
-  changeType = DS.RelationshipChange.determineRelationshipType(firstRecordType, options);
-  if (changeType === "oneToMany"){
-    return DS.OneToManyChange.createChange(firstRecordReference, secondRecordReference, store, options);
-  }
-  else if (changeType === "manyToOne"){
-    return DS.OneToManyChange.createChange(secondRecordReference, firstRecordReference, store, options);
-  }
-  else if (changeType === "oneToNone"){
-    return DS.OneToNoneChange.createChange(firstRecordReference, secondRecordReference, store, options);
-  }
-  else if (changeType === "manyToNone"){
-    return DS.ManyToNoneChange.createChange(firstRecordReference, secondRecordReference, store, options);
-  }
-  else if (changeType === "oneToOne"){
-    return DS.OneToOneChange.createChange(firstRecordReference, secondRecordReference, store, options);
-  }
-  else if (changeType === "manyToMany"){
-    return DS.ManyToManyChange.createChange(firstRecordReference, secondRecordReference, store, options);
-  }
-};
-
-/** @private */
-DS.OneToNoneChange.createChange = function(childReference, parentReference, store, options) {
-  var key = options.key;
-  var change = DS.RelationshipChange._createChange({
-      parentReference: parentReference,
-      childReference: childReference,
-      firstRecordReference: childReference,
-      store: store,
-      changeType: options.changeType,
-      firstRecordName: key,
-      firstRecordKind: "belongsTo"
-  });
-
-  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
-
-  return change;
-};
-
-/** @private */
-DS.ManyToNoneChange.createChange = function(childReference, parentReference, store, options) {
-  var key = options.key;
-  var change = DS.RelationshipChange._createChange({
-      parentReference: childReference,
-      childReference: parentReference,
-      secondRecordReference: childReference,
-      store: store,
-      changeType: options.changeType,
-      secondRecordName: options.key,
-      secondRecordKind: "hasMany"
-  });
-
-  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
-  return change;
-};
-
-
-/** @private */
-DS.ManyToManyChange.createChange = function(childReference, parentReference, store, options) {
-  // If the name of the belongsTo side of the relationship is specified,
-  // use that
-  // If the type of the parent is specified, look it up on the child's type
-  // definition.
-  var key = options.key;
-
-  var change = DS.RelationshipChange._createChange({
-      parentReference: parentReference,
-      childReference: childReference,
-      firstRecordReference: childReference,
-      secondRecordReference: parentReference,
-      firstRecordKind: "hasMany",
-      secondRecordKind: "hasMany",
-      store: store,
-      changeType: options.changeType,
-      firstRecordName:  key
-  });
-
-  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
-
-
-  return change;
-};
-
-/** @private */
-DS.OneToOneChange.createChange = function(childReference, parentReference, store, options) {
-  var key;
-
-  // If the name of the belongsTo side of the relationship is specified,
-  // use that
-  // If the type of the parent is specified, look it up on the child's type
-  // definition.
-  if (options.parentType) {
-    key = options.parentType.inverseFor(options.key).name;
-  } else if (options.key) {
-    key = options.key;
-  } else {
-    Ember.assert("You must pass either a parentType or belongsToName option to OneToManyChange.forChildAndParent", false);
-  }
-
-  var change = DS.RelationshipChange._createChange({
-      parentReference: parentReference,
-      childReference: childReference,
-      firstRecordReference: childReference,
-      secondRecordReference: parentReference,
-      firstRecordKind: "belongsTo",
-      secondRecordKind: "belongsTo",
-      store: store,
-      changeType: options.changeType,
-      firstRecordName:  key
-  });
-
-  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
-
-
-  return change;
-};
-
-DS.OneToOneChange.maintainInvariant = function(options, store, childReference, key){
-  if (options.changeType === "add" && store.recordIsMaterialized(childReference)) {
-    var child = store.recordForReference(childReference);
-    var oldParent = get(child, key);
-    if (oldParent){
-      var correspondingChange = DS.OneToOneChange.createChange(childReference, oldParent.get('reference'), store, {
-          parentType: options.parentType,
-          hasManyName: options.hasManyName,
-          changeType: "remove",
-          key: options.key
-        });
-      store.addRelationshipChangeFor(childReference, key, options.parentReference , null, correspondingChange);
-     correspondingChange.sync();
-    }
-  }
-};
-
-/** @private */
-DS.OneToManyChange.createChange = function(childReference, parentReference, store, options) {
-  var key;
-
-  // If the name of the belongsTo side of the relationship is specified,
-  // use that
-  // If the type of the parent is specified, look it up on the child's type
-  // definition.
-  if (options.parentType) {
-    key = options.parentType.inverseFor(options.key).name;
-    DS.OneToManyChange.maintainInvariant( options, store, childReference, key );
-  } else if (options.key) {
-    key = options.key;
-  } else {
-    Ember.assert("You must pass either a parentType or belongsToName option to OneToManyChange.forChildAndParent", false);
-  }
-
-  var change = DS.RelationshipChange._createChange({
-      parentReference: parentReference,
-      childReference: childReference,
-      firstRecordReference: childReference,
-      secondRecordReference: parentReference,
-      firstRecordKind: "belongsTo",
-      secondRecordKind: "hasMany",
-      store: store,
-      changeType: options.changeType,
-      firstRecordName:  key
-  });
-
-  store.addRelationshipChangeFor(childReference, key, parentReference, null, change);
-
-
-  return change;
-};
-
-
-DS.OneToManyChange.maintainInvariant = function(options, store, childReference, key){
-  var child = childReference.record;
-
-  if (options.changeType === "add" && child) {
-    var oldParent = get(child, key);
-    if (oldParent){
-      var correspondingChange = DS.OneToManyChange.createChange(childReference, oldParent.get('reference'), store, {
-          parentType: options.parentType,
-          hasManyName: options.hasManyName,
-          changeType: "remove",
-          key: options.key
-        });
-      store.addRelationshipChangeFor(childReference, key, options.parentReference , null, correspondingChange);
-      correspondingChange.sync();
-    }
-  }
-};
-
-DS.OneToManyChange.ensureSameTransaction = function(changes){
-  var records = Ember.A();
-  forEach(changes, function(change){
-    records.addObject(change.getSecondRecord());
-    records.addObject(change.getFirstRecord());
-  });
-
-  var transaction = DS.Transaction.ensureSameTransaction(records);
-  forEach(changes, function(change){
-    change.transaction = transaction;
- });
-};
-
-DS.RelationshipChange.prototype = {
-
-  getSecondRecordName: function() {
-    var name = this.secondRecordName, parent;
-
-    if (!name) {
-      parent = this.secondRecordReference;
-      if (!parent) { return; }
-
-      var childType = this.firstRecordReference.type;
-      var inverse = childType.inverseFor(this.firstRecordName);
-      this.secondRecordName = inverse.name;
-    }
-
-    return this.secondRecordName;
-  },
-
-  /**
-    Get the name of the relationship on the belongsTo side.
-
-    @returns {String}
-  */
-  getFirstRecordName: function() {
-    var name = this.firstRecordName;
-    return name;
-  },
-
-  /** @private */
-  destroy: function() {
-    var childReference = this.childReference,
-        belongsToName = this.getFirstRecordName(),
-        hasManyName = this.getSecondRecordName(),
-        store = this.store,
-        transaction;
-
-    store.removeRelationshipChangeFor(childReference, belongsToName, this.parentReference, hasManyName, this.changeType);
-
-    if (transaction = this.transaction) {
-      transaction.relationshipBecameClean(this);
-    }
-  },
-
-  /** @private */
-  getByReference: function(reference) {
-    var store = this.store;
-
-    // return null or undefined if the original reference was null or undefined
-    if (!reference) { return reference; }
-
-    if (reference.record) {
-      return reference.record;
-    }
-  },
-
-  getSecondRecord: function(){
-    return this.getByReference(this.secondRecordReference);
-  },
-
-  /** @private */
-  getFirstRecord: function() {
-    return this.getByReference(this.firstRecordReference);
-  },
-
-  /**
-    @private
-
-    Make sure that all three parts of the relationship change are part of
-    the same transaction. If any of the three records is clean and in the
-    default transaction, and the rest are in a different transaction, move
-    them all into that transaction.
-  */
-  ensureSameTransaction: function() {
-    var child = this.getFirstRecord(),
-      parentRecord = this.getSecondRecord();
-
-    var transaction = DS.Transaction.ensureSameTransaction([child, parentRecord]);
-
-    this.transaction = transaction;
-    return transaction;
-  },
-
-  callChangeEvents: function(){
-    var child = this.getFirstRecord(),
-        parentRecord = this.getSecondRecord();
-
-    var dirtySet = new Ember.OrderedSet();
-
-    // TODO: This implementation causes a race condition in key-value
-    // stores. The fix involves buffering changes that happen while
-    // a record is loading. A similar fix is required for other parts
-    // of ember-data, and should be done as new infrastructure, not
-    // a one-off hack. [tomhuda]
-    if (parentRecord && get(parentRecord, 'isLoaded')) {
-      this.store.recordHasManyDidChange(dirtySet, parentRecord, this);
-    }
-
-    if (child) {
-      this.store.recordBelongsToDidChange(dirtySet, child, this);
-    }
-
-    dirtySet.forEach(function(record) {
-      record.adapterDidDirty();
-    });
-  },
-
-  coalesce: function(){
-    var relationshipPairs = this.store.relationshipChangePairsFor(this.firstRecordReference);
-    forEach(relationshipPairs, function(pair){
-      var addedChange = pair["add"];
-      var removedChange = pair["remove"];
-      if(addedChange && removedChange) {
-        addedChange.destroy();
-        removedChange.destroy();
-      }
-    });
-  }
-};
-
-DS.RelationshipChangeAdd.prototype = Ember.create(DS.RelationshipChange.create({}));
-DS.RelationshipChangeRemove.prototype = Ember.create(DS.RelationshipChange.create({}));
-
-DS.RelationshipChangeAdd.prototype.changeType = "add";
-DS.RelationshipChangeAdd.prototype.sync = function() {
-  var secondRecordName = this.getSecondRecordName(),
-      firstRecordName = this.getFirstRecordName(),
-      firstRecord = this.getFirstRecord(),
-      secondRecord = this.getSecondRecord();
-
-  //Ember.assert("You specified a hasMany (" + hasManyName + ") on " + (!belongsToName && (newParent || oldParent || this.lastParent).constructor) + " but did not specify an inverse belongsTo on " + child.constructor, belongsToName);
-  //Ember.assert("You specified a belongsTo (" + belongsToName + ") on " + child.constructor + " but did not specify an inverse hasMany on " + (!hasManyName && (newParent || oldParent || this.lastParentRecord).constructor), hasManyName);
-
-  var transaction = this.ensureSameTransaction();
-  transaction.relationshipBecameDirty(this);
-
-  this.callChangeEvents();
-
-  if (secondRecord && firstRecord) {
-    if(this.secondRecordKind === "belongsTo"){
-      secondRecord.suspendRelationshipObservers(function(){
-        set(secondRecord, secondRecordName, firstRecord);
-      });
-
-     }
-     else if(this.secondRecordKind === "hasMany"){
-      secondRecord.suspendRelationshipObservers(function(){
-        get(secondRecord, secondRecordName).addObject(firstRecord);
-      });
-    }
-  }
-
-  if (firstRecord && secondRecord && get(firstRecord, firstRecordName) !== secondRecord) {
-    if(this.firstRecordKind === "belongsTo"){
-      firstRecord.suspendRelationshipObservers(function(){
-        set(firstRecord, firstRecordName, secondRecord);
-      });
-    }
-    else if(this.firstRecordKind === "hasMany"){
-      firstRecord.suspendRelationshipObservers(function(){
-        get(firstRecord, firstRecordName).addObject(secondRecord);
-      });
-    }
-  }
-
-  this.coalesce();
-};
-
-DS.RelationshipChangeRemove.prototype.changeType = "remove";
-DS.RelationshipChangeRemove.prototype.sync = function() {
-  var secondRecordName = this.getSecondRecordName(),
-      firstRecordName = this.getFirstRecordName(),
-      firstRecord = this.getFirstRecord(),
-      secondRecord = this.getSecondRecord();
-
-  //Ember.assert("You specified a hasMany (" + hasManyName + ") on " + (!belongsToName && (newParent || oldParent || this.lastParent).constructor) + " but did not specify an inverse belongsTo on " + child.constructor, belongsToName);
-  //Ember.assert("You specified a belongsTo (" + belongsToName + ") on " + child.constructor + " but did not specify an inverse hasMany on " + (!hasManyName && (newParent || oldParent || this.lastParentRecord).constructor), hasManyName);
-
-  var transaction = this.ensureSameTransaction(firstRecord, secondRecord, secondRecordName, firstRecordName);
-  transaction.relationshipBecameDirty(this);
-
-  this.callChangeEvents();
-
-  if (secondRecord && firstRecord) {
-    if(this.secondRecordKind === "belongsTo"){
-      secondRecord.suspendRelationshipObservers(function(){
-        set(secondRecord, secondRecordName, null);
-      });
-     }
-     else if(this.secondRecordKind === "hasMany"){
-       secondRecord.suspendRelationshipObservers(function(){
-        get(secondRecord, secondRecordName).removeObject(firstRecord);
-      });
-    }
-  }
-
-  if (firstRecord && get(firstRecord, firstRecordName)) {
-    if(this.firstRecordKind === "belongsTo"){
-      firstRecord.suspendRelationshipObservers(function(){
-        set(firstRecord, firstRecordName, null);
-      });
-     }
-     else if(this.firstRecordKind === "hasMany"){
-       firstRecord.suspendRelationshipObservers(function(){
-        get(firstRecord, firstRecordName).removeObject(secondRecord);
-      });
-    }
-  }
-
-  this.coalesce();
-};
-
-})();
-
-
-
-(function() {
 /**
   @module data
   @submodule data-relationships
@@ -45743,93 +45349,207 @@ DS.RelationshipChangeRemove.prototype.sync = function() {
 
 
 (function() {
-var set = Ember.set;
+var get = Ember.get, set = Ember.set;
+var once = Ember.run.once;
+var forEach = Ember.EnumerableUtils.forEach;
 
-/**
-  This code registers an injection for Ember.Application.
+DS.RecordArrayManager = Ember.Object.extend({
+  init: function() {
+    this.filteredRecordArrays = Ember.MapWithDefault.create({
+      defaultValue: function() { return []; }
+    });
 
-  If an Ember.js developer defines a subclass of DS.Store on their application,
-  this code will automatically instantiate it and make it available on the
-  router.
+    this.changedReferences = [];
+  },
 
-  Additionally, after an application's controllers have been injected, they will
-  each have the store made available to them.
+  referenceDidChange: function(reference) {
+    this.changedReferences.push(reference);
+    once(this, this.updateRecordArrays);
+  },
 
-  For example, imagine an Ember.js application with the following classes:
+  recordArraysForReference: function(reference) {
+    reference.recordArrays = reference.recordArrays || Ember.OrderedSet.create();
+    return reference.recordArrays;
+  },
 
-  App.Store = DS.Store.extend({
-    adapter: 'App.MyCustomAdapter'
-  });
+  /**
+    @private
 
-  App.PostsController = Ember.ArrayController.extend({
-    // ...
-  });
+    This method is invoked whenever data is loaded into the store
+    by the adapter or updated by the adapter, or when an attribute
+    changes on a record.
 
-  When the application is initialized, `App.Store` will automatically be
-  instantiated, and the instance of `App.PostsController` will have its `store`
-  property set to that instance.
+    It updates all filters that a record belongs to.
 
-  Note that this code will only be run if the `ember-application` package is
-  loaded. If Ember Data is being used in an environment other than a
-  typical application (e.g., node.js where only `ember-runtime` is available),
-  this code will be ignored.
-*/
+    To avoid thrashing, it only runs once per run loop per record.
 
-Ember.onLoad('Ember.Application', function(Application) {
-  if (Application.registerInjection) {
-    Application.registerInjection({
-      name: "store",
-      before: "controllers",
+    @param {Class} type
+    @param {Number|String} clientId
+  */
+  updateRecordArrays: function() {
+    forEach(this.changedReferences, function(reference) {
+      var type = reference.type,
+          recordArrays = this.filteredRecordArrays.get(type),
+          filter;
 
-      // If a store subclass is defined, like App.Store,
-      // instantiate it and inject it into the router.
-      injection: function(app, stateManager, property) {
-        if (!stateManager) { return; }
-        if (property === 'Store') {
-          set(stateManager, 'store', app[property].create());
+      forEach(recordArrays, function(array) {
+        filter = get(array, 'filterFunction');
+        this.updateRecordArray(array, filter, type, reference);
+      }, this);
+
+      // loop through all manyArrays containing an unloaded copy of this
+      // clientId and notify them that the record was loaded.
+      var manyArrays = reference.loadingRecordArrays;
+
+      if (manyArrays) {
+        for (var i=0, l=manyArrays.length; i<l; i++) {
+          manyArrays[i].loadedRecord();
+        }
+
+        reference.loadingRecordArrays = [];
+      }
+    }, this);
+
+    this.changedReferences = [];
+  },
+
+  /**
+    @private
+
+    Update an individual filter.
+
+    @param {DS.FilteredRecordArray} array
+    @param {Function} filter
+    @param {Class} type
+    @param {Number|String} clientId
+  */
+  updateRecordArray: function(array, filter, type, reference) {
+    var shouldBeInArray, record;
+
+    if (!filter) {
+      shouldBeInArray = true;
+    } else {
+      record = this.store.recordForReference(reference);
+      shouldBeInArray = filter(record);
+    }
+
+    var recordArrays = this.recordArraysForReference(reference);
+
+    if (shouldBeInArray) {
+      recordArrays.add(array);
+      array.addReference(reference);
+    } else if (!shouldBeInArray) {
+      recordArrays.remove(array);
+      array.removeReference(reference);
+    }
+  },
+
+  /**
+    @private
+
+    When a record is deleted, it is removed from all its
+    record arrays.
+
+    @param {DS.Model} record
+  */
+  remove: function(record) {
+    var reference = get(record, '_reference');
+    var recordArrays = reference.recordArrays || [];
+
+    recordArrays.forEach(function(array) {
+      array.removeReference(reference);
+    });
+  },
+
+  /**
+    @private
+
+    This method is invoked if the `filterFunction` property is
+    changed on a `DS.FilteredRecordArray`.
+
+    It essentially re-runs the filter from scratch. This same
+    method is invoked when the filter is created in th first place.
+  */
+  updateFilter: function(array, type, filter) {
+    var typeMap = this.store.typeMapFor(type),
+        references = typeMap.references,
+        reference, data, shouldFilter, record;
+
+    for (var i=0, l=references.length; i<l; i++) {
+      reference = references[i];
+      shouldFilter = false;
+
+      data = reference.data;
+
+      if (typeof data === 'object') {
+        if (record = reference.record) {
+          if (!get(record, 'isDeleted')) { shouldFilter = true; }
+        } else {
+          shouldFilter = true;
+        }
+
+        if (shouldFilter) {
+          this.updateRecordArray(array, filter, type, reference);
         }
       }
+    }
+  },
+
+  /**
+    @private
+
+    Create a `DS.ManyArray` for a type and list of record references, and index
+    the `ManyArray` under each reference. This allows us to efficiently remove
+    records from `ManyArray`s when they are deleted.
+
+    @param {Class} type
+    @param {Array} references
+
+    @return {DS.ManyArray}
+  */
+  createManyArray: function(type, references) {
+    var manyArray = DS.ManyArray.create({
+      type: type,
+      content: references,
+      store: this.store
     });
 
-    Application.registerInjection({
-      name: "giveStoreToControllers",
-      after: ['store','controllers'],
+    references.forEach(function(reference) {
+      var arrays = this.recordArraysForReference(reference);
+      arrays.add(manyArray);
+    }, this);
 
-      // For each controller, set its `store` property
-      // to the DS.Store instance we created above.
-      injection: function(app, stateManager, property) {
-        if (!stateManager) { return; }
-        if (/^[A-Z].*Controller$/.test(property)) {
-          var controllerName = property.charAt(0).toLowerCase() + property.substr(1);
-          var store = stateManager.get('store');
-          var controller = stateManager.get(controllerName);
-          if(!controller) { return; }
+    return manyArray;
+  },
 
-          controller.set('store', store);
-        }
-      }
-    });
-  } else if (Application.initializer) {
-    Application.initializer({
-      name: "store",
+  /**
+    @private
 
-      initialize: function(container, application) {
-        application.register('store:main', application.Store);
+    Register a RecordArray for a given type to be backed by
+    a filter function. This will cause the array to update
+    automatically when records of that type change attribute
+    values or states.
 
-        // Eagerly generate the store so defaultStore is populated.
-        // TODO: Do this in a finisher hook
-        container.lookup('store:main');
-      }
-    });
+    @param {DS.RecordArray} array
+    @param {Class} type
+    @param {Function} filter
+  */
+  registerFilteredRecordArray: function(array, type, filter) {
+    var recordArrays = this.filteredRecordArrays.get(type);
+    recordArrays.push(array);
 
-    Application.initializer({
-      name: "injectStore",
+    this.updateFilter(array, type, filter);
+  },
 
-      initialize: function(container, application) {
-        application.inject('controller', 'store', 'store:main');
-        application.inject('route', 'store', 'store:main');
-      }
-    });
+  // Internally, we maintain a map of all unloaded IDs requested by
+  // a ManyArray. As the adapter loads data into the store, the
+  // store notifies any interested ManyArrays. When the ManyArray's
+  // total number of loading records drops to zero, it becomes
+  // `isLoaded` and fires a `didLoad` event.
+  registerWaitingRecordArray: function(array, reference) {
+    var loadingRecordArrays = reference.loadingRecordArrays || [];
+    loadingRecordArrays.push(array);
+    reference.loadingRecordArrays = loadingRecordArrays;
   }
 });
 
@@ -46065,24 +45785,24 @@ DS.Serializer = Ember.Object.extend({
   extractHasMany: mustImplement('extractHasMany'),
   extractBelongsTo: mustImplement('extractBelongsTo'),
 
-  extractRecordRepresentation: function(loader, type, json, shouldSideload) {
+  extractRecordRepresentation: function(loader, type, data, shouldSideload) {
     var prematerialized = {}, reference;
 
     if (shouldSideload) {
-      reference = loader.sideload(type, json);
+      reference = loader.sideload(type, data);
     } else {
-      reference = loader.load(type, json);
+      reference = loader.load(type, data);
     }
 
     this.eachEmbeddedHasMany(type, function(name, relationship) {
-      var embeddedData = json[this.keyFor(relationship)];
+      var embeddedData = this.extractEmbeddedData(data, this.keyFor(relationship));
       if (!isNone(embeddedData)) {
         this.extractEmbeddedHasMany(loader, relationship, embeddedData, reference, prematerialized);
       }
     }, this);
 
     this.eachEmbeddedBelongsTo(type, function(name, relationship) {
-      var embeddedData = json[this.keyFor(relationship)];
+      var embeddedData = this.extractEmbeddedData(data, this.keyFor(relationship));
       if (!isNone(embeddedData)) {
         this.extractEmbeddedBelongsTo(loader, relationship, embeddedData, reference, prematerialized);
       }
@@ -46105,6 +45825,16 @@ DS.Serializer = Ember.Object.extend({
       var embeddedType = this.embeddedType(parent.type, relationship.key);
       if (embeddedType === 'always') {
         reference.parent = parent;
+      }
+
+      // If the embedded children have an inverse belongs-to, set the
+      // inverse to the current record in their prematerialized data.
+      var parentType = relationship.parentType,
+          inverse = parentType.inverseFor(relationship.key);
+
+      if (inverse) {
+        var inverseName = inverse.name;
+        reference.prematerialized[inverseName] = parent;
       }
 
       return reference;
@@ -46132,18 +45862,27 @@ DS.Serializer = Ember.Object.extend({
 
     The `extractEmbeddedType` hook is called with:
 
-    * the serialized representation being built
-    * the serialized id (after calling the `serializeId` hook)
+    * the relationship
+    * the serialized representation of the record
 
     By default, it returns the type of the relationship.
 
     @method extractEmbeddedType
     @param {Object} relationship an object representing the relationship
-    @param {any} data the serialized representation that is being built
+    @param {any} data the serialized representation of the record
   */
   extractEmbeddedType: function(relationship, data) {
     return relationship.type;
   },
+
+  /**
+    A hook you need to implement in order to extract
+    the data associated with an embedded record.
+
+    @param {any} data the serialized representation of the record
+    @param {String} key the key that represents the embedded record
+   */
+  extractEmbeddedData: mustImplement(),
 
   //.......................
   //. SERIALIZATION HOOKS
@@ -47120,7 +46859,7 @@ DS.Serializer = Ember.Object.extend({
     } else {
       return name;
     }
-  },
+  }
 });
 
 
@@ -47129,7 +46868,7 @@ DS.Serializer = Ember.Object.extend({
 
 
 (function() {
-var none = Ember.isNone, empty = Ember.isEmpty;
+var isNone = Ember.isNone, isEmpty = Ember.isEmpty;
 
 /**
   @module data
@@ -47146,21 +46885,21 @@ var none = Ember.isNone, empty = Ember.isEmpty;
 DS.JSONTransforms = {
   string: {
     deserialize: function(serialized) {
-      return none(serialized) ? null : String(serialized);
+      return isNone(serialized) ? null : String(serialized);
     },
 
     serialize: function(deserialized) {
-      return none(deserialized) ? null : String(deserialized);
+      return isNone(deserialized) ? null : String(deserialized);
     }
   },
 
   number: {
     deserialize: function(serialized) {
-      return empty(serialized) ? null : Number(serialized);
+      return isEmpty(serialized) ? null : Number(serialized);
     },
 
     serialize: function(deserialized) {
-      return empty(deserialized) ? null : Number(deserialized);
+      return isEmpty(deserialized) ? null : Number(deserialized);
     }
   },
 
@@ -47327,6 +47066,10 @@ DS.JSONSerializer = DS.Serializer.extend({
     } else {
       return null;
     }
+  },
+
+  extractEmbeddedData: function(hash, key) {
+    return hash[key];
   },
 
   extractHasMany: function(type, hash, key) {
@@ -47567,9 +47310,11 @@ DS.JSONSerializer = DS.Serializer.extend({
 
     @param {String} name the association name to convert into a key
 
-    @returns {String} the key
+    @return {String} the key
   */
-  keyForPolymorphicId: Ember.K,
+  keyForPolymorphicId: function(key){
+    return key;
+  },
 
   /**
     A hook you can use in your serializer subclass to customize
@@ -47577,17 +47322,19 @@ DS.JSONSerializer = DS.Serializer.extend({
 
     @param {String} name the association name to convert into a key
 
-    @returns {String} the key
+    @return {String} the key
   */
-  keyForPolymorphicType: Ember.K,
+  keyForPolymorphicType: function(key){
+    return this.keyForPolymorphicId(key) + '_type';
+  },
 
   /**
     A hook you can use in your serializer subclass to customize
     the key used to store the type of a record of an embedded polymorphic association.
 
-    By default, this method returns 'type'.
+    By default, this method return 'type'.
 
-    @returns {String} the key
+    @return {String} the key
   */
   keyForEmbeddedType: function() {
     return 'type';
@@ -47605,7 +47352,7 @@ DS.JSONSerializer = DS.Serializer.extend({
     `user_group`.
 
     @param {DS.Model subclass} type
-    @returns {String} name of the root element
+    @return {String} name of the root element
   */
   rootForType: function(type) {
     var typeString = type.toString();
@@ -47624,7 +47371,7 @@ DS.JSONSerializer = DS.Serializer.extend({
     The default root name for a particular sideloaded type.
 
     @param {DS.Model subclass} type
-    @returns {String} name of the root element
+    @return {String} name of the root element
   */
   defaultSideloadRootForType: function(type) {
     return this.pluralize(this.rootForType(type));
@@ -47660,7 +47407,7 @@ function loaderFor(store) {
     populateArray: Ember.K,
 
     sideload: function(type, data) {
-      return store.load(type, data);
+      return store.adapterForType(type).load(store, type, data);
     },
 
     sideloadMany: function(type, array) {
@@ -47781,7 +47528,7 @@ DS.Adapter = Ember.Object.extend(DS._Mappable, {
   */
   load: function(store, type, payload) {
     var loader = loaderFor(store);
-    get(this, 'serializer').extractRecordRepresentation(loader, type, payload);
+    return get(this, 'serializer').extractRecordRepresentation(loader, type, payload);
   },
 
   /**
@@ -48484,7 +48231,11 @@ DS.FixtureSerializer = DS.Serializer.extend({
   },
 
   extractBelongsTo: function(type, hash, key) {
-    return hash[key];
+    var val = hash[key];
+    if (val != null) {
+      val = val + '';
+    }
+    return val;
   },
 
   extractBelongsToPolymorphic: function(type, hash, key) {
@@ -48551,8 +48302,9 @@ DS.FixtureAdapter = DS.Adapter.extend({
     if (type.FIXTURES) {
       var fixtures = Ember.A(type.FIXTURES);
       return fixtures.map(function(fixture){
-        if(!fixture.id){
-          throw new Error(fmt('the id property must be defined for fixture %@', [dump(fixture)]));
+        var fixtureIdType = typeof fixture.id;
+        if(fixtureIdType !== "number" && fixtureIdType !== "string"){
+          throw new Error(fmt('the id property must be defined as a number or string for fixture %@', [dump(fixture)]));
         }
         fixture.id = fixture.id + '';
         return fixture;
@@ -48804,6 +48556,11 @@ DS.RESTSerializer = DS.JSONSerializer.extend({
 
 var get = Ember.get, set = Ember.set;
 
+function rejectionHandler(reason) {
+  Ember.Logger.error(reason, reason.message);
+  throw reason;
+}
+
 /**
   The REST adapter allows your store to communicate with an HTTP server by
   transmitting JSON via XHR. Most Ember.js apps that consume a JSON API
@@ -48876,7 +48633,7 @@ DS.RESTAdapter = DS.Adapter.extend({
   },
 
   shouldSave: function(record) {
-    var reference = get(record, 'reference');
+    var reference = get(record, '_reference');
 
     return !reference.parent;
   },
@@ -48903,7 +48660,7 @@ DS.RESTAdapter = DS.Adapter.extend({
       this._dirtyTree(dirtySet, embeddedRecord);
     }, this);
 
-    var reference = record.get('reference');
+    var reference = record.get('_reference');
 
     if (reference.parent) {
       var store = get(record, 'store');
@@ -48914,24 +48671,24 @@ DS.RESTAdapter = DS.Adapter.extend({
 
   createRecord: function(store, type, record) {
     var root = this.rootForType(type);
-
+    var adapter = this;
     var data = {};
+
     data[root] = this.serialize(record, { includeId: true });
 
-    this.ajax(this.buildURL(root), "POST", {
-      data: data,
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didCreateRecord(store, type, record, json);
-        });
-      },
-      error: function(xhr) {
-        this.didError(store, type, record, xhr);
-      }
-    });
+    return this.ajax(this.buildURL(root), "POST", {
+      data: data
+    }).then(function(json){
+      adapter.didCreateRecord(store, type, record, json);
+    }, function(xhr) {
+      adapter.didError(store, type, record, xhr);
+      throw xhr;
+    }).then(null, rejectionHandler);
   },
 
   createRecords: function(store, type, records) {
+    var adapter = this;
+
     if (get(this, 'bulkCommit') === false) {
       return this._super(store, type, records);
     }
@@ -48945,151 +48702,144 @@ DS.RESTAdapter = DS.Adapter.extend({
       data[plural].push(this.serialize(record, { includeId: true }));
     }, this);
 
-    this.ajax(this.buildURL(root), "POST", {
-      data: data,
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didCreateRecords(store, type, records, json);
-        });
-      }
-    });
+    return this.ajax(this.buildURL(root), "POST", {
+      data: data
+    }).then(function(json) {
+      adapter.didCreateRecords(store, type, records, json);
+    }).then(null, rejectionHandler);
   },
 
   updateRecord: function(store, type, record) {
-    var id = get(record, 'id');
-    var root = this.rootForType(type);
+    var id, root, adapter, data;
 
-    var data = {};
+    id = get(record, 'id');
+    root = this.rootForType(type);
+    adapter = this;
+
+    data = {};
     data[root] = this.serialize(record);
 
-    this.ajax(this.buildURL(root, id), "PUT", {
-      data: data,
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didUpdateRecord(store, type, record, json);
-        });
-      },
-      error: function(xhr) {
-        this.didError(store, type, record, xhr);
-      }
-    });
+    return this.ajax(this.buildURL(root, id), "PUT",{
+      data: data
+    }).then(function(json){
+      adapter.didUpdateRecord(store, type, record, json);
+    }, function(xhr) {
+      adapter.didError(store, type, record, xhr);
+      throw xhr;
+    }).then(null, rejectionHandler);
   },
 
   updateRecords: function(store, type, records) {
+    var root, plural, adapter, data;
+
     if (get(this, 'bulkCommit') === false) {
       return this._super(store, type, records);
     }
 
-    var root = this.rootForType(type),
-        plural = this.pluralize(root);
+    root = this.rootForType(type);
+    plural = this.pluralize(root);
+    adapter = this;
 
-    var data = {};
+    data = {};
+
     data[plural] = [];
+
     records.forEach(function(record) {
       data[plural].push(this.serialize(record, { includeId: true }));
     }, this);
 
-    this.ajax(this.buildURL(root, "bulk"), "PUT", {
-      data: data,
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didUpdateRecords(store, type, records, json);
-        });
-      }
-    });
+    return this.ajax(this.buildURL(root, "bulk"), "PUT", {
+      data: data
+    }).then(function(json) {
+      adapter.didUpdateRecords(store, type, records, json);
+    }).then(null, rejectionHandler);
   },
 
   deleteRecord: function(store, type, record) {
-    var id = get(record, 'id');
-    var root = this.rootForType(type);
+    var id, root, adapter;
 
-    this.ajax(this.buildURL(root, id), "DELETE", {
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didDeleteRecord(store, type, record, json);
-        });
-      },
-      error: function(xhr) {
-        this.didError(store, type, record, xhr);
-      }
-    });
+    id = get(record, 'id');
+    root = this.rootForType(type);
+    adapter = this;
+
+    return this.ajax(this.buildURL(root, id), "DELETE").then(function(json){
+      adapter.didDeleteRecord(store, type, record, json);
+    }, function(xhr){
+      adapter.didError(store, type, record, xhr);
+      throw xhr;
+    }).then(null, rejectionHandler);
   },
 
   deleteRecords: function(store, type, records) {
+    var root, plural, serializer, adapter, data;
+
     if (get(this, 'bulkCommit') === false) {
       return this._super(store, type, records);
     }
 
-    var root = this.rootForType(type),
-        plural = this.pluralize(root),
-        serializer = get(this, 'serializer');
+    root = this.rootForType(type);
+    plural = this.pluralize(root);
+    serializer = get(this, 'serializer');
+    adapter = this;
 
-    var data = {};
+    data = {};
+
     data[plural] = [];
     records.forEach(function(record) {
       data[plural].push(serializer.serializeId( get(record, 'id') ));
     });
 
-    this.ajax(this.buildURL(root, 'bulk'), "DELETE", {
-      data: data,
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didDeleteRecords(store, type, records, json);
-        });
-      }
-    });
+    return this.ajax(this.buildURL(root, 'bulk'), "DELETE", {
+      data: data
+    }).then(function(json){
+      adapter.didDeleteRecords(store, type, records, json);
+    }).then(null, rejectionHandler);
   },
 
   find: function(store, type, id) {
-    var root = this.rootForType(type);
+    var root = this.rootForType(type), adapter = this;
 
-    this.ajax(this.buildURL(root, id), "GET", {
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didFindRecord(store, type, json, id);
-        });
-      }
-    });
+    return this.ajax(this.buildURL(root, id), "GET").
+      then(function(json){
+        adapter.didFindRecord(store, type, json, id);
+    }).then(null, rejectionHandler);
   },
 
   findAll: function(store, type, since) {
-    var root = this.rootForType(type);
+    var root, adapter;
 
-    this.ajax(this.buildURL(root), "GET", {
-      data: this.sinceQuery(since),
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didFindAll(store, type, json);
-        });
-      }
-    });
+    root = this.rootForType(type);
+    adapter = this;
+
+    return this.ajax(this.buildURL(root), "GET",{
+      data: this.sinceQuery(since)
+    }).then(function(json) {
+      adapter.didFindAll(store, type, json);
+    }).then(null, rejectionHandler);
   },
 
   findQuery: function(store, type, query, recordArray) {
-    var root = this.rootForType(type);
+    var root = this.rootForType(type),
+    adapter = this;
 
-    this.ajax(this.buildURL(root), "GET", {
-      data: query,
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didFindQuery(store, type, json, recordArray);
-        });
-      }
-    });
+    return this.ajax(this.buildURL(root), "GET", {
+      data: query
+    }).then(function(json){
+      adapter.didFindQuery(store, type, json, recordArray);
+    }).then(null, rejectionHandler);
   },
 
   findMany: function(store, type, ids, owner) {
-    var root = this.rootForType(type);
+    var root = this.rootForType(type),
+    adapter = this;
+
     ids = this.serializeIds(ids);
 
-    this.ajax(this.buildURL(root), "GET", {
-      data: {ids: ids},
-      success: function(json) {
-        Ember.run(this, function(){
-          this.didFindMany(store, type, json);
-        });
-      }
-    });
+    return this.ajax(this.buildURL(root), "GET", {
+      data: {ids: ids}
+    }).then(function(json) {
+      adapter.didFindMany(store, type, json);
+    }).then(null, rejectionHandler);
   },
 
   /**
@@ -49097,7 +48847,7 @@ DS.RESTAdapter = DS.Adapter.extend({
 
     This method serializes a list of IDs using `serializeId`
 
-    @returns {Array} an array of serialized IDs
+    @return {Array} an array of serialized IDs
   */
   serializeIds: function(ids) {
     var serializer = get(this, 'serializer');
@@ -49120,17 +48870,30 @@ DS.RESTAdapter = DS.Adapter.extend({
   },
 
   ajax: function(url, type, hash) {
-    hash.url = url;
-    hash.type = type;
-    hash.dataType = 'json';
-    hash.contentType = 'application/json; charset=utf-8';
-    hash.context = this;
+    var adapter = this;
 
-    if (hash.data && type !== 'GET') {
-      hash.data = JSON.stringify(hash.data);
-    }
+    return new Ember.RSVP.Promise(function(resolve, reject) {
+      hash = hash || {};
+      hash.url = url;
+      hash.type = type;
+      hash.dataType = 'json';
+      hash.context = adapter;
 
-    jQuery.ajax(hash);
+      if (hash.data && type !== 'GET') {
+        hash.contentType = 'application/json; charset=utf-8';
+        hash.data = JSON.stringify(hash.data);
+      }
+
+      hash.success = function(json) {
+        Ember.run(null, resolve, json);
+      };
+
+      hash.error = function(jqXHR, textStatus, errorThrown) {
+        Ember.run(null, reject, errorThrown);
+      };
+
+      jQuery.ajax(hash);
+    });
   },
 
   url: "",
@@ -49170,310 +48933,6 @@ DS.RESTAdapter = DS.Adapter.extend({
     return since ? query : null;
   }
 });
-
-
-})();
-
-
-
-(function() {
-DS.ArrayLoader = function(store, type, queryArray) {
-  return function(array) {
-    var json;
-
-    if (array instanceof DS.ArrayProcessor) {
-      json = array.array;
-    } else {
-      json = array;
-    }
-
-    var references = json.map(function(object) {
-      return store.load(type, object);
-    });
-
-    queryArray.load(references);
-  };
-};
-
-})();
-
-
-
-(function() {
-DS.HasManyLoader = function (store, record, relationship) {
-  return function(array) {
-    var json;
-
-    if (array instanceof DS.ArrayProcessor) {
-      json = array.array;
-    } else {
-      json = array;
-    }
-
-    var ids = json.map(function(obj) { return obj.id; });
-
-    store.loadMany(relationship.type, json);
-    store.loadHasMany(record, relationship.key, ids);
-  };
-};
-
-})();
-
-
-
-(function() {
-DS.ObjectLoader = function(store, type) {
-  return function(object) {
-    var json;
-
-    if (object instanceof DS.DataProcessor) {
-      json = object.json;
-    } else {
-      json = object;
-    }
-
-    store.load(type, json);
-  };
-};
-
-})();
-
-
-
-(function() {
-
-})();
-
-
-
-(function() {
-var normalizer = requireModule('json-normalizer'),
-    camelizeKeys = normalizer.camelizeKeys;
-
-function ArrayProcessor(array) {
-  this.array = array;
-}
-
-ArrayProcessor.prototype = {
-  constructor: ArrayProcessor,
-
-  camelizeKeys: function() {
-    var array = this.array;
-    for (var i=0, l=array.length; i<l; i++) {
-      array[i] = camelizeKeys(array[i]);
-    }
-
-    return this;
-  },
-
-  munge: function(callback, binding) {
-    var array = this.array;
-    for (var i=0, l=array.length; i<l; i++) {
-      callback.call(binding, array[i]);
-    }
-
-    return this;
-  }
-};
-
-DS.ArrayProcessor = ArrayProcessor;
-
-})();
-
-
-
-(function() {
-var normalizer = requireModule('json-normalizer'),
-    Processor = normalizer.Processor;
-
-function DataProcessor() {
-  Processor.apply(this, arguments);
-}
-
-DataProcessor.prototype = Ember.create(Processor.prototype);
-
-Ember.merge(DataProcessor.prototype, {
-  munge: function(callback, binding) {
-    callback.call(binding, this.json);
-    return this;
-  },
-
-  applyTransforms: Ember.K
-});
-
-DS.DataProcessor = DataProcessor;
-
-})();
-
-
-
-(function() {
-
-})();
-
-
-
-(function() {
-/**
-  @module data
-  @submodule data-adapters
-*/
-
-var passthruTransform = {
-  serialize: function(value) { return value; },
-  deserialize: function(value) { return value; }
-};
-
-var defaultTransforms = {
-  string: passthruTransform,
-  boolean: passthruTransform,
-  number: passthruTransform
-};
-
-
-var capitalize = Ember.String.capitalize;
-var transforms = {};
-
-function registerTransform(name, transforms) {
-  transforms[name] = transforms;
-}
-
-function clearTransforms() {
-  transforms = {};
-}
-
-var registeredTransforms = {};
-
-DS.registerTransforms = function(kind, object) {
-  registeredTransforms[kind] = object;
-};
-
-DS.clearTransforms = function() {
-  registeredTransforms = {};
-};
-
-DS.clearTransforms();
-
-DS.process = function(json) {
-  if (Ember.typeOf(json) === 'array') {
-    return new DS.ArrayProcessor(json);
-  } else {
-    return new DS.DataProcessor(json);
-  }
-};
-
-/**
-  @class BasicAdapter
-  @constructor
-  @namespace DS
-  @extends DS.Adapter
-**/
-function didSave(store, record) {
-  return function(data) {
-    store.didSaveRecord(record, data);
-  };
-}
-
-var PassthruSerializer = DS.Serializer.extend({
-  extractId: function(type, data) {
-    return data.id + '';
-  },
-
-  extractAttribute: function(type, data, name) {
-    return data[name];
-  },
-
-  extractHasMany: function(type, data, name) {
-    return data[name];
-  },
-
-  extractBelongsTo: function(type, data, name) {
-    return data[name];
-  },
-
-  deserializeValue: function(value) {
-    return value;
-  },
-
-  serializeValue: function(value) {
-    return value;
-  }
-});
-
-/**
-  @class BasicAdapter
-  @constructor
-  @namespace DS
-  @extends DS.Adapter
-**/
-DS.BasicAdapter = DS.Adapter.extend({
-  serializer: PassthruSerializer,
-
-  find: function(store, type, id) {
-    var sync = type.sync;
-
-    Ember.assert("You are trying to use the BasicAdapter to find id '" + id + "' of " + type + " but " + type + ".sync was not found", sync);
-    Ember.assert("The sync code on " + type + " does not implement find(), but you are trying to find id '" + id + "'.", sync.find);
-
-    sync.find(id, DS.ObjectLoader(store, type));
-  },
-
-  findQuery: function(store, type, query, recordArray) {
-    var sync = type.sync;
-
-    Ember.assert("You are trying to use the BasicAdapter to query " + type + " but " + type + ".sync was not found", sync);
-    Ember.assert("The sync code on " + type + " does not implement query(), but you are trying to query " + type + ".", sync.query);
-
-    sync.query(query, DS.ArrayLoader(store, type, recordArray));
-  },
-
-  findHasMany: function(store, record, relationship, data) {
-    var name = capitalize(relationship.key),
-        sync = record.constructor.sync,
-        load = DS.HasManyLoader(store, record, relationship);
-
-    Ember.assert("You are trying to use the BasicAdapter to query " + record.constructor + " but " + record.constructor + ".sync was not found", sync);
-
-    var options = {
-      relationship: relationship.key,
-      data: data
-    };
-
-    if (sync['find'+name]) {
-      sync['find' + name](record, options, load);
-    } else if (sync.findHasMany) {
-      sync.findHasMany(record, options, load);
-    } else {
-      Ember.assert("You are trying to use the BasicAdapter to find the " + relationship.key + " has-many relationship, but " + record.constructor + ".sync did not implement findHasMany or find" + name + ".", false);
-    }
-  },
-
-  createRecord: function(store, type, record) {
-    var sync = type.sync;
-
-    Ember.assert("You are trying to use the BasicAdapter to query " + type + " but " + type + ".sync was not found", sync);
-    Ember.assert("The sync code on " + type + " does not implement createRecord(), but you are trying to create a " + type + " record", sync.createRecord);
-
-    sync.createRecord(record, didSave(store, record));
-  },
-
-  updateRecord: function(store, type, record) {
-    var sync = type.sync;
-    Ember.assert("You are trying to use the BasicAdapter to query " + type + " but " + type + ".sync was not found", sync);
-    Ember.assert("The sync code on " + type + " does not implement updateRecord(), but you are trying to update a " + type + " record", sync.updateRecord);
-
-    sync.updateRecord(record, didSave(store, record));
-  },
-
-  deleteRecord: function(store, type, record) {
-    var sync = type.sync;
-    Ember.assert("You are trying to use the BasicAdapter to query " + type + " but " + type + ".sync was not found", sync);
-    Ember.assert("The sync code on " + type + " does not implement deleteRecord(), but you are trying to delete a " + type + " record", sync.deleteRecord);
-
-    sync.deleteRecord(record, didSave(store, record));
-  }
-});
-
 
 })();
 
@@ -49523,7 +48982,6 @@ DS.BasicAdapter = DS.Adapter.extend({
 
 
 })();
-
 // moment.js
 // version : 2.0.0
 // author : Tim Wood
@@ -65775,292 +65233,112 @@ $.widget( "ui.tooltip", {
 
 }( jQuery ) );
 
-/*
- Highcharts JS v2.3.5 (2012-12-19)
+// Adds a dollar sign and appropriate commas to a provided number.
+Ember.Handlebars.registerBoundHelper('formatCurrency', function(value) {
+	value += '';
+	// do not format empty values.
+	if(!value) return '';
 
- (c) 2009-2012 Torstein Hønsi
+	//
+	var x = value.split('.');
+	var x1 = x[0];
+	var x2 = x.length > 1 ? '.' + x[1] : '';
+	var rgx = /(\d+)(\d{3})/;
+	while (rgx.test(x1)) {
+		x1 = x1.replace(rgx, '$1' + ',' + '$2');
+	}
+	return '$'+ x1 + x2;
+});
 
- License: www.highcharts.com/license
+// Converts a given string to all upper case characters
+Ember.Handlebars.registerBoundHelper('toUpperCase', function(value) {
+	return String(value).toUpperCase();
+});
+
+/**
+ * EMBER DEBUGGING APPROACHES
+ * source: http://www.akshay.cc/blog/2013-02-22-debugging-ember-js-and-ember-data.html
+ *
+ * Log Object Bindings:
+ * Ember.LOG_BINDINGS = true;
+ *
+ * View All Registered Route:
+ * Ember.keys(App.Router.router.recognizer.names);
+ *
+ * Log State Transitions:
+ * record.stateManager.get('currentPath')
+ *
+ * View Registered Temlates:
+ * Ember.keys(Ember.TEMPLATES)
+ *
+ * View an instance of something from the container:
+ * App.__container__.lookup("controller:posts")
+ * App.__container__.lookup("route:application")
+ *
+ * View ember-data's identity map:
+ * App.__container__.lookup('store:main').recordCache # all records in memory
+ * App.__container__.lookup('store:main').recordCache[2].get('data.attributes') #attributes
+ * App.__container__.lookup('store:main').recordCache[2].get('comments') #loaded associations
+ *
+ * See all observers for a object, key:
+ * Ember.observersFor(comments, keyName);
+ *
+ * Dealing with deprecations:
+ * Ember.ENV.RAISE_ON_DEPRECATION = true
+ * Ember.LOG_STACKTRACE_ON_DEPRECATION = true
+ *
+ *
+ * Handlebars:
+ * {{debugger}}
+ * {{log record}}
+ *
+ * Implement a Ember.onerror hook to log all errors in production:
+ * Ember.onerror = function(error) {
+ *  Em.$.ajax('/error-notification', 'POST', {
+ *     stack: error.stack,
+ *    otherInformation: 'exception message'
+ *  });
+ * }
+ *
+ * Use ember extension when its ready:
+ * https://github.com/tildeio/ember-extension.git
+ */
+
+// Application
+window.App = Ember.Application.create({
+	LOG_TRANSITIONS: true
+});
+/**
+* Application Router
+*
+* @class Router
 */
-(function(){function x(a,b){var c;a||(a={});for(c in b)a[c]=b[c];return a}function ia(){for(var a=0,b=arguments,c=b.length,d={};a<c;a++)d[b[a++]]=b[a];return d}function z(a,b){return parseInt(a,b||10)}function ja(a){return typeof a==="string"}function Y(a){return typeof a==="object"}function Ia(a){return Object.prototype.toString.call(a)==="[object Array]"}function Da(a){return typeof a==="number"}function ka(a){return K.log(a)/K.LN10}function aa(a){return K.pow(10,a)}function ta(a,b){for(var c=a.length;c--;)if(a[c]===
-b){a.splice(c,1);break}}function r(a){return a!==A&&a!==null}function w(a,b,c){var d,e;if(ja(b))r(c)?a.setAttribute(b,c):a&&a.getAttribute&&(e=a.getAttribute(b));else if(r(b)&&Y(b))for(d in b)a.setAttribute(d,b[d]);return e}function la(a){return Ia(a)?a:[a]}function n(){var a=arguments,b,c,d=a.length;for(b=0;b<d;b++)if(c=a[b],typeof c!=="undefined"&&c!==null)return c}function I(a,b){if(Ea&&b&&b.opacity!==A)b.filter="alpha(opacity="+b.opacity*100+")";x(a.style,b)}function T(a,b,c,d,e){a=C.createElement(a);
-b&&x(a,b);e&&I(a,{padding:0,border:Q,margin:0});c&&I(a,c);d&&d.appendChild(a);return a}function ba(a,b){var c=function(){};c.prototype=new a;x(c.prototype,b);return c}function Ja(a,b,c,d){var e=N.lang,f=a;b===-1?(b=(a||0).toString(),a=b.indexOf(".")>-1?b.split(".")[1].length:0):a=isNaN(b=M(b))?2:b;var b=a,c=c===void 0?e.decimalPoint:c,d=d===void 0?e.thousandsSep:d,e=f<0?"-":"",a=String(z(f=M(+f||0).toFixed(b))),g=a.length>3?a.length%3:0;return e+(g?a.substr(0,g)+d:"")+a.substr(g).replace(/(\d{3})(?=\d)/g,
-"$1"+d)+(b?c+M(f-a).toFixed(b).slice(2):"")}function ua(a,b){return Array((b||2)+1-String(a).length).join(0)+a}function hb(a,b,c,d){var e,c=n(c,1);e=a/c;b||(b=[1,2,2.5,5,10],d&&d.allowDecimals===!1&&(c===1?b=[1,2,5,10]:c<=0.1&&(b=[1/c])));for(d=0;d<b.length;d++)if(a=b[d],e<=(b[d]+(b[d+1]||b[d]))/2)break;a*=c;return a}function Ab(a,b){var c=b||[[Bb,[1,2,5,10,20,25,50,100,200,500]],[ib,[1,2,5,10,15,30]],[Va,[1,2,5,10,15,30]],[Ka,[1,2,3,4,6,8,12]],[ma,[1,2]],[Wa,[1,2]],[La,[1,2,3,4,6]],[va,null]],d=
-c[c.length-1],e=D[d[0]],f=d[1],g;for(g=0;g<c.length;g++)if(d=c[g],e=D[d[0]],f=d[1],c[g+1]&&a<=(e*f[f.length-1]+D[c[g+1][0]])/2)break;e===D[va]&&a<5*e&&(f=[1,2,5]);e===D[va]&&a<5*e&&(f=[1,2,5]);c=hb(a/e,f);return{unitRange:e,count:c,unitName:d[0]}}function Cb(a,b,c,d){var e=[],f={},g=N.global.useUTC,h,i=new Date(b),j=a.unitRange,k=a.count;if(r(b)){j>=D[ib]&&(i.setMilliseconds(0),i.setSeconds(j>=D[Va]?0:k*U(i.getSeconds()/k)));if(j>=D[Va])i[Db](j>=D[Ka]?0:k*U(i[jb]()/k));if(j>=D[Ka])i[Eb](j>=D[ma]?
-0:k*U(i[kb]()/k));if(j>=D[ma])i[lb](j>=D[La]?1:k*U(i[Ma]()/k));j>=D[La]&&(i[Fb](j>=D[va]?0:k*U(i[Xa]()/k)),h=i[Ya]());j>=D[va]&&(h-=h%k,i[Gb](h));if(j===D[Wa])i[lb](i[Ma]()-i[mb]()+n(d,1));b=1;h=i[Ya]();for(var d=i.getTime(),l=i[Xa](),m=i[Ma](),i=g?0:(864E5+i.getTimezoneOffset()*6E4)%864E5;d<c;)e.push(d),j===D[va]?d=Za(h+b*k,0):j===D[La]?d=Za(h,l+b*k):!g&&(j===D[ma]||j===D[Wa])?d=Za(h,l,m+b*k*(j===D[ma]?1:7)):(d+=j*k,j<=D[Ka]&&d%D[ma]===i&&(f[d]=ma)),b++;e.push(d)}e.info=x(a,{higherRanks:f,totalRange:j*
-k});return e}function Hb(){this.symbol=this.color=0}function Ib(a,b){var c=a.length,d,e;for(e=0;e<c;e++)a[e].ss_i=e;a.sort(function(a,c){d=b(a,c);return d===0?a.ss_i-c.ss_i:d});for(e=0;e<c;e++)delete a[e].ss_i}function Fa(a){for(var b=a.length,c=a[0];b--;)a[b]<c&&(c=a[b]);return c}function wa(a){for(var b=a.length,c=a[0];b--;)a[b]>c&&(c=a[b]);return c}function Ga(a,b){for(var c in a)a[c]&&a[c]!==b&&a[c].destroy&&a[c].destroy(),delete a[c]}function Na(a){$a||($a=T(ga));a&&$a.appendChild(a);$a.innerHTML=
-""}function Oa(a,b){var c="Highcharts error #"+a+": www.highcharts.com/errors/"+a;if(b)throw c;else L.console&&console.log(c)}function da(a){return parseFloat(a.toPrecision(14))}function xa(a,b){Pa=n(a,b.animation)}function Jb(){var a=N.global.useUTC,b=a?"getUTC":"get",c=a?"setUTC":"set";Za=a?Date.UTC:function(a,b,c,g,h,i){return(new Date(a,b,n(c,1),n(g,0),n(h,0),n(i,0))).getTime()};jb=b+"Minutes";kb=b+"Hours";mb=b+"Day";Ma=b+"Date";Xa=b+"Month";Ya=b+"FullYear";Db=c+"Minutes";Eb=c+"Hours";lb=c+"Date";
-Fb=c+"Month";Gb=c+"FullYear"}function ya(){}function Qa(a,b,c){this.axis=a;this.pos=b;this.type=c||"";this.isNew=!0;c||this.addLabel()}function nb(a,b){this.axis=a;if(b)this.options=b,this.id=b.id;return this}function Kb(a,b,c,d,e,f){var g=a.chart.inverted;this.axis=a;this.isNegative=c;this.options=b;this.x=d;this.stack=e;this.percent=f==="percent";this.alignOptions={align:b.align||(g?c?"left":"right":"center"),verticalAlign:b.verticalAlign||(g?"middle":c?"bottom":"top"),y:n(b.y,g?4:c?14:-6),x:n(b.x,
-g?c?-6:6:0)};this.textAlign=b.textAlign||(g?c?"right":"left":"center")}function ob(){this.init.apply(this,arguments)}function pb(a,b){var c=b.borderWidth,d=b.style,e=z(d.padding);this.chart=a;this.options=b;this.crosshairs=[];this.now={x:0,y:0};this.isHidden=!0;this.label=a.renderer.label("",0,0,b.shape,null,null,b.useHTML,null,"tooltip").attr({padding:e,fill:b.backgroundColor,"stroke-width":c,r:b.borderRadius,zIndex:8}).css(d).css({padding:0}).hide().add();V||this.label.shadow(b.shadow);this.shared=
-b.shared}function qb(a,b){var c=V?"":b.chart.zoomType;this.zoomX=/x/.test(c);this.zoomY=/y/.test(c);this.options=b;this.chart=a;this.init(a,b.tooltip)}function rb(a){this.init(a)}function sb(){this.init.apply(this,arguments)}var A,C=document,L=window,K=Math,u=K.round,U=K.floor,za=K.ceil,s=K.max,O=K.min,M=K.abs,W=K.cos,Z=K.sin,Aa=K.PI,ab=Aa*2/360,na=navigator.userAgent,Lb=L.opera,Ea=/msie/i.test(na)&&!Lb,Ra=C.documentMode===8,bb=/AppleWebKit/.test(na),cb=/Firefox/.test(na),Mb=/(Mobile|Android|Windows Phone)/.test(na),
-oa="http://www.w3.org/2000/svg",ca=!!C.createElementNS&&!!C.createElementNS(oa,"svg").createSVGRect,Sb=cb&&parseInt(na.split("Firefox/")[1],10)<4,V=!ca&&!Ea&&!!C.createElement("canvas").getContext,Sa,Ba=C.documentElement.ontouchstart!==A,Nb={},tb=0,$a,N,db,Pa,ub,D,pa=function(){},Ha=[],ga="div",Q="none",vb="rgba(192,192,192,"+(ca?1.0E-4:0.002)+")",Bb="millisecond",ib="second",Va="minute",Ka="hour",ma="day",Wa="week",La="month",va="year",wb="stroke-width",Za,jb,kb,mb,Ma,Xa,Ya,Db,Eb,lb,Fb,Gb,$={};L.Highcharts=
-{};db=function(a,b,c){if(!r(b)||isNaN(b))return"Invalid date";var a=n(a,"%Y-%m-%d %H:%M:%S"),d=new Date(b),e,f=d[kb](),g=d[mb](),h=d[Ma](),i=d[Xa](),j=d[Ya](),k=N.lang,l=k.weekdays,b={a:l[g].substr(0,3),A:l[g],d:ua(h),e:h,b:k.shortMonths[i],B:k.months[i],m:ua(i+1),y:j.toString().substr(2,2),Y:j,H:ua(f),I:ua(f%12||12),l:f%12||12,M:ua(d[jb]()),p:f<12?"AM":"PM",P:f<12?"am":"pm",S:ua(d.getSeconds()),L:ua(u(b%1E3),3)};for(e in b)for(;a.indexOf("%"+e)!==-1;)a=a.replace("%"+e,b[e]);return c?a.substr(0,1).toUpperCase()+
-a.substr(1):a};Hb.prototype={wrapColor:function(a){if(this.color>=a)this.color=0},wrapSymbol:function(a){if(this.symbol>=a)this.symbol=0}};D=ia(Bb,1,ib,1E3,Va,6E4,Ka,36E5,ma,864E5,Wa,6048E5,La,26784E5,va,31556952E3);ub={init:function(a,b,c){var b=b||"",d=a.shift,e=b.indexOf("C")>-1,f=e?7:3,g,b=b.split(" "),c=[].concat(c),h,i,j=function(a){for(g=a.length;g--;)a[g]==="M"&&a.splice(g+1,0,a[g+1],a[g+2],a[g+1],a[g+2])};e&&(j(b),j(c));a.isArea&&(h=b.splice(b.length-6,6),i=c.splice(c.length-6,6));if(d<=
-c.length/f)for(;d--;)c=[].concat(c).splice(0,f).concat(c);a.shift=0;if(b.length)for(a=c.length;b.length<a;)d=[].concat(b).splice(b.length-f,f),e&&(d[f-6]=d[f-2],d[f-5]=d[f-1]),b=b.concat(d);h&&(b=b.concat(h),c=c.concat(i));return[b,c]},step:function(a,b,c,d){var e=[],f=a.length;if(c===1)e=d;else if(f===b.length&&c<1)for(;f--;)d=parseFloat(a[f]),e[f]=isNaN(d)?a[f]:c*parseFloat(b[f]-d)+d;else e=b;return e}};(function(a){L.HighchartsAdapter=L.HighchartsAdapter||a&&{init:function(b){var c=a.fx,d=c.step,
-e,f=a.Tween,g=f&&f.propHooks;a.extend(a.easing,{easeOutQuad:function(a,b,c,d,e){return-d*(b/=e)*(b-2)+c}});a.each(["cur","_default","width","height"],function(a,b){var e=d,k,l;b==="cur"?e=c.prototype:b==="_default"&&f&&(e=g[b],b="set");(k=e[b])&&(e[b]=function(c){c=a?c:this;l=c.elem;return l.attr?l.attr(c.prop,b==="cur"?A:c.now):k.apply(this,arguments)})});e=function(a){var c=a.elem,d;if(!a.started)d=b.init(c,c.d,c.toD),a.start=d[0],a.end=d[1],a.started=!0;c.attr("d",b.step(a.start,a.end,a.pos,c.toD))};
-f?g.d={set:e}:d.d=e;this.each=Array.prototype.forEach?function(a,b){return Array.prototype.forEach.call(a,b)}:function(a,b){for(var c=0,d=a.length;c<d;c++)if(b.call(a[c],a[c],c,a)===!1)return c}},getScript:a.getScript,inArray:a.inArray,adapterRun:function(b,c){return a(b)[c]()},grep:a.grep,map:function(a,c){for(var d=[],e=0,f=a.length;e<f;e++)d[e]=c.call(a[e],a[e],e,a);return d},merge:function(){var b=arguments;return a.extend(!0,null,b[0],b[1],b[2],b[3])},offset:function(b){return a(b).offset()},
-addEvent:function(b,c,d){a(b).bind(c,d)},removeEvent:function(b,c,d){var e=C.removeEventListener?"removeEventListener":"detachEvent";C[e]&&!b[e]&&(b[e]=function(){});a(b).unbind(c,d)},fireEvent:function(b,c,d,e){var f=a.Event(c),g="detached"+c,h;!Ea&&d&&(delete d.layerX,delete d.layerY);x(f,d);b[c]&&(b[g]=b[c],b[c]=null);a.each(["preventDefault","stopPropagation"],function(a,b){var c=f[b];f[b]=function(){try{c.call(f)}catch(a){b==="preventDefault"&&(h=!0)}}});a(b).trigger(f);b[g]&&(b[c]=b[g],b[g]=
-null);e&&!f.isDefaultPrevented()&&!h&&e(f)},washMouseEvent:function(a){var c=a.originalEvent||a;if(c.pageX===A)c.pageX=a.pageX,c.pageY=a.pageY;return c},animate:function(b,c,d){var e=a(b);if(c.d)b.toD=c.d,c.d=1;e.stop();e.animate(c,d)},stop:function(b){a(b).stop()}}})(L.jQuery);var ea=L.HighchartsAdapter,G=ea||{};ea&&ea.init.call(ea,ub);var eb=G.adapterRun,Tb=G.getScript,Ub=G.inArray,o=G.each,Ob=G.grep,Vb=G.offset,Ta=G.map,B=G.merge,J=G.addEvent,R=G.removeEvent,F=G.fireEvent,Pb=G.washMouseEvent,xb=
-G.animate,fb=G.stop,G={enabled:!0,align:"center",x:0,y:15,style:{color:"#666",fontSize:"11px",lineHeight:"14px"}};N={colors:"#4572A7,#AA4643,#89A54E,#80699B,#3D96AE,#DB843D,#92A8CD,#A47D7C,#B5CA92".split(","),symbols:["circle","diamond","square","triangle","triangle-down"],lang:{loading:"Loading...",months:"January,February,March,April,May,June,July,August,September,October,November,December".split(","),shortMonths:"Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(","),weekdays:"Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday".split(","),
-decimalPoint:".",numericSymbols:"k,M,G,T,P,E".split(","),resetZoom:"Reset zoom",resetZoomTitle:"Reset zoom level 1:1",thousandsSep:","},global:{useUTC:!0,canvasToolsURL:"http://code.highcharts.com/2.3.5/modules/canvas-tools.js",VMLRadialGradientURL:"http://code.highcharts.com/2.3.5/gfx/vml-radial-gradient.png"},chart:{borderColor:"#4572A7",borderRadius:5,defaultSeriesType:"line",ignoreHiddenSeries:!0,spacingTop:10,spacingRight:10,spacingBottom:15,spacingLeft:10,style:{fontFamily:'"Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif',
-fontSize:"12px"},backgroundColor:"#FFFFFF",plotBorderColor:"#C0C0C0",resetZoomButton:{theme:{zIndex:20},position:{align:"right",x:-10,y:10}}},title:{text:"Chart title",align:"center",y:15,style:{color:"#3E576F",fontSize:"16px"}},subtitle:{text:"",align:"center",y:30,style:{color:"#6D869F"}},plotOptions:{line:{allowPointSelect:!1,showCheckbox:!1,animation:{duration:1E3},events:{},lineWidth:2,shadow:!0,marker:{enabled:!0,lineWidth:0,radius:4,lineColor:"#FFFFFF",states:{hover:{enabled:!0},select:{fillColor:"#FFFFFF",
-lineColor:"#000000",lineWidth:2}}},point:{events:{}},dataLabels:B(G,{enabled:!1,formatter:function(){return this.y},verticalAlign:"bottom",y:0}),cropThreshold:300,pointRange:0,showInLegend:!0,states:{hover:{marker:{}},select:{marker:{}}},stickyTracking:!0}},labels:{style:{position:"absolute",color:"#3E576F"}},legend:{enabled:!0,align:"center",layout:"horizontal",labelFormatter:function(){return this.name},borderWidth:1,borderColor:"#909090",borderRadius:5,navigation:{activeColor:"#3E576F",inactiveColor:"#CCC"},
-shadow:!1,itemStyle:{cursor:"pointer",color:"#3E576F",fontSize:"12px"},itemHoverStyle:{color:"#000"},itemHiddenStyle:{color:"#CCC"},itemCheckboxStyle:{position:"absolute",width:"13px",height:"13px"},symbolWidth:16,symbolPadding:5,verticalAlign:"bottom",x:0,y:0},loading:{labelStyle:{fontWeight:"bold",position:"relative",top:"1em"},style:{position:"absolute",backgroundColor:"white",opacity:0.5,textAlign:"center"}},tooltip:{enabled:!0,backgroundColor:"rgba(255, 255, 255, .85)",borderWidth:2,borderRadius:5,
-dateTimeLabelFormats:{millisecond:"%A, %b %e, %H:%M:%S.%L",second:"%A, %b %e, %H:%M:%S",minute:"%A, %b %e, %H:%M",hour:"%A, %b %e, %H:%M",day:"%A, %b %e, %Y",week:"Week from %A, %b %e, %Y",month:"%B %Y",year:"%Y"},headerFormat:'<span style="font-size: 10px">{point.key}</span><br/>',pointFormat:'<span style="color:{series.color}">{series.name}</span>: <b>{point.y}</b><br/>',shadow:!0,shared:V,snap:Mb?25:10,style:{color:"#333333",fontSize:"12px",padding:"5px",whiteSpace:"nowrap"}},credits:{enabled:!0,
-text:"",href:"",position:{align:"right",x:-10,verticalAlign:"bottom",y:-5},style:{cursor:"pointer",color:"#909090",fontSize:"10px"}}};var X=N.plotOptions,ea=X.line;Jb();var qa=function(a){var b=[],c;(function(a){(c=/rgba\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]?(?:\.[0-9]+)?)\s*\)/.exec(a))?b=[z(c[1]),z(c[2]),z(c[3]),parseFloat(c[4],10)]:(c=/#([a-fA-F0-9]{2})([a-fA-F0-9]{2})([a-fA-F0-9]{2})/.exec(a))&&(b=[z(c[1],16),z(c[2],16),z(c[3],
-16),1])})(a);return{get:function(c){return b&&!isNaN(b[0])?c==="rgb"?"rgb("+b[0]+","+b[1]+","+b[2]+")":c==="a"?b[3]:"rgba("+b.join(",")+")":a},brighten:function(a){if(Da(a)&&a!==0){var c;for(c=0;c<3;c++)b[c]+=z(a*255),b[c]<0&&(b[c]=0),b[c]>255&&(b[c]=255)}return this},setOpacity:function(a){b[3]=a;return this}}};ya.prototype={init:function(a,b){this.element=b==="span"?T(b):C.createElementNS(oa,b);this.renderer=a;this.attrSetters={}},animate:function(a,b,c){b=n(b,Pa,!0);fb(this);if(b){b=B(b);if(c)b.complete=
-c;xb(this,a,b)}else this.attr(a),c&&c()},attr:function(a,b){var c,d,e,f,g=this.element,h=g.nodeName.toLowerCase(),i=this.renderer,j,k=this.attrSetters,l=this.shadows,m,q,p=this;ja(a)&&r(b)&&(c=a,a={},a[c]=b);if(ja(a))c=a,h==="circle"?c={x:"cx",y:"cy"}[c]||c:c==="strokeWidth"&&(c="stroke-width"),p=w(g,c)||this[c]||0,c!=="d"&&c!=="visibility"&&(p=parseFloat(p));else for(c in a)if(j=!1,d=a[c],e=k[c]&&k[c].call(this,d,c),e!==!1){e!==A&&(d=e);if(c==="d")d&&d.join&&(d=d.join(" ")),/(NaN| {2}|^$)/.test(d)&&
-(d="M 0 0");else if(c==="x"&&h==="text"){for(e=0;e<g.childNodes.length;e++)f=g.childNodes[e],w(f,"x")===w(g,"x")&&w(f,"x",d);this.rotation&&w(g,"transform","rotate("+this.rotation+" "+d+" "+z(a.y||w(g,"y"))+")")}else if(c==="fill")d=i.color(d,g,c);else if(h==="circle"&&(c==="x"||c==="y"))c={x:"cx",y:"cy"}[c]||c;else if(h==="rect"&&c==="r")w(g,{rx:d,ry:d}),j=!0;else if(c==="translateX"||c==="translateY"||c==="rotation"||c==="verticalAlign")j=q=!0;else if(c==="stroke")d=i.color(d,g,c);else if(c==="dashstyle")if(c=
-"stroke-dasharray",d=d&&d.toLowerCase(),d==="solid")d=Q;else{if(d){d=d.replace("shortdashdotdot","3,1,1,1,1,1,").replace("shortdashdot","3,1,1,1").replace("shortdot","1,1,").replace("shortdash","3,1,").replace("longdash","8,3,").replace(/dot/g,"1,3,").replace("dash","4,3,").replace(/,$/,"").split(",");for(e=d.length;e--;)d[e]=z(d[e])*a["stroke-width"];d=d.join(",")}}else if(c==="isTracker")this[c]=d;else if(c==="width")d=z(d);else if(c==="align")c="text-anchor",d={left:"start",center:"middle",right:"end"}[d];
-else if(c==="title")e=g.getElementsByTagName("title")[0],e||(e=C.createElementNS(oa,"title"),g.appendChild(e)),e.textContent=d;c==="strokeWidth"&&(c="stroke-width");if(c==="stroke-width"&&d===0&&(bb||i.forExport))d=1.0E-6;this.symbolName&&/^(x|y|width|height|r|start|end|innerR|anchorX|anchorY)/.test(c)&&(m||(this.symbolAttr(a),m=!0),j=!0);if(l&&/^(width|height|visibility|x|y|d|transform)$/.test(c))for(e=l.length;e--;)w(l[e],c,c==="height"?s(d-(l[e].cutHeight||0),0):d);if((c==="width"||c==="height")&&
-h==="rect"&&d<0)d=0;this[c]=d;q&&this.updateTransform();c==="text"?(d!==this.textStr&&delete this.bBox,this.textStr=d,this.added&&i.buildText(this)):j||w(g,c,d)}return p},symbolAttr:function(a){var b=this;o("x,y,r,start,end,width,height,innerR,anchorX,anchorY".split(","),function(c){b[c]=n(a[c],b[c])});b.attr({d:b.renderer.symbols[b.symbolName](b.x,b.y,b.width,b.height,b)})},clip:function(a){return this.attr("clip-path",a?"url("+this.renderer.url+"#"+a.id+")":Q)},crisp:function(a,b,c,d,e){var f,g=
-{},h={},i,a=a||this.strokeWidth||this.attr&&this.attr("stroke-width")||0;i=u(a)%2/2;h.x=U(b||this.x||0)+i;h.y=U(c||this.y||0)+i;h.width=U((d||this.width||0)-2*i);h.height=U((e||this.height||0)-2*i);h.strokeWidth=a;for(f in h)this[f]!==h[f]&&(this[f]=g[f]=h[f]);return g},css:function(a){var b=this.element,b=a&&a.width&&b.nodeName.toLowerCase()==="text",c,d="",e=function(a,b){return"-"+b.toLowerCase()};if(a&&a.color)a.fill=a.color;this.styles=a=x(this.styles,a);V&&b&&delete a.width;if(Ea&&!ca)b&&delete a.width,
-I(this.element,a);else{for(c in a)d+=c.replace(/([A-Z])/g,e)+":"+a[c]+";";this.attr({style:d})}b&&this.added&&this.renderer.buildText(this);return this},on:function(a,b){if(Ba&&a==="click")this.element.ontouchstart=function(a){a.preventDefault();b()};this.element["on"+a]=b;return this},setRadialReference:function(a){this.element.radialReference=a;return this},translate:function(a,b){return this.attr({translateX:a,translateY:b})},invert:function(){this.inverted=!0;this.updateTransform();return this},
-htmlCss:function(a){var b=this.element;if(b=a&&b.tagName==="SPAN"&&a.width)delete a.width,this.textWidth=b,this.updateTransform();this.styles=x(this.styles,a);I(this.element,a);return this},htmlGetBBox:function(){var a=this.element,b=this.bBox;if(!b){if(a.nodeName==="text")a.style.position="absolute";b=this.bBox={x:a.offsetLeft,y:a.offsetTop,width:a.offsetWidth,height:a.offsetHeight}}return b},htmlUpdateTransform:function(){if(this.added){var a=this.renderer,b=this.element,c=this.translateX||0,d=
-this.translateY||0,e=this.x||0,f=this.y||0,g=this.textAlign||"left",h={left:0,center:0.5,right:1}[g],i=g&&g!=="left",j=this.shadows;if(c||d)I(b,{marginLeft:c,marginTop:d}),j&&o(j,function(a){I(a,{marginLeft:c+1,marginTop:d+1})});this.inverted&&o(b.childNodes,function(c){a.invertChild(c,b)});if(b.tagName==="SPAN"){var k,l,j=this.rotation,m,q=0,p=1,q=0,y;m=z(this.textWidth);var t=this.xCorr||0,H=this.yCorr||0,ra=[j,g,b.innerHTML,this.textWidth].join(",");k={};if(ra!==this.cTT){if(r(j))a.isSVG?(t=Ea?
-"-ms-transform":bb?"-webkit-transform":cb?"MozTransform":Lb?"-o-transform":"",k[t]=k.transform="rotate("+j+"deg)"):(q=j*ab,p=W(q),q=Z(q),k.filter=j?["progid:DXImageTransform.Microsoft.Matrix(M11=",p,", M12=",-q,", M21=",q,", M22=",p,", sizingMethod='auto expand')"].join(""):Q),I(b,k);k=n(this.elemWidth,b.offsetWidth);l=n(this.elemHeight,b.offsetHeight);if(k>m&&/[ \-]/.test(b.textContent||b.innerText))I(b,{width:m+"px",display:"block",whiteSpace:"normal"}),k=m;m=a.fontMetrics(b.style.fontSize).b;t=
-p<0&&-k;H=q<0&&-l;y=p*q<0;t+=q*m*(y?1-h:h);H-=p*m*(j?y?h:1-h:1);i&&(t-=k*h*(p<0?-1:1),j&&(H-=l*h*(q<0?-1:1)),I(b,{textAlign:g}));this.xCorr=t;this.yCorr=H}I(b,{left:e+t+"px",top:f+H+"px"});if(bb)l=b.offsetHeight;this.cTT=ra}}else this.alignOnAdd=!0},updateTransform:function(){var a=this.translateX||0,b=this.translateY||0,c=this.inverted,d=this.rotation,e=[];c&&(a+=this.attr("width"),b+=this.attr("height"));(a||b)&&e.push("translate("+a+","+b+")");c?e.push("rotate(90) scale(-1,1)"):d&&e.push("rotate("+
-d+" "+(this.x||0)+" "+(this.y||0)+")");e.length&&w(this.element,"transform",e.join(" "))},toFront:function(){var a=this.element;a.parentNode.appendChild(a);return this},align:function(a,b,c){a?(this.alignOptions=a,this.alignByTranslate=b,c||this.renderer.alignedObjects.push(this)):(a=this.alignOptions,b=this.alignByTranslate);var c=n(c,this.renderer),d=a.align,e=a.verticalAlign,f=(c.x||0)+(a.x||0),g=(c.y||0)+(a.y||0),h={};if(d==="right"||d==="center")f+=(c.width-(a.width||0))/{right:1,center:2}[d];
-h[b?"translateX":"x"]=u(f);if(e==="bottom"||e==="middle")g+=(c.height-(a.height||0))/({bottom:1,middle:2}[e]||1);h[b?"translateY":"y"]=u(g);this[this.placed?"animate":"attr"](h);this.placed=!0;this.alignAttr=h;return this},getBBox:function(){var a=this.bBox,b=this.renderer,c,d=this.rotation;c=this.element;var e=this.styles,f=d*ab;if(!a){if(c.namespaceURI===oa||b.forExport){try{a=c.getBBox?x({},c.getBBox()):{width:c.offsetWidth,height:c.offsetHeight}}catch(g){}if(!a||a.width<0)a={width:0,height:0}}else a=
-this.htmlGetBBox();if(b.isSVG){b=a.width;c=a.height;if(Ea&&e&&e.fontSize==="11px"&&c===22.700000762939453)a.height=c=14;if(d)a.width=M(c*Z(f))+M(b*W(f)),a.height=M(c*W(f))+M(b*Z(f))}this.bBox=a}return a},show:function(){return this.attr({visibility:"visible"})},hide:function(){return this.attr({visibility:"hidden"})},add:function(a){var b=this.renderer,c=a||b,d=c.element||b.box,e=d.childNodes,f=this.element,g=w(f,"zIndex"),h;if(a)this.parentGroup=a;this.parentInverted=a&&a.inverted;this.textStr!==
-void 0&&b.buildText(this);if(g)c.handleZ=!0,g=z(g);if(c.handleZ)for(c=0;c<e.length;c++)if(a=e[c],b=w(a,"zIndex"),a!==f&&(z(b)>g||!r(g)&&r(b))){d.insertBefore(f,a);h=!0;break}h||d.appendChild(f);this.added=!0;F(this,"add");return this},safeRemoveChild:function(a){var b=a.parentNode;b&&b.removeChild(a)},destroy:function(){var a=this,b=a.element||{},c=a.shadows,d,e;b.onclick=b.onmouseout=b.onmouseover=b.onmousemove=null;fb(a);if(a.clipPath)a.clipPath=a.clipPath.destroy();if(a.stops){for(e=0;e<a.stops.length;e++)a.stops[e]=
-a.stops[e].destroy();a.stops=null}a.safeRemoveChild(b);c&&o(c,function(b){a.safeRemoveChild(b)});ta(a.renderer.alignedObjects,a);for(d in a)delete a[d];return null},empty:function(){for(var a=this.element,b=a.childNodes,c=b.length;c--;)a.removeChild(b[c])},shadow:function(a,b,c){var d=[],e,f,g=this.element,h,i,j,k;if(a){i=n(a.width,3);j=(a.opacity||0.15)/i;k=this.parentInverted?"(-1,-1)":"("+n(a.offsetX,1)+", "+n(a.offsetY,1)+")";for(e=1;e<=i;e++){f=g.cloneNode(0);h=i*2+1-2*e;w(f,{isShadow:"true",
-stroke:a.color||"black","stroke-opacity":j*e,"stroke-width":h,transform:"translate"+k,fill:Q});if(c)w(f,"height",s(w(f,"height")-h,0)),f.cutHeight=h;b?b.element.appendChild(f):g.parentNode.insertBefore(f,g);d.push(f)}this.shadows=d}return this}};var sa=function(){this.init.apply(this,arguments)};sa.prototype={Element:ya,init:function(a,b,c,d){var e=location,f;f=this.createElement("svg").attr({xmlns:oa,version:"1.1"});a.appendChild(f.element);this.isSVG=!0;this.box=f.element;this.boxWrapper=f;this.alignedObjects=
-[];this.url=(cb||bb)&&C.getElementsByTagName("base").length?e.href.replace(/#.*?$/,"").replace(/([\('\)])/g,"\\$1").replace(/ /g,"%20"):"";this.defs=this.createElement("defs").add();this.forExport=d;this.gradients={};this.setSize(b,c,!1);var g;if(cb&&a.getBoundingClientRect)this.subPixelFix=b=function(){I(a,{left:0,top:0});g=a.getBoundingClientRect();I(a,{left:za(g.left)-g.left+"px",top:za(g.top)-g.top+"px"})},b(),J(L,"resize",b)},isHidden:function(){return!this.boxWrapper.getBBox().width},destroy:function(){var a=
-this.defs;this.box=null;this.boxWrapper=this.boxWrapper.destroy();Ga(this.gradients||{});this.gradients=null;if(a)this.defs=a.destroy();this.subPixelFix&&R(L,"resize",this.subPixelFix);return this.alignedObjects=null},createElement:function(a){var b=new this.Element;b.init(this,a);return b},draw:function(){},buildText:function(a){for(var b=a.element,c=n(a.textStr,"").toString().replace(/<(b|strong)>/g,'<span style="font-weight:bold">').replace(/<(i|em)>/g,'<span style="font-style:italic">').replace(/<a/g,
-"<span").replace(/<\/(b|strong|i|em|a)>/g,"</span>").split(/<br.*?>/g),d=b.childNodes,e=/style="([^"]+)"/,f=/href="([^"]+)"/,g=w(b,"x"),h=a.styles,i=h&&h.width&&z(h.width),j=h&&h.lineHeight,k,h=d.length,l=[];h--;)b.removeChild(d[h]);i&&!a.added&&this.box.appendChild(b);c[c.length-1]===""&&c.pop();o(c,function(c,d){var h,y=0,t,c=c.replace(/<span/g,"|||<span").replace(/<\/span>/g,"</span>|||");h=c.split("|||");o(h,function(c){if(c!==""||h.length===1){var m={},n=C.createElementNS(oa,"tspan"),o;e.test(c)&&
-(o=c.match(e)[1].replace(/(;| |^)color([ :])/,"$1fill$2"),w(n,"style",o));f.test(c)&&(w(n,"onclick",'location.href="'+c.match(f)[1]+'"'),I(n,{cursor:"pointer"}));c=(c.replace(/<(.|\n)*?>/g,"")||" ").replace(/&lt;/g,"<").replace(/&gt;/g,">");n.appendChild(C.createTextNode(c));y?m.dx=3:m.x=g;if(!y){if(d){!ca&&a.renderer.forExport&&I(n,{display:"block"});t=L.getComputedStyle&&z(L.getComputedStyle(k,null).getPropertyValue("line-height"));if(!t||isNaN(t)){var r;if(!(r=j))if(!(r=k.offsetHeight))l[d]=b.getBBox?
-b.getBBox().height:a.renderer.fontMetrics(b.style.fontSize).h,r=u(l[d]-(l[d-1]||0))||18;t=r}w(n,"dy",t)}k=n}w(n,m);b.appendChild(n);y++;if(i)for(var c=c.replace(/([^\^])-/g,"$1- ").split(" "),E=[];c.length||E.length;)delete a.bBox,r=a.getBBox().width,m=r>i,!m||c.length===1?(c=E,E=[],c.length&&(n=C.createElementNS(oa,"tspan"),w(n,{dy:j||16,x:g}),o&&w(n,"style",o),b.appendChild(n),r>i&&(i=r))):(n.removeChild(n.firstChild),E.unshift(c.pop())),c.length&&n.appendChild(C.createTextNode(c.join(" ").replace(/- /g,
-"-")))}})})},button:function(a,b,c,d,e,f,g){var h=this.label(a,b,c),i=0,j,k,l,m,q,a={x1:0,y1:0,x2:0,y2:1},e=B(ia(wb,1,"stroke","#999","fill",ia("linearGradient",a,"stops",[[0,"#FFF"],[1,"#DDD"]]),"r",3,"padding",3,"style",ia("color","black")),e);l=e.style;delete e.style;f=B(e,ia("stroke","#68A","fill",ia("linearGradient",a,"stops",[[0,"#FFF"],[1,"#ACF"]])),f);m=f.style;delete f.style;g=B(e,ia("stroke","#68A","fill",ia("linearGradient",a,"stops",[[0,"#9BD"],[1,"#CDF"]])),g);q=g.style;delete g.style;
-J(h.element,"mouseenter",function(){h.attr(f).css(m)});J(h.element,"mouseleave",function(){j=[e,f,g][i];k=[l,m,q][i];h.attr(j).css(k)});h.setState=function(a){(i=a)?a===2&&h.attr(g).css(q):h.attr(e).css(l)};return h.on("click",function(){d.call(h)}).attr(e).css(x({cursor:"default"},l))},crispLine:function(a,b){a[1]===a[4]&&(a[1]=a[4]=u(a[1])-b%2/2);a[2]===a[5]&&(a[2]=a[5]=u(a[2])+b%2/2);return a},path:function(a){var b={fill:Q};Ia(a)?b.d=a:Y(a)&&x(b,a);return this.createElement("path").attr(b)},circle:function(a,
-b,c){a=Y(a)?a:{x:a,y:b,r:c};return this.createElement("circle").attr(a)},arc:function(a,b,c,d,e,f){if(Y(a))b=a.y,c=a.r,d=a.innerR,e=a.start,f=a.end,a=a.x;return this.symbol("arc",a||0,b||0,c||0,c||0,{innerR:d||0,start:e||0,end:f||0})},rect:function(a,b,c,d,e,f){e=Y(a)?a.r:e;e=this.createElement("rect").attr({rx:e,ry:e,fill:Q});return e.attr(Y(a)?a:e.crisp(f,a,b,s(c,0),s(d,0)))},setSize:function(a,b,c){var d=this.alignedObjects,e=d.length;this.width=a;this.height=b;for(this.boxWrapper[n(c,!0)?"animate":
-"attr"]({width:a,height:b});e--;)d[e].align()},g:function(a){var b=this.createElement("g");return r(a)?b.attr({"class":"highcharts-"+a}):b},image:function(a,b,c,d,e){var f={preserveAspectRatio:Q};arguments.length>1&&x(f,{x:b,y:c,width:d,height:e});f=this.createElement("image").attr(f);f.element.setAttributeNS?f.element.setAttributeNS("http://www.w3.org/1999/xlink","href",a):f.element.setAttribute("hc-svg-href",a);return f},symbol:function(a,b,c,d,e,f){var g,h=this.symbols[a],h=h&&h(u(b),u(c),d,e,
-f),i=/^url\((.*?)\)$/,j,k;h?(g=this.path(h),x(g,{symbolName:a,x:b,y:c,width:d,height:e}),f&&x(g,f)):i.test(a)&&(k=function(a,b){a.element&&(a.attr({width:b[0],height:b[1]}),a.alignByTranslate||a.translate(u((d-b[0])/2),u((e-b[1])/2)))},j=a.match(i)[1],a=Nb[j],g=this.image(j).attr({x:b,y:c}),a?k(g,a):(g.attr({width:0,height:0}),T("img",{onload:function(){k(g,Nb[j]=[this.width,this.height])},src:j})));return g},symbols:{circle:function(a,b,c,d){var e=0.166*c;return["M",a+c/2,b,"C",a+c+e,b,a+c+e,b+d,
-a+c/2,b+d,"C",a-e,b+d,a-e,b,a+c/2,b,"Z"]},square:function(a,b,c,d){return["M",a,b,"L",a+c,b,a+c,b+d,a,b+d,"Z"]},triangle:function(a,b,c,d){return["M",a+c/2,b,"L",a+c,b+d,a,b+d,"Z"]},"triangle-down":function(a,b,c,d){return["M",a,b,"L",a+c,b,a+c/2,b+d,"Z"]},diamond:function(a,b,c,d){return["M",a+c/2,b,"L",a+c,b+d/2,a+c/2,b+d,a,b+d/2,"Z"]},arc:function(a,b,c,d,e){var f=e.start,c=e.r||c||d,g=e.end-1.0E-6,d=e.innerR,h=e.open,i=W(f),j=Z(f),k=W(g),g=Z(g),e=e.end-f<Aa?0:1;return["M",a+c*i,b+c*j,"A",c,c,
-0,e,1,a+c*k,b+c*g,h?"M":"L",a+d*k,b+d*g,"A",d,d,0,e,0,a+d*i,b+d*j,h?"":"Z"]}},clipRect:function(a,b,c,d){var e="highcharts-"+tb++,f=this.createElement("clipPath").attr({id:e}).add(this.defs),a=this.rect(a,b,c,d,0).add(f);a.id=e;a.clipPath=f;return a},color:function(a,b,c){var d=this,e,f=/^rgba/,g,h,i,j,k,l,m,q=[];a&&a.linearGradient?g="linearGradient":a&&a.radialGradient&&(g="radialGradient");if(g){c=a[g];h=d.gradients;j=a.stops;b=b.radialReference;Ia(c)&&(a[g]=c={x1:c[0],y1:c[1],x2:c[2],y2:c[3],
-gradientUnits:"userSpaceOnUse"});g==="radialGradient"&&b&&!r(c.gradientUnits)&&x(c,{cx:b[0]-b[2]/2+c.cx*b[2],cy:b[1]-b[2]/2+c.cy*b[2],r:c.r*b[2],gradientUnits:"userSpaceOnUse"});for(m in c)m!=="id"&&q.push(m,c[m]);for(m in j)q.push(j[m]);q=q.join(",");h[q]?a=h[q].id:(c.id=a="highcharts-"+tb++,h[q]=i=d.createElement(g).attr(c).add(d.defs),i.stops=[],o(j,function(a){f.test(a[1])?(e=qa(a[1]),k=e.get("rgb"),l=e.get("a")):(k=a[1],l=1);a=d.createElement("stop").attr({offset:a[0],"stop-color":k,"stop-opacity":l}).add(i);
-i.stops.push(a)}));return"url("+d.url+"#"+a+")"}else return f.test(a)?(e=qa(a),w(b,c+"-opacity",e.get("a")),e.get("rgb")):(b.removeAttribute(c+"-opacity"),a)},text:function(a,b,c,d){var e=N.chart.style,f=V||!ca&&this.forExport;if(d&&!this.forExport)return this.html(a,b,c);b=u(n(b,0));c=u(n(c,0));a=this.createElement("text").attr({x:b,y:c,text:a}).css({fontFamily:e.fontFamily,fontSize:e.fontSize});f&&a.css({position:"absolute"});a.x=b;a.y=c;return a},html:function(a,b,c){var d=N.chart.style,e=this.createElement("span"),
-f=e.attrSetters,g=e.element,h=e.renderer;f.text=function(a){a!==g.innerHTML&&delete this.bBox;g.innerHTML=a;return!1};f.x=f.y=f.align=function(a,b){b==="align"&&(b="textAlign");e[b]=a;e.htmlUpdateTransform();return!1};e.attr({text:a,x:u(b),y:u(c)}).css({position:"absolute",whiteSpace:"nowrap",fontFamily:d.fontFamily,fontSize:d.fontSize});e.css=e.htmlCss;if(h.isSVG)e.add=function(a){var b,c=h.box.parentNode,d=[];if(a){if(b=a.div,!b){for(;a;)d.push(a),a=a.parentGroup;o(d.reverse(),function(a){var d;
-b=a.div=a.div||T(ga,{className:w(a.element,"class")},{position:"absolute",left:(a.translateX||0)+"px",top:(a.translateY||0)+"px"},b||c);d=b.style;x(a.attrSetters,{translateX:function(a){d.left=a+"px"},translateY:function(a){d.top=a+"px"},visibility:function(a,b){d[b]=a}})})}}else b=c;b.appendChild(g);e.added=!0;e.alignOnAdd&&e.htmlUpdateTransform();return e};return e},fontMetrics:function(a){var a=z(a||11),a=a<24?a+4:u(a*1.2),b=u(a*0.8);return{h:a,b:b}},label:function(a,b,c,d,e,f,g,h,i){function j(){var a;
-a=y.element.style;H=(s===void 0||yb===void 0||p.styles.textAlign)&&y.getBBox();p.width=(s||H.width||0)+2*v;p.height=(yb||H.height||0)+2*v;zb=v+q.fontMetrics(a&&a.fontSize).b;if(z){if(!n)a=h?-zb:0,p.box=n=d?q.symbol(d,-ra*v,a,p.width,p.height):q.rect(-ra*v,a,p.width,p.height,0,w[wb]),n.add(p);n.attr(B({width:p.width,height:p.height},w));w=null}}function k(){var a=p.styles,a=a&&a.textAlign,b=v*(1-ra),c;c=h?0:zb;if(r(s)&&(a==="center"||a==="right"))b+={center:0.5,right:1}[a]*(s-H.width);(b!==y.x||c!==
-y.y)&&y.attr({x:b,y:c});y.x=b;y.y=c}function l(a,b){n?n.attr(a,b):w[a]=b}function m(){y.add(p);p.attr({text:a,x:b,y:c});n&&r(e)&&p.attr({anchorX:e,anchorY:f})}var q=this,p=q.g(i),y=q.text("",0,0,g).attr({zIndex:1}),n,H,ra=0,v=3,s,yb,E,S,Qb=0,w={},zb,g=p.attrSetters,z;J(p,"add",m);g.width=function(a){s=a;return!1};g.height=function(a){yb=a;return!1};g.padding=function(a){r(a)&&a!==v&&(v=a,k());return!1};g.align=function(a){ra={left:0,center:0.5,right:1}[a];return!1};g.text=function(a,b){y.attr(b,a);
-j();k();return!1};g[wb]=function(a,b){z=!0;Qb=a%2/2;l(b,a);return!1};g.stroke=g.fill=g.r=function(a,b){b==="fill"&&(z=!0);l(b,a);return!1};g.anchorX=function(a,b){e=a;l(b,a+Qb-E);return!1};g.anchorY=function(a,b){f=a;l(b,a-S);return!1};g.x=function(a){p.x=a;a-=ra*((s||H.width)+v);E=u(a);p.attr("translateX",E);return!1};g.y=function(a){S=p.y=u(a);p.attr("translateY",a);return!1};var C=p.css;return x(p,{css:function(a){if(a){var b={},a=B({},a);o("fontSize,fontWeight,fontFamily,color,lineHeight,width".split(","),
-function(c){a[c]!==A&&(b[c]=a[c],delete a[c])});y.css(b)}return C.call(p,a)},getBBox:function(){return{width:H.width+2*v,height:H.height+2*v,x:H.x-v,y:H.y-v}},shadow:function(a){n&&n.shadow(a);return p},destroy:function(){R(p,"add",m);R(p.element,"mouseenter");R(p.element,"mouseleave");y&&(y=y.destroy());n&&(n=n.destroy());ya.prototype.destroy.call(p);p=q=j=k=l=m=null}})}};Sa=sa;var ha;if(!ca&&!V){ha={init:function(a,b){var c=["<",b,' filled="f" stroked="f"'],d=["position: ","absolute",";"];(b===
-"shape"||b===ga)&&d.push("left:0;top:0;width:1px;height:1px;");Ra&&d.push("visibility: ",b===ga?"hidden":"visible");c.push(' style="',d.join(""),'"/>');if(b)c=b===ga||b==="span"||b==="img"?c.join(""):a.prepVML(c),this.element=T(c);this.renderer=a;this.attrSetters={}},add:function(a){var b=this.renderer,c=this.element,d=b.box,d=a?a.element||a:d;a&&a.inverted&&b.invertChild(c,d);d.appendChild(c);this.added=!0;this.alignOnAdd&&!this.deferUpdateTransform&&this.updateTransform();F(this,"add");return this},
-updateTransform:ya.prototype.htmlUpdateTransform,attr:function(a,b){var c,d,e,f=this.element||{},g=f.style,h=f.nodeName,i=this.renderer,j=this.symbolName,k,l=this.shadows,m,q=this.attrSetters,p=this;ja(a)&&r(b)&&(c=a,a={},a[c]=b);if(ja(a))c=a,p=c==="strokeWidth"||c==="stroke-width"?this.strokeweight:this[c];else for(c in a)if(d=a[c],m=!1,e=q[c]&&q[c].call(this,d,c),e!==!1&&d!==null){e!==A&&(d=e);if(j&&/^(x|y|r|start|end|width|height|innerR|anchorX|anchorY)/.test(c))k||(this.symbolAttr(a),k=!0),m=
-!0;else if(c==="d"){d=d||[];this.d=d.join(" ");e=d.length;for(m=[];e--;)m[e]=Da(d[e])?u(d[e]*10)-5:d[e]==="Z"?"x":d[e];d=m.join(" ")||"x";f.path=d;if(l)for(e=l.length;e--;)l[e].path=l[e].cutOff?this.cutOffPath(d,l[e].cutOff):d;m=!0}else if(c==="visibility"){if(l)for(e=l.length;e--;)l[e].style[c]=d;h==="DIV"&&(d=d==="hidden"?"-999em":0,c="top");g[c]=d;m=!0}else if(c==="zIndex")d&&(g[c]=d),m=!0;else if(c==="width"||c==="height")d=s(0,d),this[c]=d,this.updateClipping?(this[c]=d,this.updateClipping()):
-g[c]=d,m=!0;else if(c==="x"||c==="y")this[c]=d,g[{x:"left",y:"top"}[c]]=d;else if(c==="class")f.className=d;else if(c==="stroke")d=i.color(d,f,c),c="strokecolor";else if(c==="stroke-width"||c==="strokeWidth")f.stroked=d?!0:!1,c="strokeweight",this[c]=d,Da(d)&&(d+="px");else if(c==="dashstyle")(f.getElementsByTagName("stroke")[0]||T(i.prepVML(["<stroke/>"]),null,null,f))[c]=d||"solid",this.dashstyle=d,m=!0;else if(c==="fill")if(h==="SPAN")g.color=d;else{if(h!=="IMG")f.filled=d!==Q?!0:!1,d=i.color(d,
-f,c,this),c="fillcolor"}else if(h==="shape"&&c==="rotation")this[c]=d,f.style.left=-u(Z(d*ab)+1)+"px",f.style.top=u(W(d*ab))+"px";else if(c==="translateX"||c==="translateY"||c==="rotation")this[c]=d,this.updateTransform(),m=!0;else if(c==="text")this.bBox=null,f.innerHTML=d,m=!0;m||(Ra?f[c]=d:w(f,c,d))}return p},clip:function(a){var b=this,c,d=b.element,e=d.parentNode;a?(c=a.members,ta(c,b),c.push(b),b.destroyClip=function(){ta(c,b)},e&&e.className==="highcharts-tracker"&&!Ra&&I(d,{visibility:"hidden"}),
-a=a.getCSS(b)):(b.destroyClip&&b.destroyClip(),a={clip:Ra?"inherit":"rect(auto)"});return b.css(a)},css:ya.prototype.htmlCss,safeRemoveChild:function(a){a.parentNode&&Na(a)},destroy:function(){this.destroyClip&&this.destroyClip();return ya.prototype.destroy.apply(this)},empty:function(){for(var a=this.element.childNodes,b=a.length,c;b--;)c=a[b],c.parentNode.removeChild(c)},on:function(a,b){this.element["on"+a]=function(){var a=L.event;a.target=a.srcElement;b(a)};return this},cutOffPath:function(a,
-b){var c,a=a.split(/[ ,]/);c=a.length;if(c===9||c===11)a[c-4]=a[c-2]=z(a[c-2])-10*b;return a.join(" ")},shadow:function(a,b,c){var d=[],e,f=this.element,g=this.renderer,h,i=f.style,j,k=f.path,l,m,q,p;k&&typeof k.value!=="string"&&(k="x");m=k;if(a){q=n(a.width,3);p=(a.opacity||0.15)/q;for(e=1;e<=3;e++){l=q*2+1-2*e;c&&(m=this.cutOffPath(k.value,l+0.5));j=['<shape isShadow="true" strokeweight="',l,'" filled="false" path="',m,'" coordsize="10 10" style="',f.style.cssText,'" />'];h=T(g.prepVML(j),null,
-{left:z(i.left)+n(a.offsetX,1),top:z(i.top)+n(a.offsetY,1)});if(c)h.cutOff=l+1;j=['<stroke color="',a.color||"black",'" opacity="',p*e,'"/>'];T(g.prepVML(j),null,null,h);b?b.element.appendChild(h):f.parentNode.insertBefore(h,f);d.push(h)}this.shadows=d}return this}};ha=ba(ya,ha);var fa={Element:ha,isIE8:na.indexOf("MSIE 8.0")>-1,init:function(a,b,c){var d,e;this.alignedObjects=[];d=this.createElement(ga);e=d.element;e.style.position="relative";a.appendChild(d.element);this.box=e;this.boxWrapper=d;
-this.setSize(b,c,!1);if(!C.namespaces.hcv)C.namespaces.add("hcv","urn:schemas-microsoft-com:vml"),C.createStyleSheet().cssText="hcv\\:fill, hcv\\:path, hcv\\:shape, hcv\\:stroke{ behavior:url(#default#VML); display: inline-block; } "},isHidden:function(){return!this.box.offsetWidth},clipRect:function(a,b,c,d){var e=this.createElement(),f=Y(a);return x(e,{members:[],left:f?a.x:a,top:f?a.y:b,width:f?a.width:c,height:f?a.height:d,getCSS:function(a){var b=a.inverted,c=this.top,d=this.left,e=d+this.width,
-f=c+this.height,c={clip:"rect("+u(b?d:c)+"px,"+u(b?f:e)+"px,"+u(b?e:f)+"px,"+u(b?c:d)+"px)"};!b&&Ra&&a.element.nodeName!=="IMG"&&x(c,{width:e+"px",height:f+"px"});return c},updateClipping:function(){o(e.members,function(a){a.css(e.getCSS(a))})}})},color:function(a,b,c,d){var e=this,f,g=/^rgba/,h,i,j=Q;a&&a.linearGradient?i="gradient":a&&a.radialGradient&&(i="pattern");if(i){var k,l,m=a.linearGradient||a.radialGradient,q,p,n,t,H,r="",a=a.stops,v,s=[],u=function(){h=['<fill colors="'+s.join(",")+'" opacity="',
-n,'" o:opacity2="',p,'" type="',i,'" ',r,'focus="100%" method="any" />'];T(e.prepVML(h),null,null,b)};q=a[0];v=a[a.length-1];q[0]>0&&a.unshift([0,q[1]]);v[0]<1&&a.push([1,v[1]]);o(a,function(a,b){g.test(a[1])?(f=qa(a[1]),k=f.get("rgb"),l=f.get("a")):(k=a[1],l=1);s.push(a[0]*100+"% "+k);b?(n=l,t=k):(p=l,H=k)});if(c==="fill")if(i==="gradient")c=m.x1||m[0]||0,a=m.y1||m[1]||0,q=m.x2||m[2]||0,m=m.y2||m[3]||0,r='angle="'+(90-K.atan((m-a)/(q-c))*180/Aa)+'"',u();else{var j=m.r,E=j*2,S=j*2,x=m.cx,A=m.cy,w=
-b.radialReference,z,j=function(){w&&(z=d.getBBox(),x+=(w[0]-z.x)/z.width-0.5,A+=(w[1]-z.y)/z.height-0.5,E*=w[2]/z.width,S*=w[2]/z.height);r='src="'+N.global.VMLRadialGradientURL+'" size="'+E+","+S+'" origin="0.5,0.5" position="'+x+","+A+'" color2="'+H+'" ';u()};d.added?j():J(d,"add",j);j=t}else j=k}else if(g.test(a)&&b.tagName!=="IMG")f=qa(a),h=["<",c,' opacity="',f.get("a"),'"/>'],T(this.prepVML(h),null,null,b),j=f.get("rgb");else{j=b.getElementsByTagName(c);if(j.length)j[0].opacity=1;j=a}return j},
-prepVML:function(a){var b=this.isIE8,a=a.join("");b?(a=a.replace("/>",' xmlns="urn:schemas-microsoft-com:vml" />'),a=a.indexOf('style="')===-1?a.replace("/>",' style="display:inline-block;behavior:url(#default#VML);" />'):a.replace('style="','style="display:inline-block;behavior:url(#default#VML);')):a=a.replace("<","<hcv:");return a},text:sa.prototype.html,path:function(a){var b={coordsize:"10 10"};Ia(a)?b.d=a:Y(a)&&x(b,a);return this.createElement("shape").attr(b)},circle:function(a,b,c){return this.symbol("circle").attr({x:a-
-c,y:b-c,width:2*c,height:2*c})},g:function(a){var b;a&&(b={className:"highcharts-"+a,"class":"highcharts-"+a});return this.createElement(ga).attr(b)},image:function(a,b,c,d,e){var f=this.createElement("img").attr({src:a});arguments.length>1&&f.attr({x:b,y:c,width:d,height:e});return f},rect:function(a,b,c,d,e,f){if(Y(a))b=a.y,c=a.width,d=a.height,f=a.strokeWidth,a=a.x;var g=this.symbol("rect");g.r=e;return g.attr(g.crisp(f,a,b,s(c,0),s(d,0)))},invertChild:function(a,b){var c=b.style;I(a,{flip:"x",
-left:z(c.width)-1,top:z(c.height)-1,rotation:-90})},symbols:{arc:function(a,b,c,d,e){var f=e.start,g=e.end,h=e.r||c||d,c=W(f),d=Z(f),i=W(g),j=Z(g),k=e.innerR,l=0.08/h,m=k&&0.1/k||0;if(g-f===0)return["x"];else 2*Aa-g+f<l?i=-l:g-f<m&&(i=W(f+m));f=["wa",a-h,b-h,a+h,b+h,a+h*c,b+h*d,a+h*i,b+h*j];e.open&&!k&&f.push("e","M",a,b);f.push("at",a-k,b-k,a+k,b+k,a+k*i,b+k*j,a+k*c,b+k*d,"x","e");return f},circle:function(a,b,c,d){return["wa",a,b,a+c,b+d,a+c,b+d/2,a+c,b+d/2,"e"]},rect:function(a,b,c,d,e){var f=
-a+c,g=b+d,h;!r(e)||!e.r?f=sa.prototype.symbols.square.apply(0,arguments):(h=O(e.r,c,d),f=["M",a+h,b,"L",f-h,b,"wa",f-2*h,b,f,b+2*h,f-h,b,f,b+h,"L",f,g-h,"wa",f-2*h,g-2*h,f,g,f,g-h,f-h,g,"L",a+h,g,"wa",a,g-2*h,a+2*h,g,a+h,g,a,g-h,"L",a,b+h,"wa",a,b,a+2*h,b+2*h,a,b+h,a+h,b,"x","e"]);return f}}};ha=function(){this.init.apply(this,arguments)};ha.prototype=B(sa.prototype,fa);Sa=ha}var gb,Rb;if(V)gb=function(){oa="http://www.w3.org/1999/xhtml"},gb.prototype.symbols={},Rb=function(){function a(){var a=b.length,
-d;for(d=0;d<a;d++)b[d]();b=[]}var b=[];return{push:function(c,d){b.length===0&&Tb(d,a);b.push(c)}}}();Sa=ha||gb||sa;Qa.prototype={addLabel:function(){var a=this.axis,b=a.options,c=a.chart,d=a.horiz,e=a.categories,f=this.pos,g=b.labels,h=a.tickPositions,d=e&&d&&e.length&&!g.step&&!g.staggerLines&&!g.rotation&&c.plotWidth/h.length||!d&&c.plotWidth/2,i=f===h[0],j=f===h[h.length-1],k=e&&r(e[f])?e[f]:f,e=this.label,h=h.info,l;a.isDatetimeAxis&&h&&(l=b.dateTimeLabelFormats[h.higherRanks[f]||h.unitName]);
-this.isFirst=i;this.isLast=j;b=a.labelFormatter.call({axis:a,chart:c,isFirst:i,isLast:j,dateTimeLabelFormat:l,value:a.isLog?da(aa(k)):k});f=d&&{width:s(1,u(d-2*(g.padding||10)))+"px"};f=x(f,g.style);if(r(e))e&&e.attr({text:b}).css(f);else{d={align:g.align};if(Da(g.rotation))d.rotation=g.rotation;this.label=r(b)&&g.enabled?c.renderer.text(b,0,0,g.useHTML).attr(d).css(f).add(a.labelGroup):null}},getLabelSize:function(){var a=this.label,b=this.axis;return a?(this.labelBBox=a.getBBox())[b.horiz?"height":
-"width"]:0},getLabelSides:function(){var a=this.axis.options.labels,b=this.labelBBox.width,a=b*{left:0,center:0.5,right:1}[a.align]-a.x;return[-a,b-a]},handleOverflow:function(a,b){var c=!0,d=this.axis,e=d.chart,f=this.isFirst,g=this.isLast,h=b.x,i=d.reversed,j=d.tickPositions;if(f||g){var k=this.getLabelSides(),l=k[0],k=k[1],e=e.plotLeft,m=e+d.len,j=(d=d.ticks[j[a+(f?1:-1)]])&&d.label.xy&&d.label.xy.x+d.getLabelSides()[f?0:1];f&&!i||g&&i?h+l<e&&(h=e-l,d&&h+k>j&&(c=!1)):h+k>m&&(h=m-k,d&&h+l<j&&(c=
-!1));b.x=h}return c},getPosition:function(a,b,c,d){var e=this.axis,f=e.chart,g=d&&f.oldChartHeight||f.chartHeight;return{x:a?e.translate(b+c,null,null,d)+e.transB:e.left+e.offset+(e.opposite?(d&&f.oldChartWidth||f.chartWidth)-e.right-e.left:0),y:a?g-e.bottom+e.offset-(e.opposite?e.height:0):g-e.translate(b+c,null,null,d)-e.transB}},getLabelPosition:function(a,b,c,d,e,f,g,h){var i=this.axis,j=i.transA,k=i.reversed,i=i.staggerLines,a=a+e.x-(f&&d?f*j*(k?-1:1):0),b=b+e.y-(f&&!d?f*j*(k?1:-1):0);r(e.y)||
-(b+=z(c.styles.lineHeight)*0.9-c.getBBox().height/2);i&&(b+=g/(h||1)%i*16);return{x:a,y:b}},getMarkPath:function(a,b,c,d,e,f){return f.crispLine(["M",a,b,"L",a+(e?0:-c),b+(e?c:0)],d)},render:function(a,b){var c=this.axis,d=c.options,e=c.chart.renderer,f=c.horiz,g=this.type,h=this.label,i=this.pos,j=d.labels,k=this.gridLine,l=g?g+"Grid":"grid",m=g?g+"Tick":"tick",q=d[l+"LineWidth"],p=d[l+"LineColor"],y=d[l+"LineDashStyle"],t=d[m+"Length"],l=d[m+"Width"]||0,o=d[m+"Color"],r=d[m+"Position"],m=this.mark,
-v=j.step,s=!0,u=c.tickmarkOffset,E=this.getPosition(f,i,u,b),S=E.x,E=E.y,x=c.staggerLines;if(q){i=c.getPlotLinePath(i+u,q,b);if(k===A){k={stroke:p,"stroke-width":q};if(y)k.dashstyle=y;if(!g)k.zIndex=1;this.gridLine=k=q?e.path(i).attr(k).add(c.gridGroup):null}if(!b&&k&&i)k[this.isNew?"attr":"animate"]({d:i})}if(l&&t)r==="inside"&&(t=-t),c.opposite&&(t=-t),g=this.getMarkPath(S,E,t,l,f,e),m?m.animate({d:g}):this.mark=e.path(g).attr({stroke:o,"stroke-width":l}).add(c.axisGroup);if(h&&!isNaN(S))h.xy=E=
-this.getLabelPosition(S,E,h,f,j,u,a,v),this.isFirst&&!n(d.showFirstLabel,1)||this.isLast&&!n(d.showLastLabel,1)?s=!1:!x&&f&&j.overflow==="justify"&&!this.handleOverflow(a,E)&&(s=!1),v&&a%v&&(s=!1),s?(h[this.isNew?"attr":"animate"](E),this.isNew=!1):h.attr("y",-9999)},destroy:function(){Ga(this,this.axis)}};nb.prototype={render:function(){var a=this,b=a.axis,c=b.horiz,d=(b.pointRange||0)/2,e=a.options,f=e.label,g=a.label,h=e.width,i=e.to,j=e.from,k=r(j)&&r(i),l=e.value,m=e.dashStyle,q=a.svgElem,p=
-[],y,t=e.color,o=e.zIndex,u=e.events,v=b.chart.renderer;b.isLog&&(j=ka(j),i=ka(i),l=ka(l));if(h){if(p=b.getPlotLinePath(l,h),d={stroke:t,"stroke-width":h},m)d.dashstyle=m}else if(k){if(j=s(j,b.min-d),i=O(i,b.max+d),p=b.getPlotBandPath(j,i,e),d={fill:t},e.borderWidth)d.stroke=e.borderColor,d["stroke-width"]=e.borderWidth}else return;if(r(o))d.zIndex=o;if(q)p?q.animate({d:p},null,q.onGetPath):(q.hide(),q.onGetPath=function(){q.show()});else if(p&&p.length&&(a.svgElem=q=v.path(p).attr(d).add(),u))for(y in e=
-function(b){q.on(b,function(c){u[b].apply(a,[c])})},u)e(y);if(f&&r(f.text)&&p&&p.length&&b.width>0&&b.height>0){f=B({align:c&&k&&"center",x:c?!k&&4:10,verticalAlign:!c&&k&&"middle",y:c?k?16:10:k?6:-4,rotation:c&&!k&&90},f);if(!g)a.label=g=v.text(f.text,0,0).attr({align:f.textAlign||f.align,rotation:f.rotation,zIndex:o}).css(f.style).add();b=[p[1],p[4],n(p[6],p[1])];p=[p[2],p[5],n(p[7],p[2])];c=Fa(b);k=Fa(p);g.align(f,!1,{x:c,y:k,width:wa(b)-c,height:wa(p)-k});g.show()}else g&&g.hide();return a},destroy:function(){ta(this.axis.plotLinesAndBands,
-this);Ga(this,this.axis)}};Kb.prototype={destroy:function(){Ga(this,this.axis)},setTotal:function(a){this.cum=this.total=a},render:function(a){var b=this.options.formatter.call(this);this.label?this.label.attr({text:b,visibility:"hidden"}):this.label=this.axis.chart.renderer.text(b,0,0).css(this.options.style).attr({align:this.textAlign,rotation:this.options.rotation,visibility:"hidden"}).add(a)},setOffset:function(a,b){var c=this.axis,d=c.chart,e=d.inverted,f=this.isNegative,g=c.translate(this.percent?
-100:this.total,0,0,0,1),c=c.translate(0),c=M(g-c),h=d.xAxis[0].translate(this.x)+a,i=d.plotHeight,f={x:e?f?g:g-c:h,y:e?i-h-b:f?i-g-c:i-g,width:e?c:b,height:e?b:c};if(e=this.label)e.align(this.alignOptions,null,f),f=e.alignAttr,e.attr({visibility:this.options.crop===!1||d.isInsidePlot(f.x,f.y)?ca?"inherit":"visible":"hidden"})}};ob.prototype={defaultOptions:{dateTimeLabelFormats:{millisecond:"%H:%M:%S.%L",second:"%H:%M:%S",minute:"%H:%M",hour:"%H:%M",day:"%e. %b",week:"%e. %b",month:"%b '%y",year:"%Y"},
-endOnTick:!1,gridLineColor:"#C0C0C0",labels:G,lineColor:"#C0D0E0",lineWidth:1,minPadding:0.01,maxPadding:0.01,minorGridLineColor:"#E0E0E0",minorGridLineWidth:1,minorTickColor:"#A0A0A0",minorTickLength:2,minorTickPosition:"outside",startOfWeek:1,startOnTick:!1,tickColor:"#C0D0E0",tickLength:5,tickmarkPlacement:"between",tickPixelInterval:100,tickPosition:"outside",tickWidth:1,title:{align:"middle",style:{color:"#6D869F",fontWeight:"bold"}},type:"linear"},defaultYAxisOptions:{endOnTick:!0,gridLineWidth:1,
-tickPixelInterval:72,showLastLabel:!0,labels:{align:"right",x:-8,y:3},lineWidth:0,maxPadding:0.05,minPadding:0.05,startOnTick:!0,tickWidth:0,title:{rotation:270,text:"Y-values"},stackLabels:{enabled:!1,formatter:function(){return this.total},style:G.style}},defaultLeftAxisOptions:{labels:{align:"right",x:-8,y:null},title:{rotation:270}},defaultRightAxisOptions:{labels:{align:"left",x:8,y:null},title:{rotation:90}},defaultBottomAxisOptions:{labels:{align:"center",x:0,y:14},title:{rotation:0}},defaultTopAxisOptions:{labels:{align:"center",
-x:0,y:-5},title:{rotation:0}},init:function(a,b){var c=b.isX;this.horiz=a.inverted?!c:c;this.xOrY=(this.isXAxis=c)?"x":"y";this.opposite=b.opposite;this.side=this.horiz?this.opposite?0:2:this.opposite?1:3;this.setOptions(b);var d=this.options,e=d.type,f=e==="datetime";this.labelFormatter=d.labels.formatter||this.defaultLabelFormatter;this.staggerLines=this.horiz&&d.labels.staggerLines;this.userOptions=b;this.minPixelPadding=0;this.chart=a;this.reversed=d.reversed;this.categories=d.categories;this.isLog=
-e==="logarithmic";this.isLinked=r(d.linkedTo);this.isDatetimeAxis=f;this.tickmarkOffset=d.categories&&d.tickmarkPlacement==="between"?0.5:0;this.ticks={};this.minorTicks={};this.plotLinesAndBands=[];this.alternateBands={};this.len=0;this.minRange=this.userMinRange=d.minRange||d.maxZoom;this.range=d.range;this.offset=d.offset||0;this.stacks={};this.min=this.max=null;var g,d=this.options.events;a.axes.push(this);a[c?"xAxis":"yAxis"].push(this);this.series=[];if(a.inverted&&c&&this.reversed===A)this.reversed=
-!0;this.removePlotLine=this.removePlotBand=this.removePlotBandOrLine;this.addPlotLine=this.addPlotBand=this.addPlotBandOrLine;for(g in d)J(this,g,d[g]);if(this.isLog)this.val2lin=ka,this.lin2val=aa},setOptions:function(a){this.options=B(this.defaultOptions,this.isXAxis?{}:this.defaultYAxisOptions,[this.defaultTopAxisOptions,this.defaultRightAxisOptions,this.defaultBottomAxisOptions,this.defaultLeftAxisOptions][this.side],B(N[this.isXAxis?"xAxis":"yAxis"],a))},defaultLabelFormatter:function(){var a=
-this.axis,b=this.value,c=this.dateTimeLabelFormat,d=N.lang.numericSymbols,e=d&&d.length,f,g=a.isLog?b:a.tickInterval;if(a.categories)f=b;else if(c)f=db(c,b);else if(e&&g>=1E3)for(;e--&&f===A;)a=Math.pow(1E3,e+1),g>=a&&d[e]!==null&&(f=Ja(b/a,-1)+d[e]);f===A&&(f=b>=1E3?Ja(b,0):Ja(b,-1));return f},getSeriesExtremes:function(){var a=this,b=a.chart,c=a.stacks,d=[],e=[],f;a.hasVisibleSeries=!1;a.dataMin=a.dataMax=null;o(a.series,function(g){if(g.visible||!b.options.chart.ignoreHiddenSeries){var h=g.options,
-i,j,k,l,m,q,p,y,t,o=h.threshold,u,v=[],x=0;a.hasVisibleSeries=!0;if(a.isLog&&o<=0)o=h.threshold=null;if(a.isXAxis){if(h=g.xData,h.length)a.dataMin=O(n(a.dataMin,h[0]),Fa(h)),a.dataMax=s(n(a.dataMax,h[0]),wa(h))}else{var z,E,S,w=g.cropped,B=g.xAxis.getExtremes(),C=!!g.modifyValue;i=h.stacking;a.usePercentage=i==="percent";if(i)m=h.stack,l=g.type+n(m,""),q="-"+l,g.stackKey=l,j=d[l]||[],d[l]=j,k=e[q]||[],e[q]=k;if(a.usePercentage)a.dataMin=0,a.dataMax=99;h=g.processedXData;p=g.processedYData;u=p.length;
-for(f=0;f<u;f++)if(y=h[f],t=p[f],i&&(E=(z=t<o)?k:j,S=z?q:l,r(E[y])?(E[y]=da(E[y]+t),t=[t,E[y]]):E[y]=t,c[S]||(c[S]={}),c[S][y]||(c[S][y]=new Kb(a,a.options.stackLabels,z,y,m,i)),c[S][y].setTotal(E[y])),t!==null&&t!==A&&(C&&(t=g.modifyValue(t)),w||(h[f+1]||y)>=B.min&&(h[f-1]||y)<=B.max))if(y=t.length)for(;y--;)t[y]!==null&&(v[x++]=t[y]);else v[x++]=t;if(!a.usePercentage&&v.length)a.dataMin=O(n(a.dataMin,v[0]),Fa(v)),a.dataMax=s(n(a.dataMax,v[0]),wa(v));if(r(o))if(a.dataMin>=o)a.dataMin=o,a.ignoreMinPadding=
-!0;else if(a.dataMax<o)a.dataMax=o,a.ignoreMaxPadding=!0}}})},translate:function(a,b,c,d,e,f){var g=this.len,h=1,i=0,j=d?this.oldTransA:this.transA,d=d?this.oldMin:this.min,e=this.options.ordinal||this.isLog&&e;if(!j)j=this.transA;c&&(h*=-1,i=g);this.reversed&&(h*=-1,i-=h*g);b?(this.reversed&&(a=g-a),a=a/j+d,e&&(a=this.lin2val(a))):(e&&(a=this.val2lin(a)),a=h*(a-d)*j+i+h*this.minPixelPadding+(f?j*this.pointRange/2:0));return a},getPlotLinePath:function(a,b,c){var d=this.chart,e=this.left,f=this.top,
-g,h,i,a=this.translate(a,null,null,c),j=c&&d.oldChartHeight||d.chartHeight,k=c&&d.oldChartWidth||d.chartWidth,l;g=this.transB;c=h=u(a+g);g=i=u(j-a-g);if(isNaN(a))l=!0;else if(this.horiz){if(g=f,i=j-this.bottom,c<e||c>e+this.width)l=!0}else if(c=e,h=k-this.right,g<f||g>f+this.height)l=!0;return l?null:d.renderer.crispLine(["M",c,g,"L",h,i],b||0)},getPlotBandPath:function(a,b){var c=this.getPlotLinePath(b),d=this.getPlotLinePath(a);d&&c?d.push(c[4],c[5],c[1],c[2]):d=null;return d},getLinearTickPositions:function(a,
-b,c){for(var d,b=da(U(b/a)*a),c=da(za(c/a)*a),e=[];b<=c;){e.push(b);b=da(b+a);if(b===d)break;d=b}return e},getLogTickPositions:function(a,b,c,d){var e=this.options,f=this.len,g=[];if(!d)this._minorAutoInterval=null;if(a>=0.5)a=u(a),g=this.getLinearTickPositions(a,b,c);else if(a>=0.08)for(var f=U(b),h,i,j,k,l,e=a>0.3?[1,2,4]:a>0.15?[1,2,4,6,8]:[1,2,3,4,5,6,7,8,9];f<c+1&&!l;f++){i=e.length;for(h=0;h<i&&!l;h++)j=ka(aa(f)*e[h]),j>b&&g.push(k),k>c&&(l=!0),k=j}else if(b=aa(b),c=aa(c),a=e[d?"minorTickInterval":
-"tickInterval"],a=n(a==="auto"?null:a,this._minorAutoInterval,(c-b)*(e.tickPixelInterval/(d?5:1))/((d?f/this.tickPositions.length:f)||1)),a=hb(a,null,K.pow(10,U(K.log(a)/K.LN10))),g=Ta(this.getLinearTickPositions(a,b,c),ka),!d)this._minorAutoInterval=a/5;if(!d)this.tickInterval=a;return g},getMinorTickPositions:function(){var a=this.options,b=this.tickPositions,c=this.minorTickInterval,d=[],e;if(this.isLog){e=b.length;for(a=1;a<e;a++)d=d.concat(this.getLogTickPositions(c,b[a-1],b[a],!0))}else if(this.isDatetimeAxis&&
-a.minorTickInterval==="auto")d=d.concat(Cb(Ab(c),this.min,this.max,a.startOfWeek));else for(b=this.min+(b[0]-this.min)%c;b<=this.max;b+=c)d.push(b);return d},adjustForMinRange:function(){var a=this.options,b=this.min,c=this.max,d,e=this.dataMax-this.dataMin>=this.minRange,f,g,h,i,j;if(this.isXAxis&&this.minRange===A&&!this.isLog)r(a.min)||r(a.max)?this.minRange=null:(o(this.series,function(a){i=a.xData;for(g=j=a.xIncrement?1:i.length-1;g>0;g--)if(h=i[g]-i[g-1],f===A||h<f)f=h}),this.minRange=O(f*5,
-this.dataMax-this.dataMin));if(c-b<this.minRange){var k=this.minRange;d=(k-c+b)/2;d=[b-d,n(a.min,b-d)];if(e)d[2]=this.dataMin;b=wa(d);c=[b+k,n(a.max,b+k)];if(e)c[2]=this.dataMax;c=Fa(c);c-b<k&&(d[0]=c-k,d[1]=n(a.min,c-k),b=wa(d))}this.min=b;this.max=c},setAxisTranslation:function(){var a=this.max-this.min,b=0,c,d=0,e=0,f=this.linkedParent,g=this.transA;if(this.isXAxis)f?(d=f.minPointOffset,e=f.pointRangePadding):o(this.series,function(a){var f=a.pointRange,g=a.options.pointPlacement,k=a.closestPointRange;
-b=s(b,f);d=s(d,g?0:f/2);e=s(e,g==="on"?0:f);!a.noSharedTooltip&&r(k)&&(c=r(c)?O(c,k):k)}),this.minPointOffset=d,this.pointRangePadding=e,this.pointRange=b,this.closestPointRange=c;this.oldTransA=g;this.translationSlope=this.transA=g=this.len/(a+e||1);this.transB=this.horiz?this.left:this.bottom;this.minPixelPadding=g*d},setTickPositions:function(a){var b=this,c=b.chart,d=b.options,e=b.isLog,f=b.isDatetimeAxis,g=b.isXAxis,h=b.isLinked,i=b.options.tickPositioner,j=d.maxPadding,k=d.minPadding,l=d.tickInterval,
-m=d.minTickInterval,q=d.tickPixelInterval,p=b.categories;h?(b.linkedParent=c[g?"xAxis":"yAxis"][d.linkedTo],c=b.linkedParent.getExtremes(),b.min=n(c.min,c.dataMin),b.max=n(c.max,c.dataMax),d.type!==b.linkedParent.options.type&&Oa(11,1)):(b.min=n(b.userMin,d.min,b.dataMin),b.max=n(b.userMax,d.max,b.dataMax));if(e)!a&&O(b.min,n(b.dataMin,b.min))<=0&&Oa(10,1),b.min=da(ka(b.min)),b.max=da(ka(b.max));if(b.range&&(b.userMin=b.min=s(b.min,b.max-b.range),b.userMax=b.max,a))b.range=null;b.adjustForMinRange();
-if(!p&&!b.usePercentage&&!h&&r(b.min)&&r(b.max)&&(c=b.max-b.min)){if(!r(d.min)&&!r(b.userMin)&&k&&(b.dataMin<0||!b.ignoreMinPadding))b.min-=c*k;if(!r(d.max)&&!r(b.userMax)&&j&&(b.dataMax>0||!b.ignoreMaxPadding))b.max+=c*j}b.tickInterval=b.min===b.max||b.min===void 0||b.max===void 0?1:h&&!l&&q===b.linkedParent.options.tickPixelInterval?b.linkedParent.tickInterval:n(l,p?1:(b.max-b.min)*q/(b.len||1));g&&!a&&o(b.series,function(a){a.processData(b.min!==b.oldMin||b.max!==b.oldMax)});b.setAxisTranslation(a);
-b.beforeSetTickPositions&&b.beforeSetTickPositions();if(b.postProcessTickInterval)b.tickInterval=b.postProcessTickInterval(b.tickInterval);if(!l&&b.tickInterval<m)b.tickInterval=m;if(!f&&!e&&(a=K.pow(10,U(K.log(b.tickInterval)/K.LN10)),!l))b.tickInterval=hb(b.tickInterval,null,a,d);b.minorTickInterval=d.minorTickInterval==="auto"&&b.tickInterval?b.tickInterval/5:d.minorTickInterval;b.tickPositions=i=d.tickPositions||i&&i.apply(b,[b.min,b.max]);if(!i)i=f?(b.getNonLinearTimeTicks||Cb)(Ab(b.tickInterval,
-d.units),b.min,b.max,d.startOfWeek,b.ordinalPositions,b.closestPointRange,!0):e?b.getLogTickPositions(b.tickInterval,b.min,b.max):b.getLinearTickPositions(b.tickInterval,b.min,b.max),b.tickPositions=i;if(!h)e=i[0],f=i[i.length-1],h=b.minPointOffset||0,d.startOnTick?b.min=e:b.min-h>e&&i.shift(),d.endOnTick?b.max=f:b.max+h<f&&i.pop(),i.length===1&&(b.min-=1.0E-9,b.max+=1.0E-9)},setMaxTicks:function(){var a=this.chart,b=a.maxTicks,c=this.tickPositions,d=this.xOrY;b||(b={x:0,y:0});if(!this.isLinked&&
-!this.isDatetimeAxis&&c.length>b[d]&&this.options.alignTicks!==!1)b[d]=c.length;a.maxTicks=b},adjustTickAmount:function(){var a=this.xOrY,b=this.tickPositions,c=this.chart.maxTicks;if(c&&c[a]&&!this.isDatetimeAxis&&!this.categories&&!this.isLinked&&this.options.alignTicks!==!1){var d=this.tickAmount,e=b.length;this.tickAmount=a=c[a];if(e<a){for(;b.length<a;)b.push(da(b[b.length-1]+this.tickInterval));this.transA*=(e-1)/(a-1);this.max=b[b.length-1]}if(r(d)&&a!==d)this.isDirty=!0}},setScale:function(){var a=
-this.stacks,b,c,d,e;this.oldMin=this.min;this.oldMax=this.max;this.oldAxisLength=this.len;this.setAxisSize();e=this.len!==this.oldAxisLength;o(this.series,function(a){if(a.isDirtyData||a.isDirty||a.xAxis.isDirty)d=!0});if(e||d||this.isLinked||this.userMin!==this.oldUserMin||this.userMax!==this.oldUserMax)if(this.getSeriesExtremes(),this.setTickPositions(),this.oldUserMin=this.userMin,this.oldUserMax=this.userMax,!this.isDirty)this.isDirty=e||this.min!==this.oldMin||this.max!==this.oldMax;if(!this.isXAxis)for(b in a)for(c in a[b])a[b][c].cum=
-a[b][c].total;this.setMaxTicks()},setExtremes:function(a,b,c,d,e){var f=this,g=f.chart,c=n(c,!0),e=x(e,{min:a,max:b});F(f,"setExtremes",e,function(){f.userMin=a;f.userMax=b;f.isDirtyExtremes=!0;c&&g.redraw(d)})},zoom:function(a,b){this.setExtremes(a,b,!1,A,{trigger:"zoom"});return!0},setAxisSize:function(){var a=this.chart,b=this.options,c=b.offsetLeft||0,d=b.offsetRight||0;this.left=n(b.left,a.plotLeft+c);this.top=n(b.top,a.plotTop);this.width=n(b.width,a.plotWidth-c+d);this.height=n(b.height,a.plotHeight);
-this.bottom=a.chartHeight-this.height-this.top;this.right=a.chartWidth-this.width-this.left;this.len=s(this.horiz?this.width:this.height,0)},getExtremes:function(){var a=this.isLog;return{min:a?da(aa(this.min)):this.min,max:a?da(aa(this.max)):this.max,dataMin:this.dataMin,dataMax:this.dataMax,userMin:this.userMin,userMax:this.userMax}},getThreshold:function(a){var b=this.isLog,c=b?aa(this.min):this.min,b=b?aa(this.max):this.max;c>a||a===null?a=c:b<a&&(a=b);return this.translate(a,0,1,0,1)},addPlotBandOrLine:function(a){a=
-(new nb(this,a)).render();this.plotLinesAndBands.push(a);return a},getOffset:function(){var a=this,b=a.chart,c=b.renderer,d=a.options,e=a.tickPositions,f=a.ticks,g=a.horiz,h=a.side,i,j=0,k,l=0,m=d.title,q=d.labels,p=0,y=b.axisOffset,t=[-1,1,1,-1][h],H;a.hasData=b=a.hasVisibleSeries||r(a.min)&&r(a.max)&&!!e;a.showAxis=i=b||n(d.showEmpty,!0);if(!a.axisGroup)a.gridGroup=c.g("grid").attr({zIndex:d.gridZIndex||1}).add(),a.axisGroup=c.g("axis").attr({zIndex:d.zIndex||2}).add(),a.labelGroup=c.g("axis-labels").attr({zIndex:q.zIndex||
-7}).add();if(b||a.isLinked)o(e,function(b){f[b]?f[b].addLabel():f[b]=new Qa(a,b)}),o(e,function(a){if(h===0||h===2||{1:"left",3:"right"}[h]===q.align)p=s(f[a].getLabelSize(),p)}),a.staggerLines&&(p+=(a.staggerLines-1)*16);else for(H in f)f[H].destroy(),delete f[H];if(m&&m.text){if(!a.axisTitle)a.axisTitle=c.text(m.text,0,0,m.useHTML).attr({zIndex:7,rotation:m.rotation||0,align:m.textAlign||{low:"left",middle:"center",high:"right"}[m.align]}).css(m.style).add(a.axisGroup),a.axisTitle.isNew=!0;if(i)j=
-a.axisTitle.getBBox()[g?"height":"width"],l=n(m.margin,g?5:10),k=m.offset;a.axisTitle[i?"show":"hide"]()}a.offset=t*n(d.offset,y[h]);a.axisTitleMargin=n(k,p+l+(h!==2&&p&&t*d.labels[g?"y":"x"]));y[h]=s(y[h],a.axisTitleMargin+j+t*a.offset)},getLinePath:function(a){var b=this.chart,c=this.opposite,d=this.offset,e=this.horiz,f=this.left+(c?this.width:0)+d;this.lineTop=c=b.chartHeight-this.bottom-(c?this.height:0)+d;return b.renderer.crispLine(["M",e?this.left:f,e?c:this.top,"L",e?b.chartWidth-this.right:
-f,e?c:b.chartHeight-this.bottom],a)},getTitlePosition:function(){var a=this.horiz,b=this.left,c=this.top,d=this.len,e=this.options.title,f=a?b:c,g=this.opposite,h=this.offset,i=z(e.style.fontSize||12),d={low:f+(a?0:d),middle:f+d/2,high:f+(a?d:0)}[e.align],b=(a?c+this.height:b)+(a?1:-1)*(g?-1:1)*this.axisTitleMargin+(this.side===2?i:0);return{x:a?d:b+(g?this.width:0)+h+(e.x||0),y:a?b-(g?this.height:0)+h:d+(e.y||0)}},render:function(){var a=this,b=a.chart,c=b.renderer,d=a.options,e=a.isLog,f=a.isLinked,
-g=a.tickPositions,h=a.axisTitle,i=a.stacks,j=a.ticks,k=a.minorTicks,l=a.alternateBands,m=d.stackLabels,q=d.alternateGridColor,p=a.tickmarkOffset,n=d.lineWidth,t,H=b.hasRendered&&r(a.oldMin)&&!isNaN(a.oldMin),u=a.showAxis,v,s;if(a.hasData||f)if(a.minorTickInterval&&!a.categories&&o(a.getMinorTickPositions(),function(b){k[b]||(k[b]=new Qa(a,b,"minor"));H&&k[b].isNew&&k[b].render(null,!0);k[b].isActive=!0;k[b].render()}),g.length&&o(g.slice(1).concat([g[0]]),function(b,c){c=c===g.length-1?0:c+1;if(!f||
-b>=a.min&&b<=a.max)j[b]||(j[b]=new Qa(a,b)),H&&j[b].isNew&&j[b].render(c,!0),j[b].isActive=!0,j[b].render(c)}),q&&o(g,function(b,c){if(c%2===0&&b<a.max)l[b]||(l[b]=new nb(a)),v=b+p,s=g[c+1]!==A?g[c+1]+p:a.max,l[b].options={from:e?aa(v):v,to:e?aa(s):s,color:q},l[b].render(),l[b].isActive=!0}),!a._addedPlotLB)o((d.plotLines||[]).concat(d.plotBands||[]),function(b){a.addPlotBandOrLine(b)}),a._addedPlotLB=!0;o([j,k,l],function(a){for(var b in a)a[b].isActive?a[b].isActive=!1:(a[b].destroy(),delete a[b])});
-if(n)t=a.getLinePath(n),a.axisLine?a.axisLine.animate({d:t}):a.axisLine=c.path(t).attr({stroke:d.lineColor,"stroke-width":n,zIndex:7}).add(a.axisGroup),a.axisLine[u?"show":"hide"]();if(h&&u)h[h.isNew?"attr":"animate"](a.getTitlePosition()),h.isNew=!1;if(m&&m.enabled){var x,E,d=a.stackTotalGroup;if(!d)a.stackTotalGroup=d=c.g("stack-labels").attr({visibility:"visible",zIndex:6}).add();d.translate(b.plotLeft,b.plotTop);for(x in i)for(E in b=i[x],b)b[E].render(d)}a.isDirty=!1},removePlotBandOrLine:function(a){for(var b=
-this.plotLinesAndBands,c=b.length;c--;)b[c].id===a&&b[c].destroy()},setTitle:function(a,b){var c=this.chart,d=this.options,e=this.axisTitle;d.title=B(d.title,a);this.axisTitle=e&&e.destroy();this.isDirty=!0;n(b,!0)&&c.redraw()},redraw:function(){var a=this.chart;a.tracker.resetTracker&&a.tracker.resetTracker(!0);this.render();o(this.plotLinesAndBands,function(a){a.render()});o(this.series,function(a){a.isDirty=!0})},setCategories:function(a,b){var c=this.chart;this.categories=this.userOptions.categories=
-a;o(this.series,function(a){a.translate();a.setTooltipPoints(!0)});this.isDirty=!0;n(b,!0)&&c.redraw()},destroy:function(){var a=this,b=a.stacks,c;R(a);for(c in b)Ga(b[c]),b[c]=null;o([a.ticks,a.minorTicks,a.alternateBands,a.plotLinesAndBands],function(a){Ga(a)});o("stackTotalGroup,axisLine,axisGroup,gridGroup,labelGroup,axisTitle".split(","),function(b){a[b]&&(a[b]=a[b].destroy())})}};pb.prototype={destroy:function(){o(this.crosshairs,function(a){a&&a.destroy()});if(this.label)this.label=this.label.destroy()},
-move:function(a,b,c,d){var e=this,f=e.now,g=e.options.animation!==!1&&!e.isHidden;x(f,{x:g?(2*f.x+a)/3:a,y:g?(f.y+b)/2:b,anchorX:g?(2*f.anchorX+c)/3:c,anchorY:g?(f.anchorY+d)/2:d});e.label.attr(f);if(g&&(M(a-f.x)>1||M(b-f.y)>1))clearTimeout(this.tooltipTimeout),this.tooltipTimeout=setTimeout(function(){e&&e.move(a,b,c,d)},32)},hide:function(){if(!this.isHidden){var a=this.chart.hoverPoints;this.label.hide();a&&o(a,function(a){a.setState()});this.chart.hoverPoints=null;this.isHidden=!0}},hideCrosshairs:function(){o(this.crosshairs,
-function(a){a&&a.hide()})},getAnchor:function(a,b){var c,d=this.chart,e=d.inverted,f=0,g=0,h,a=la(a);c=a[0].tooltipPos;c||(o(a,function(a){h=a.series.yAxis;f+=a.plotX;g+=(a.plotLow?(a.plotLow+a.plotHigh)/2:a.plotY)+(!e&&h?h.top-d.plotTop:0)}),f/=a.length,g/=a.length,c=[e?d.plotWidth-g:f,this.shared&&!e&&a.length>1&&b?b.chartY-d.plotTop:e?d.plotHeight-f:g]);return Ta(c,u)},getPosition:function(a,b,c){var d=this.chart,e=d.plotLeft,f=d.plotTop,g=d.plotWidth,h=d.plotHeight,i=n(this.options.distance,12),
-j=c.plotX,c=c.plotY,d=j+e+(d.inverted?i:-a-i),k=c-b+f+15,l;d<7&&(d=e+s(j,0)+i);d+a>e+g&&(d-=d+a-(e+g),k=c-b+f-i,l=!0);k<f+5&&(k=f+5,l&&c>=k&&c<=k+b&&(k=c+f+i));k+b>f+h&&(k=s(f,f+h-b-i));return{x:d,y:k}},refresh:function(a,b){function c(){var a=this.points||la(this),b=a[0].series,c;c=[b.tooltipHeaderFormatter(a[0].key)];o(a,function(a){b=a.series;c.push(b.tooltipFormatter&&b.tooltipFormatter(a)||a.point.tooltipFormatter(b.tooltipOptions.pointFormat))});c.push(f.footerFormat||"");return c.join("")}
-var d=this.chart,e=this.label,f=this.options,g,h,i,j={},k,l=[];k=f.formatter||c;var j=d.hoverPoints,m,q=f.crosshairs;i=this.shared;h=this.getAnchor(a,b);g=h[0];h=h[1];i&&(!a.series||!a.series.noSharedTooltip)?(d.hoverPoints=a,j&&o(j,function(a){a.setState()}),o(a,function(a){a.setState("hover");l.push(a.getLabelConfig())}),j={x:a[0].category,y:a[0].y},j.points=l,a=a[0]):j=a.getLabelConfig();k=k.call(j);j=a.series;i=i||!j.isCartesian||j.tooltipOutsidePlot||d.isInsidePlot(g,h);k===!1||!i?this.hide():
-(this.isHidden&&e.show(),e.attr({text:k}),m=f.borderColor||a.color||j.color||"#606060",e.attr({stroke:m}),e=(f.positioner||this.getPosition).call(this,e.width,e.height,{plotX:g,plotY:h}),this.move(u(e.x),u(e.y),g+d.plotLeft,h+d.plotTop),this.isHidden=!1);if(q){q=la(q);for(e=q.length;e--;)if(i=a.series[e?"yAxis":"xAxis"],q[e]&&i)if(i=i.getPlotLinePath(e?n(a.stackY,a.y):a.x,1),this.crosshairs[e])this.crosshairs[e].attr({d:i,visibility:"visible"});else{j={"stroke-width":q[e].width||1,stroke:q[e].color||
-"#C0C0C0",zIndex:q[e].zIndex||2};if(q[e].dashStyle)j.dashstyle=q[e].dashStyle;this.crosshairs[e]=d.renderer.path(i).attr(j).add()}}F(d,"tooltipRefresh",{text:k,x:g+d.plotLeft,y:h+d.plotTop,borderColor:m})}};qb.prototype={normalizeMouseEvent:function(a){var b,c,d,a=a||L.event;if(!a.target)a.target=a.srcElement;a=Pb(a);d=a.touches?a.touches.item(0):a;this.chartPosition=b=Vb(this.chart.container);d.pageX===A?(c=a.x,b=a.y):(c=d.pageX-b.left,b=d.pageY-b.top);return x(a,{chartX:u(c),chartY:u(b)})},getMouseCoordinates:function(a){var b=
-{xAxis:[],yAxis:[]},c=this.chart;o(c.axes,function(d){var e=d.isXAxis;b[e?"xAxis":"yAxis"].push({axis:d,value:d.translate(((c.inverted?!e:e)?a.chartX-c.plotLeft:d.top+d.len-a.chartY)-d.minPixelPadding,!0)})});return b},getIndex:function(a){var b=this.chart;return b.inverted?b.plotHeight+b.plotTop-a.chartY:a.chartX-b.plotLeft},onmousemove:function(a){var b=this.chart,c=b.series,d=b.tooltip,e,f=b.hoverPoint,g=b.hoverSeries,h,i,j=b.chartWidth,k=this.getIndex(a);if(d&&this.options.tooltip.shared&&(!g||
-!g.noSharedTooltip)){e=[];h=c.length;for(i=0;i<h;i++)if(c[i].visible&&c[i].options.enableMouseTracking!==!1&&!c[i].noSharedTooltip&&c[i].tooltipPoints&&c[i].tooltipPoints.length)b=c[i].tooltipPoints[k],b._dist=M(k-b[c[i].xAxis.tooltipPosName||"plotX"]),j=O(j,b._dist),e.push(b);for(h=e.length;h--;)e[h]._dist>j&&e.splice(h,1);if(e.length&&e[0].plotX!==this.hoverX)d.refresh(e,a),this.hoverX=e[0].plotX}if(g&&g.tracker&&(b=g.tooltipPoints[k])&&b!==f)b.onMouseOver()},resetTracker:function(a){var b=this.chart,
-c=b.hoverSeries,d=b.hoverPoint,e=b.tooltip,b=e&&e.shared?b.hoverPoints:d;(a=a&&e&&b)&&la(b)[0].plotX===A&&(a=!1);if(a)e.refresh(b);else{if(d)d.onMouseOut();if(c)c.onMouseOut();e&&(e.hide(),e.hideCrosshairs());this.hoverX=null}},setDOMEvents:function(){function a(){if(b.selectionMarker){var f={xAxis:[],yAxis:[]},g=b.selectionMarker.getBBox(),h=g.x-c.plotLeft,l=g.y-c.plotTop,m;e&&(o(c.axes,function(a){if(a.options.zoomEnabled!==!1){var b=a.isXAxis,d=c.inverted?!b:b,e=a.translate(d?h:c.plotHeight-l-
-g.height,!0,0,0,1),d=a.translate((d?h+g.width:c.plotHeight-l)-2*a.minPixelPadding,!0,0,0,1);!isNaN(e)&&!isNaN(d)&&(f[b?"xAxis":"yAxis"].push({axis:a,min:O(e,d),max:s(e,d)}),m=!0)}}),m&&F(c,"selection",f,function(a){c.zoom(a)}));b.selectionMarker=b.selectionMarker.destroy()}if(c)I(d,{cursor:"auto"}),c.cancelClick=e,c.mouseIsDown=e=!1;R(C,"mouseup",a);Ba&&R(C,"touchend",a)}var b=this,c=b.chart,d=c.container,e,f=b.zoomX&&!c.inverted||b.zoomY&&c.inverted,g=b.zoomY&&!c.inverted||b.zoomX&&c.inverted;b.hideTooltipOnMouseMove=
-function(a){a=Pb(a);b.chartPosition&&c.hoverSeries&&c.hoverSeries.isCartesian&&!c.isInsidePlot(a.pageX-b.chartPosition.left-c.plotLeft,a.pageY-b.chartPosition.top-c.plotTop)&&b.resetTracker()};b.hideTooltipOnMouseLeave=function(){b.resetTracker();b.chartPosition=null};d.onmousedown=function(d){d=b.normalizeMouseEvent(d);d.type.indexOf("touch")===-1&&d.preventDefault&&d.preventDefault();c.mouseIsDown=!0;c.cancelClick=!1;c.mouseDownX=b.mouseDownX=d.chartX;b.mouseDownY=d.chartY;J(C,"mouseup",a);Ba&&
-J(C,"touchend",a)};var h=function(a){if(!a||!(a.touches&&a.touches.length>1)){var a=b.normalizeMouseEvent(a),d=a.type,h=a.chartX,l=a.chartY,m=!c.isInsidePlot(h-c.plotLeft,l-c.plotTop);if(d.indexOf("touch")===-1)a.returnValue=!1;d==="touchstart"&&(w(a.target,"isTracker")?c.runTrackerClick||a.preventDefault():!c.runChartClick&&!m&&a.preventDefault());if(m)h<c.plotLeft?h=c.plotLeft:h>c.plotLeft+c.plotWidth&&(h=c.plotLeft+c.plotWidth),l<c.plotTop?l=c.plotTop:l>c.plotTop+c.plotHeight&&(l=c.plotTop+c.plotHeight);
-if(c.mouseIsDown&&d!=="touchstart"&&(e=Math.sqrt(Math.pow(b.mouseDownX-h,2)+Math.pow(b.mouseDownY-l,2)),e>10)){d=c.isInsidePlot(b.mouseDownX-c.plotLeft,b.mouseDownY-c.plotTop);if(c.hasCartesianSeries&&(b.zoomX||b.zoomY)&&d&&!b.selectionMarker)b.selectionMarker=c.renderer.rect(c.plotLeft,c.plotTop,f?1:c.plotWidth,g?1:c.plotHeight,0).attr({fill:b.options.chart.selectionMarkerFill||"rgba(69,114,167,0.25)",zIndex:7}).add();if(b.selectionMarker&&f){var q=h-b.mouseDownX;b.selectionMarker.attr({width:M(q),
-x:(q>0?0:q)+b.mouseDownX})}b.selectionMarker&&g&&(l-=b.mouseDownY,b.selectionMarker.attr({height:M(l),y:(l>0?0:l)+b.mouseDownY}));d&&!b.selectionMarker&&b.options.chart.panning&&c.pan(h)}if(!m)b.onmousemove(a);return m||!c.hasCartesianSeries}};if(!/Android 4\.0/.test(na))d.onmousemove=h;J(d,"mouseleave",b.hideTooltipOnMouseLeave);Ba||J(C,"mousemove",b.hideTooltipOnMouseMove);d.ontouchstart=function(a){if(b.zoomX||b.zoomY)d.onmousedown(a);h(a)};d.ontouchmove=h;d.ontouchend=function(){e&&b.resetTracker()};
-d.onclick=function(a){var d=c.hoverPoint,e,f,a=b.normalizeMouseEvent(a);a.cancelBubble=!0;if(!c.cancelClick)d&&(w(a.target,"isTracker")||w(a.target.parentNode,"isTracker"))?(e=d.plotX,f=d.plotY,x(d,{pageX:b.chartPosition.left+c.plotLeft+(c.inverted?c.plotWidth-f:e),pageY:b.chartPosition.top+c.plotTop+(c.inverted?c.plotHeight-e:f)}),F(d.series,"click",x(a,{point:d})),d.firePointEvent("click",a)):(x(a,b.getMouseCoordinates(a)),c.isInsidePlot(a.chartX-c.plotLeft,a.chartY-c.plotTop)&&F(c,"click",a))}},
-destroy:function(){var a=this.chart,b=a.container;if(a.trackerGroup)a.trackerGroup=a.trackerGroup.destroy();R(b,"mouseleave",this.hideTooltipOnMouseLeave);R(C,"mousemove",this.hideTooltipOnMouseMove);b.onclick=b.onmousedown=b.onmousemove=b.ontouchstart=b.ontouchend=b.ontouchmove=null;clearInterval(this.tooltipTimeout)},init:function(a,b){if(!a.trackerGroup)a.trackerGroup=a.renderer.g("tracker").attr({zIndex:9}).add();if(b.enabled)a.tooltip=new pb(a,b);this.setDOMEvents()}};rb.prototype={init:function(a){var b=
-this,c=b.options=a.options.legend;if(c.enabled){var d=c.itemStyle,e=n(c.padding,8),f=c.itemMarginTop||0;b.baseline=z(d.fontSize)+3+f;b.itemStyle=d;b.itemHiddenStyle=B(d,c.itemHiddenStyle);b.itemMarginTop=f;b.padding=e;b.initialItemX=e;b.initialItemY=e-5;b.maxItemWidth=0;b.chart=a;b.itemHeight=0;b.lastLineHeight=0;b.render();J(b.chart,"endResize",function(){b.positionCheckboxes()})}},colorizeItem:function(a,b){var c=this.options,d=a.legendItem,e=a.legendLine,f=a.legendSymbol,g=this.itemHiddenStyle.color,
-c=b?c.itemStyle.color:g,h=b?a.color:g,g=a.options&&a.options.marker,i={stroke:h,fill:h},j;d&&d.css({fill:c});e&&e.attr({stroke:h});if(f){if(g)for(j in g=a.convertAttribs(g),g)d=g[j],d!==A&&(i[j]=d);f.attr(i)}},positionItem:function(a){var b=this.options,c=b.symbolPadding,b=!b.rtl,d=a._legendItemPos,e=d[0],d=d[1],f=a.checkbox;a.legendGroup&&a.legendGroup.translate(b?e:this.legendWidth-e-2*c-4,d);if(f)f.x=e,f.y=d},destroyItem:function(a){var b=a.checkbox;o(["legendItem","legendLine","legendSymbol",
-"legendGroup"],function(b){a[b]&&a[b].destroy()});b&&Na(a.checkbox)},destroy:function(){var a=this.group,b=this.box;if(b)this.box=b.destroy();if(a)this.group=a.destroy()},positionCheckboxes:function(a){var b=this.group.alignAttr,c,d=this.clipHeight||this.legendHeight;if(b)c=b.translateY,o(this.allItems,function(e){var f=e.checkbox,g;f&&(g=c+f.y+(a||0)+3,I(f,{left:b.translateX+e.legendItemWidth+f.x-20+"px",top:g+"px",display:g>c-6&&g<c+d-6?"":Q}))})},renderItem:function(a){var p;var b=this,c=b.chart,
-d=c.renderer,e=b.options,f=e.layout==="horizontal",g=e.symbolWidth,h=e.symbolPadding,i=b.itemStyle,j=b.itemHiddenStyle,k=b.padding,l=!e.rtl,m=e.width,q=e.itemMarginBottom||0,n=b.itemMarginTop,o=b.initialItemX,t=a.legendItem,r=a.series||a,u=r.options,v=u.showCheckbox,x=e.useHTML;if(!t&&(a.legendGroup=d.g("legend-item").attr({zIndex:1}).add(b.scrollGroup),r.drawLegendSymbol(b,a),a.legendItem=t=d.text(e.labelFormatter.call(a),l?g+h:-h,b.baseline,x).css(B(a.visible?i:j)).attr({align:l?"left":"right",
-zIndex:2}).add(a.legendGroup),(x?t:a.legendGroup).on("mouseover",function(){a.setState("hover");t.css(b.options.itemHoverStyle)}).on("mouseout",function(){t.css(a.visible?i:j);a.setState()}).on("click",function(b){var c=function(){a.setVisible()},b={browserEvent:b};a.firePointEvent?a.firePointEvent("legendItemClick",b,c):F(a,"legendItemClick",b,c)}),b.colorizeItem(a,a.visible),u&&v))a.checkbox=T("input",{type:"checkbox",checked:a.selected,defaultChecked:a.selected},e.itemCheckboxStyle,c.container),
-J(a.checkbox,"click",function(b){F(a,"checkboxClick",{checked:b.target.checked},function(){a.select()})});d=t.getBBox();p=a.legendItemWidth=e.itemWidth||g+h+d.width+k+(v?20:0),e=p;b.itemHeight=g=d.height;if(f&&b.itemX-o+e>(m||c.chartWidth-2*k-o))b.itemX=o,b.itemY+=n+b.lastLineHeight+q,b.lastLineHeight=0;b.maxItemWidth=s(b.maxItemWidth,e);b.lastItemY=n+b.itemY+q;b.lastLineHeight=s(g,b.lastLineHeight);a._legendItemPos=[b.itemX,b.itemY];f?b.itemX+=e:(b.itemY+=n+g+q,b.lastLineHeight=g);b.offsetWidth=
-m||s(f?b.itemX-o:e,b.offsetWidth)},render:function(){var a=this,b=a.chart,c=b.renderer,d=a.group,e,f,g,h,i=a.box,j=a.options,k=a.padding,l=j.borderWidth,m=j.backgroundColor;a.itemX=a.initialItemX;a.itemY=a.initialItemY;a.offsetWidth=0;a.lastItemY=0;if(!d)a.group=d=c.g("legend").attr({zIndex:7}).add(),a.contentGroup=c.g().attr({zIndex:1}).add(d),a.scrollGroup=c.g().add(a.contentGroup),a.clipRect=c.clipRect(0,0,9999,b.chartHeight),a.contentGroup.clip(a.clipRect);e=[];o(b.series,function(a){var b=a.options;
-b.showInLegend&&(e=e.concat(a.legendItems||(b.legendType==="point"?a.data:a)))});Ib(e,function(a,b){return(a.options&&a.options.legendIndex||0)-(b.options&&b.options.legendIndex||0)});j.reversed&&e.reverse();a.allItems=e;a.display=f=!!e.length;o(e,function(b){a.renderItem(b)});g=j.width||a.offsetWidth;h=a.lastItemY+a.lastLineHeight;h=a.handleOverflow(h);if(l||m){g+=k;h+=k;if(i){if(g>0&&h>0)i[i.isNew?"attr":"animate"](i.crisp(null,null,null,g,h)),i.isNew=!1}else a.box=i=c.rect(0,0,g,h,j.borderRadius,
-l||0).attr({stroke:j.borderColor,"stroke-width":l||0,fill:m||Q}).add(d).shadow(j.shadow),i.isNew=!0;i[f?"show":"hide"]()}a.legendWidth=g;a.legendHeight=h;o(e,function(b){a.positionItem(b)});f&&d.align(x({width:g,height:h},j),!0,b.spacingBox);b.isResizing||this.positionCheckboxes()},handleOverflow:function(a){var b=this,c=this.chart,d=c.renderer,e=this.options,f=e.y,f=c.spacingBox.height+(e.verticalAlign==="top"?-f:f)-this.padding,g=e.maxHeight,h=this.clipRect,i=e.navigation,j=n(i.animation,!0),k=
-i.arrowSize||12,l=this.nav;e.layout==="horizontal"&&(f/=2);g&&(f=O(f,g));if(a>f){this.clipHeight=c=f-20;this.pageCount=za(a/c);this.currentPage=n(this.currentPage,1);this.fullHeight=a;h.attr({height:c});if(!l)this.nav=l=d.g().attr({zIndex:1}).add(this.group),this.up=d.symbol("triangle",0,0,k,k).on("click",function(){b.scroll(-1,j)}).add(l),this.pager=d.text("",15,10).css(i.style).add(l),this.down=d.symbol("triangle-down",0,0,k,k).on("click",function(){b.scroll(1,j)}).add(l);b.scroll(0);a=f}else if(l)h.attr({height:c.chartHeight}),
-l.hide(),this.scrollGroup.attr({translateY:1}),this.clipHeight=0;return a},scroll:function(a,b){var c=this.pageCount,d=this.currentPage+a,e=this.clipHeight,f=this.options.navigation,g=f.activeColor,h=f.inactiveColor,f=this.pager,i=this.padding;d>c&&(d=c);if(d>0)b!==A&&xa(b,this.chart),this.nav.attr({translateX:i,translateY:e+7,visibility:"visible"}),this.up.attr({fill:d===1?h:g}).css({cursor:d===1?"default":"pointer"}),f.attr({text:d+"/"+this.pageCount}),this.down.attr({x:18+this.pager.getBBox().width,
-fill:d===c?h:g}).css({cursor:d===c?"default":"pointer"}),e=-O(e*(d-1),this.fullHeight-e+i)+1,this.scrollGroup.animate({translateY:e}),f.attr({text:d+"/"+c}),this.currentPage=d,this.positionCheckboxes(e)}};sb.prototype={init:function(a,b){var c,d=a.series;a.series=null;c=B(N,a);c.series=a.series=d;var d=c.chart,e=d.margin,e=Y(e)?e:[e,e,e,e];this.optionsMarginTop=n(d.marginTop,e[0]);this.optionsMarginRight=n(d.marginRight,e[1]);this.optionsMarginBottom=n(d.marginBottom,e[2]);this.optionsMarginLeft=
-n(d.marginLeft,e[3]);this.runChartClick=(e=d.events)&&!!e.click;this.callback=b;this.isResizing=0;this.options=c;this.axes=[];this.series=[];this.hasCartesianSeries=d.showAxes;var f;this.index=Ha.length;Ha.push(this);d.reflow!==!1&&J(this,"load",this.initReflow);if(e)for(f in e)J(this,f,e[f]);this.xAxis=[];this.yAxis=[];this.animation=V?!1:n(d.animation,!0);this.pointCount=0;this.counters=new Hb;this.firstRender()},initSeries:function(a){var b=this.options.chart,b=new $[a.type||b.type||b.defaultSeriesType];
-b.init(this,a);return b},addSeries:function(a,b,c){var d,e=this;a&&(xa(c,e),b=n(b,!0),F(e,"addSeries",{options:a},function(){d=e.initSeries(a);e.isDirtyLegend=!0;b&&e.redraw()}));return d},isInsidePlot:function(a,b,c){var d=c?b:a,a=c?a:b;return d>=0&&d<=this.plotWidth&&a>=0&&a<=this.plotHeight},adjustTickAmounts:function(){this.options.chart.alignTicks!==!1&&o(this.axes,function(a){a.adjustTickAmount()});this.maxTicks=null},redraw:function(a){var b=this.axes,c=this.series,d=this.tracker,e=this.legend,
-f=this.isDirtyLegend,g,h=this.isDirtyBox,i=c.length,j=i,k=this.renderer,l=k.isHidden(),m=[];xa(a,this);for(l&&this.cloneRenderTo();j--;)if(a=c[j],a.isDirty&&a.options.stacking){g=!0;break}if(g)for(j=i;j--;)if(a=c[j],a.options.stacking)a.isDirty=!0;o(c,function(a){a.isDirty&&a.options.legendType==="point"&&(f=!0)});if(f&&e.options.enabled)e.render(),this.isDirtyLegend=!1;if(this.hasCartesianSeries){if(!this.isResizing)this.maxTicks=null,o(b,function(a){a.setScale()});this.adjustTickAmounts();this.getMargins();
-o(b,function(a){if(a.isDirtyExtremes)a.isDirtyExtremes=!1,m.push(function(){F(a,"afterSetExtremes",a.getExtremes())});if(a.isDirty||h||g)a.redraw(),h=!0})}h&&this.drawChartBox();o(c,function(a){a.isDirty&&a.visible&&(!a.isCartesian||a.xAxis)&&a.redraw()});d&&d.resetTracker&&d.resetTracker(!0);k.draw();F(this,"redraw");l&&this.cloneRenderTo(!0);o(m,function(a){a.call()})},showLoading:function(a){var b=this.options,c=this.loadingDiv,d=b.loading;if(!c)this.loadingDiv=c=T(ga,{className:"highcharts-loading"},
-x(d.style,{left:this.plotLeft+"px",top:this.plotTop+"px",width:this.plotWidth+"px",height:this.plotHeight+"px",zIndex:10,display:Q}),this.container),this.loadingSpan=T("span",null,d.labelStyle,c);this.loadingSpan.innerHTML=a||b.lang.loading;if(!this.loadingShown)I(c,{opacity:0,display:""}),xb(c,{opacity:d.style.opacity},{duration:d.showDuration||0}),this.loadingShown=!0},hideLoading:function(){var a=this.options,b=this.loadingDiv;b&&xb(b,{opacity:0},{duration:a.loading.hideDuration||100,complete:function(){I(b,
-{display:Q})}});this.loadingShown=!1},get:function(a){var b=this.axes,c=this.series,d,e;for(d=0;d<b.length;d++)if(b[d].options.id===a)return b[d];for(d=0;d<c.length;d++)if(c[d].options.id===a)return c[d];for(d=0;d<c.length;d++){e=c[d].points||[];for(b=0;b<e.length;b++)if(e[b].id===a)return e[b]}return null},getAxes:function(){var a=this,b=this.options,c=b.xAxis||{},b=b.yAxis||{},c=la(c);o(c,function(a,b){a.index=b;a.isX=!0});b=la(b);o(b,function(a,b){a.index=b});c=c.concat(b);o(c,function(b){new ob(a,
-b)});a.adjustTickAmounts()},getSelectedPoints:function(){var a=[];o(this.series,function(b){a=a.concat(Ob(b.points,function(a){return a.selected}))});return a},getSelectedSeries:function(){return Ob(this.series,function(a){return a.selected})},showResetZoom:function(){var a=this,b=N.lang,c=a.options.chart.resetZoomButton,d=c.theme,e=d.states,f=c.relativeTo==="chart"?null:"plotBox";this.resetZoomButton=a.renderer.button(b.resetZoom,null,null,function(){a.zoomOut()},d,e&&e.hover).attr({align:c.position.align,
-title:b.resetZoomTitle}).add().align(c.position,!1,a[f]);this.resetZoomButton.alignTo=f},zoomOut:function(){var a=this,b=a.resetZoomButton;F(a,"selection",{resetSelection:!0},function(){a.zoom()});if(b)a.resetZoomButton=b.destroy()},zoom:function(a){var b=this,c;!a||a.resetSelection?o(b.axes,function(a){c=a.zoom()}):o(a.xAxis.concat(a.yAxis),function(a){var e=a.axis;if(b.tracker[e.isXAxis?"zoomX":"zoomY"])c=e.zoom(a.min,a.max)});b.resetZoomButton||b.showResetZoom();c&&b.redraw(n(b.options.chart.animation,
-b.pointCount<100))},pan:function(a){var b=this.xAxis[0],c=this.mouseDownX,d=b.pointRange/2,e=b.getExtremes(),f=b.translate(c-a,!0)+d,c=b.translate(c+this.plotWidth-a,!0)-d;(d=this.hoverPoints)&&o(d,function(a){a.setState()});b.series.length&&f>O(e.dataMin,e.min)&&c<s(e.dataMax,e.max)&&b.setExtremes(f,c,!0,!1,{trigger:"pan"});this.mouseDownX=a;I(this.container,{cursor:"move"})},setTitle:function(a,b){var c=this,d=c.options,e;c.chartTitleOptions=e=B(d.title,a);c.chartSubtitleOptions=d=B(d.subtitle,
-b);o([["title",a,e],["subtitle",b,d]],function(a){var b=a[0],d=c[b],e=a[1],a=a[2];d&&e&&(c[b]=d=d.destroy());a&&a.text&&!d&&(c[b]=c.renderer.text(a.text,0,0,a.useHTML).attr({align:a.align,"class":"highcharts-"+b,zIndex:a.zIndex||4}).css(a.style).add().align(a,!1,c.spacingBox))})},getChartSize:function(){var a=this.options.chart,b=this.renderToClone||this.renderTo;this.containerWidth=eb(b,"width");this.containerHeight=eb(b,"height");this.chartWidth=s(0,n(a.width,this.containerWidth,600));this.chartHeight=
-s(0,n(a.height,this.containerHeight>19?this.containerHeight:400))},cloneRenderTo:function(a){var b=this.renderToClone,c=this.container;a?b&&(this.renderTo.appendChild(c),Na(b),delete this.renderToClone):(c&&this.renderTo.removeChild(c),this.renderToClone=b=this.renderTo.cloneNode(0),I(b,{position:"absolute",top:"-9999px",display:"block"}),C.body.appendChild(b),c&&b.appendChild(c))},getContainer:function(){var a,b=this.options.chart,c,d,e;this.renderTo=a=b.renderTo;e="highcharts-"+tb++;if(ja(a))this.renderTo=
-a=C.getElementById(a);a||Oa(13,!0);c=z(w(a,"data-highcharts-chart"));!isNaN(c)&&Ha[c]&&Ha[c].destroy();w(a,"data-highcharts-chart",this.index);a.innerHTML="";a.offsetWidth||this.cloneRenderTo();this.getChartSize();c=this.chartWidth;d=this.chartHeight;this.container=a=T(ga,{className:"highcharts-container"+(b.className?" "+b.className:""),id:e},x({position:"relative",overflow:"hidden",width:c+"px",height:d+"px",textAlign:"left",lineHeight:"normal",zIndex:0},b.style),this.renderToClone||a);this.renderer=
-b.forExport?new sa(a,c,d,!0):new Sa(a,c,d);V&&this.renderer.create(this,a,c,d)},getMargins:function(){var a=this.options.chart,b=a.spacingTop,c=a.spacingRight,d=a.spacingBottom,a=a.spacingLeft,e,f=this.legend,g=this.optionsMarginTop,h=this.optionsMarginLeft,i=this.optionsMarginRight,j=this.optionsMarginBottom,k=this.chartTitleOptions,l=this.chartSubtitleOptions,m=this.options.legend,q=n(m.margin,10),p=m.x,y=m.y,t=m.align,u=m.verticalAlign;this.resetMargins();e=this.axisOffset;if((this.title||this.subtitle)&&
-!r(this.optionsMarginTop))if(l=s(this.title&&!k.floating&&!k.verticalAlign&&k.y||0,this.subtitle&&!l.floating&&!l.verticalAlign&&l.y||0))this.plotTop=s(this.plotTop,l+n(k.margin,15)+b);if(f.display&&!m.floating)if(t==="right"){if(!r(i))this.marginRight=s(this.marginRight,f.legendWidth-p+q+c)}else if(t==="left"){if(!r(h))this.plotLeft=s(this.plotLeft,f.legendWidth+p+q+a)}else if(u==="top"){if(!r(g))this.plotTop=s(this.plotTop,f.legendHeight+y+q+b)}else if(u==="bottom"&&!r(j))this.marginBottom=s(this.marginBottom,
-f.legendHeight-y+q+d);this.extraBottomMargin&&(this.marginBottom+=this.extraBottomMargin);this.extraTopMargin&&(this.plotTop+=this.extraTopMargin);this.hasCartesianSeries&&o(this.axes,function(a){a.getOffset()});r(h)||(this.plotLeft+=e[3]);r(g)||(this.plotTop+=e[0]);r(j)||(this.marginBottom+=e[2]);r(i)||(this.marginRight+=e[1]);this.setChartSize()},initReflow:function(){function a(a){var g=c.width||eb(d,"width"),h=c.height||eb(d,"height"),a=a?a.target:L;if(!b.hasUserSize&&g&&h&&(a===L||a===C)){if(g!==
-b.containerWidth||h!==b.containerHeight)clearTimeout(e),b.reflowTimeout=e=setTimeout(function(){if(b.container)b.setSize(g,h,!1),b.hasUserSize=null},100);b.containerWidth=g;b.containerHeight=h}}var b=this,c=b.options.chart,d=b.renderTo,e;J(L,"resize",a);J(b,"destroy",function(){R(L,"resize",a)})},setSize:function(a,b,c){var d=this,e,f,g=d.resetZoomButton,h=d.title,i=d.subtitle,j;d.isResizing+=1;j=function(){d&&F(d,"endResize",null,function(){d.isResizing-=1})};xa(c,d);d.oldChartHeight=d.chartHeight;
-d.oldChartWidth=d.chartWidth;if(r(a))d.chartWidth=e=s(0,u(a)),d.hasUserSize=!!e;if(r(b))d.chartHeight=f=s(0,u(b));I(d.container,{width:e+"px",height:f+"px"});d.renderer.setSize(e,f,c);d.plotWidth=e-d.plotLeft-d.marginRight;d.plotHeight=f-d.plotTop-d.marginBottom;d.maxTicks=null;o(d.axes,function(a){a.isDirty=!0;a.setScale()});o(d.series,function(a){a.isDirty=!0});d.isDirtyLegend=!0;d.isDirtyBox=!0;d.getMargins();a=d.spacingBox;h&&h.align(null,null,a);i&&i.align(null,null,a);g&&g.align&&g.align(null,
-null,d[g.alignTo]);d.redraw(c);d.oldChartHeight=null;F(d,"resize");Pa===!1?j():setTimeout(j,Pa&&Pa.duration||500)},setChartSize:function(){var a=this.inverted,b=this.chartWidth,c=this.chartHeight,d=this.options.chart,e=d.spacingTop,f=d.spacingRight,g=d.spacingBottom,h=d.spacingLeft,i,j,k,l;this.plotLeft=i=u(this.plotLeft);this.plotTop=j=u(this.plotTop);this.plotWidth=k=s(0,u(b-i-this.marginRight));this.plotHeight=l=s(0,u(c-j-this.marginBottom));this.plotSizeX=a?l:k;this.plotSizeY=a?k:l;this.plotBorderWidth=
-a=d.plotBorderWidth||0;this.spacingBox={x:h,y:e,width:b-h-f,height:c-e-g};this.plotBox={x:i,y:j,width:k,height:l};this.clipBox={x:a/2,y:a/2,width:this.plotSizeX-a,height:this.plotSizeY-a};o(this.axes,function(a){a.setAxisSize();a.setAxisTranslation()})},resetMargins:function(){var a=this.options.chart,b=a.spacingRight,c=a.spacingBottom,d=a.spacingLeft;this.plotTop=n(this.optionsMarginTop,a.spacingTop);this.marginRight=n(this.optionsMarginRight,b);this.marginBottom=n(this.optionsMarginBottom,c);this.plotLeft=
-n(this.optionsMarginLeft,d);this.axisOffset=[0,0,0,0]},drawChartBox:function(){var a=this.options.chart,b=this.renderer,c=this.chartWidth,d=this.chartHeight,e=this.chartBackground,f=this.plotBackground,g=this.plotBorder,h=this.plotBGImage,i=a.borderWidth||0,j=a.backgroundColor,k=a.plotBackgroundColor,l=a.plotBackgroundImage,m=a.plotBorderWidth||0,n,p=this.plotLeft,o=this.plotTop,t=this.plotWidth,r=this.plotHeight,u=this.plotBox,v=this.clipRect,s=this.clipBox;n=i+(a.shadow?8:0);if(i||j)if(e)e.animate(e.crisp(null,
-null,null,c-n,d-n));else{e={fill:j||Q};if(i)e.stroke=a.borderColor,e["stroke-width"]=i;this.chartBackground=b.rect(n/2,n/2,c-n,d-n,a.borderRadius,i).attr(e).add().shadow(a.shadow)}if(k)f?f.animate(u):this.plotBackground=b.rect(p,o,t,r,0).attr({fill:k}).add().shadow(a.plotShadow);if(l)h?h.animate(u):this.plotBGImage=b.image(l,p,o,t,r).add();v?v.animate({width:s.width,height:s.height}):this.clipRect=b.clipRect(s);if(m)g?g.animate(g.crisp(null,p,o,t,r)):this.plotBorder=b.rect(p,o,t,r,0,m).attr({stroke:a.plotBorderColor,
-"stroke-width":m,zIndex:1}).add();this.isDirtyBox=!1},propFromSeries:function(){var a=this,b=a.options.chart,c,d=a.options.series,e,f;o(["inverted","angular","polar"],function(g){c=$[b.type||b.defaultSeriesType];f=a[g]||b[g]||c&&c.prototype[g];for(e=d&&d.length;!f&&e--;)(c=$[d[e].type])&&c.prototype[g]&&(f=!0);a[g]=f})},render:function(){var a=this,b=a.axes,c=a.renderer,d=a.options,e=d.labels,d=d.credits,f;a.setTitle();a.legend=new rb(a);o(b,function(a){a.setScale()});a.getMargins();a.maxTicks=null;
-o(b,function(a){a.setTickPositions(!0);a.setMaxTicks()});a.adjustTickAmounts();a.getMargins();a.drawChartBox();a.hasCartesianSeries&&o(b,function(a){a.render()});if(!a.seriesGroup)a.seriesGroup=c.g("series-group").attr({zIndex:3}).add();o(a.series,function(a){a.translate();a.setTooltipPoints();a.render()});e.items&&o(e.items,function(b){var d=x(e.style,b.style),f=z(d.left)+a.plotLeft,j=z(d.top)+a.plotTop+12;delete d.left;delete d.top;c.text(b.html,f,j).attr({zIndex:2}).css(d).add()});if(d.enabled&&
-!a.credits)f=d.href,a.credits=c.text(d.text,0,0).on("click",function(){if(f)location.href=f}).attr({align:d.position.align,zIndex:8}).css(d.style).add().align(d.position);a.hasRendered=!0},destroy:function(){var a=this,b=a.axes,c=a.series,d=a.container,e,f=d&&d.parentNode;F(a,"destroy");Ha[a.index]=A;a.renderTo.removeAttribute("data-highcharts-chart");R(a);for(e=b.length;e--;)b[e]=b[e].destroy();for(e=c.length;e--;)c[e]=c[e].destroy();o("title,subtitle,chartBackground,plotBackground,plotBGImage,plotBorder,seriesGroup,clipRect,credits,tracker,scroller,rangeSelector,legend,resetZoomButton,tooltip,renderer".split(","),
-function(b){var c=a[b];c&&c.destroy&&(a[b]=c.destroy())});if(d)d.innerHTML="",R(d),f&&Na(d);for(e in a)delete a[e]},isReadyToRender:function(){var a=this;return!ca&&L==L.top&&C.readyState!=="complete"||V&&!L.canvg?(V?Rb.push(function(){a.firstRender()},a.options.global.canvasToolsURL):C.attachEvent("onreadystatechange",function(){C.detachEvent("onreadystatechange",a.firstRender);C.readyState==="complete"&&a.firstRender()}),!1):!0},firstRender:function(){var a=this,b=a.options,c=a.callback;if(a.isReadyToRender()){a.getContainer();
-F(a,"init");if(Highcharts.RangeSelector&&b.rangeSelector.enabled)a.rangeSelector=new Highcharts.RangeSelector(a);a.resetMargins();a.setChartSize();a.propFromSeries();a.getAxes();o(b.series||[],function(b){a.initSeries(b)});if(Highcharts.Scroller&&(b.navigator.enabled||b.scrollbar.enabled))a.scroller=new Highcharts.Scroller(a);a.tracker=new qb(a,b);a.render();a.renderer.draw();c&&c.apply(a,[a]);o(a.callbacks,function(b){b.apply(a,[a])});a.cloneRenderTo(!0);F(a,"load")}}};sb.prototype.callbacks=[];
-var Ua=function(){};Ua.prototype={init:function(a,b,c){var d=a.chart.counters;this.series=a;this.applyOptions(b,c);this.pointAttr={};if(a.options.colorByPoint)b=a.chart.options.colors,this.color=this.color||b[d.color++],d.wrapColor(b.length);a.chart.pointCount++;return this},applyOptions:function(a,b){var c=this.series,d=typeof a;this.config=a;if(d==="number"||a===null)this.y=a;else if(typeof a[0]==="number")this.x=a[0],this.y=a[1];else if(d==="object"&&typeof a.length!=="number"){x(this,a);this.options=
-a;if(a.dataLabels)c._hasPointLabels=!0;if(a.marker)c._hasPointMarkers=!0}else if(typeof a[0]==="string")this.name=a[0],this.y=a[1];if(this.x===A)this.x=b===A?c.autoIncrement():b},destroy:function(){var a=this.series.chart,b=a.hoverPoints,c;a.pointCount--;if(b&&(this.setState(),ta(b,this),!b.length))a.hoverPoints=null;if(this===a.hoverPoint)this.onMouseOut();if(this.graphic||this.dataLabel)R(this),this.destroyElements();this.legendItem&&a.legend.destroyItem(this);for(c in this)this[c]=null},destroyElements:function(){for(var a=
-"graphic,tracker,dataLabel,dataLabelUpper,group,connector,shadowGroup".split(","),b,c=6;c--;)b=a[c],this[b]&&(this[b]=this[b].destroy())},getLabelConfig:function(){return{x:this.category,y:this.y,key:this.name||this.category,series:this.series,point:this,percentage:this.percentage,total:this.total||this.stackTotal}},select:function(a,b){var c=this,d=c.series.chart,a=n(a,!c.selected);c.firePointEvent(a?"select":"unselect",{accumulate:b},function(){c.selected=a;c.setState(a&&"select");b||o(d.getSelectedPoints(),
-function(a){if(a.selected&&a!==c)a.selected=!1,a.setState(""),a.firePointEvent("unselect")})})},onMouseOver:function(){var a=this.series,b=a.chart,c=b.tooltip,d=b.hoverPoint;if(d&&d!==this)d.onMouseOut();this.firePointEvent("mouseOver");c&&(!c.shared||a.noSharedTooltip)&&c.refresh(this);this.setState("hover");b.hoverPoint=this},onMouseOut:function(){var a=this.series.chart,b=a.hoverPoints;if(!b||Ub(this,b)===-1)this.firePointEvent("mouseOut"),this.setState(),a.hoverPoint=null},tooltipFormatter:function(a){var b=
-this.series,c=b.tooltipOptions,d=a.match(/\{(series|point)\.[a-zA-Z]+\}/g),e=/[{\.}]/,f,g,h,i,j={y:0,open:0,high:0,low:0,close:0,percentage:1,total:1};c.valuePrefix=c.valuePrefix||c.yPrefix;c.valueDecimals=n(c.valueDecimals,c.yDecimals);c.valueSuffix=c.valueSuffix||c.ySuffix;for(i in d)g=d[i],ja(g)&&g!==a&&(h=(" "+g).split(e),f={point:this,series:b}[h[1]],h=h[2],f===this&&j.hasOwnProperty(h)?(f=j[h]?h:"value",f=(c[f+"Prefix"]||"")+Ja(this[h],n(c[f+"Decimals"],-1))+(c[f+"Suffix"]||"")):f=f[h],a=a.replace(g,
-f));return a},update:function(a,b,c){var d=this,e=d.series,f=d.graphic,g,h=e.data,i=h.length,j=e.chart,b=n(b,!0);d.firePointEvent("update",{options:a},function(){d.applyOptions(a);Y(a)&&(e.getAttribs(),f&&f.attr(d.pointAttr[e.state]));for(g=0;g<i;g++)if(h[g]===d){e.xData[g]=d.x;e.yData[g]=d.toYData?d.toYData():d.y;e.options.data[g]=a;break}e.isDirty=!0;e.isDirtyData=!0;b&&j.redraw(c)})},remove:function(a,b){var c=this,d=c.series,e=d.chart,f,g=d.data,h=g.length;xa(b,e);a=n(a,!0);c.firePointEvent("remove",
-null,function(){for(f=0;f<h;f++)if(g[f]===c){g.splice(f,1);d.options.data.splice(f,1);d.xData.splice(f,1);d.yData.splice(f,1);break}c.destroy();d.isDirty=!0;d.isDirtyData=!0;a&&e.redraw()})},firePointEvent:function(a,b,c){var d=this,e=this.series.options;(e.point.events[a]||d.options&&d.options.events&&d.options.events[a])&&this.importEvents();a==="click"&&e.allowPointSelect&&(c=function(a){d.select(null,a.ctrlKey||a.metaKey||a.shiftKey)});F(this,a,b,c)},importEvents:function(){if(!this.hasImportedEvents){var a=
-B(this.series.options.point,this.options).events,b;this.events=a;for(b in a)J(this,b,a[b]);this.hasImportedEvents=!0}},setState:function(a){var b=this.plotX,c=this.plotY,d=this.series,e=d.options.states,f=X[d.type].marker&&d.options.marker,g=f&&!f.enabled,h=f&&f.states[a],i=h&&h.enabled===!1,j=d.stateMarkerGraphic,k=d.chart,l=this.pointAttr,a=a||"";if(!(a===this.state||this.selected&&a!=="select"||e[a]&&e[a].enabled===!1||a&&(i||g&&!h.enabled))){if(this.graphic)e=f&&this.graphic.symbolName&&l[a].r,
-this.graphic.attr(B(l[a],e?{x:b-e,y:c-e,width:2*e,height:2*e}:{}));else{if(a&&h)e=h.radius,j?j.attr({x:b-e,y:c-e}):d.stateMarkerGraphic=j=k.renderer.symbol(d.symbol,b-e,c-e,2*e,2*e).attr(l[a]).add(d.markerGroup);if(j)j[a&&k.isInsidePlot(b,c)?"show":"hide"]()}this.state=a}}};var P=function(){};P.prototype={isCartesian:!0,type:"line",pointClass:Ua,sorted:!0,requireSorting:!0,pointAttrToOptions:{stroke:"lineColor","stroke-width":"lineWidth",fill:"fillColor",r:"radius"},init:function(a,b){var c,d;this.chart=
-a;this.options=b=this.setOptions(b);this.bindAxes();x(this,{name:b.name,state:"",pointAttr:{},visible:b.visible!==!1,selected:b.selected===!0});if(V)b.animation=!1;d=b.events;for(c in d)J(this,c,d[c]);if(d&&d.click||b.point&&b.point.events&&b.point.events.click||b.allowPointSelect)a.runTrackerClick=!0;this.getColor();this.getSymbol();this.setData(b.data,!1);if(this.isCartesian)a.hasCartesianSeries=!0;a.series.push(this);Ib(a.series,function(a,b){return(a.options.index||0)-(b.options.index||0)});o(a.series,
-function(a,b){a.index=b;a.name=a.name||"Series "+(b+1)})},bindAxes:function(){var a=this,b=a.options,c=a.chart,d;a.isCartesian&&o(["xAxis","yAxis"],function(e){o(c[e],function(c){d=c.options;if(b[e]===d.index||b[e]===A&&d.index===0)c.series.push(a),a[e]=c,c.isDirty=!0})})},autoIncrement:function(){var a=this.options,b=this.xIncrement,b=n(b,a.pointStart,0);this.pointInterval=n(this.pointInterval,a.pointInterval,1);this.xIncrement=b+this.pointInterval;return b},getSegments:function(){var a=-1,b=[],
-c,d=this.points,e=d.length;if(e)if(this.options.connectNulls){for(c=e;c--;)d[c].y===null&&d.splice(c,1);d.length&&(b=[d])}else o(d,function(c,g){c.y===null?(g>a+1&&b.push(d.slice(a+1,g)),a=g):g===e-1&&b.push(d.slice(a+1,g+1))});this.segments=b},setOptions:function(a){var b=this.chart.options,c=b.plotOptions,d=c[this.type],e=a.data;a.data=null;c=B(d,c.series,a);c.data=a.data=e;this.tooltipOptions=B(b.tooltip,c.tooltip);d.marker===null&&delete c.marker;return c},getColor:function(){var a=this.options,
-b=this.chart.options.colors,c=this.chart.counters;this.color=a.color||!a.colorByPoint&&b[c.color++]||"gray";c.wrapColor(b.length)},getSymbol:function(){var a=this.options.marker,b=this.chart,c=b.options.symbols,b=b.counters;this.symbol=a.symbol||c[b.symbol++];if(/^url/.test(this.symbol))a.radius=0;b.wrapSymbol(c.length)},drawLegendSymbol:function(a){var b=this.options,c=b.marker,d=a.options.symbolWidth,e=this.chart.renderer,f=this.legendGroup,a=a.baseline,g;if(b.lineWidth){g={"stroke-width":b.lineWidth};
-if(b.dashStyle)g.dashstyle=b.dashStyle;this.legendLine=e.path(["M",0,a-4,"L",d,a-4]).attr(g).add(f)}if(c&&c.enabled)b=c.radius,this.legendSymbol=e.symbol(this.symbol,d/2-b,a-4-b,2*b,2*b).add(f)},addPoint:function(a,b,c,d){var e=this.options,f=this.data,g=this.graph,h=this.area,i=this.chart,j=this.xData,k=this.yData,l=g&&g.shift||0,m=e.data,q=this.pointClass.prototype;xa(d,i);if(g&&c)g.shift=l+1;if(h){if(c)h.shift=l+1;h.isArea=!0}b=n(b,!0);d={series:this};q.applyOptions.apply(d,[a]);j.push(d.x);k.push(q.toYData?
-q.toYData.call(d):d.y);m.push(a);e.legendType==="point"&&this.generatePoints();c&&(f[0]&&f[0].remove?f[0].remove(!1):(f.shift(),j.shift(),k.shift(),m.shift()));this.getAttribs();this.isDirtyData=this.isDirty=!0;b&&i.redraw()},setData:function(a,b){var c=this.points,d=this.options,e=this.initialColor,f=this.chart,g=null,h=this.xAxis,i,j=this.pointClass.prototype;this.xIncrement=null;this.pointRange=h&&h.categories?1:d.pointRange;if(r(e))f.counters.color=e;var e=[],k=[],l=a?a.length:[],m=(i=this.pointArrayMap)&&
-i.length;if(l>(d.turboThreshold||1E3)){for(i=0;g===null&&i<l;)g=a[i],i++;if(Da(g)){j=n(d.pointStart,0);d=n(d.pointInterval,1);for(i=0;i<l;i++)e[i]=j,k[i]=a[i],j+=d;this.xIncrement=j}else if(Ia(g))if(m)for(i=0;i<l;i++)d=a[i],e[i]=d[0],k[i]=d.slice(1,m+1);else for(i=0;i<l;i++)d=a[i],e[i]=d[0],k[i]=d[1]}else for(i=0;i<l;i++)d={series:this},j.applyOptions.apply(d,[a[i]]),e[i]=d.x,k[i]=j.toYData?j.toYData.call(d):d.y;this.requireSorting&&e.length>1&&e[1]<e[0]&&Oa(15);ja(k[0])&&Oa(14,!0);this.data=[];this.options.data=
-a;this.xData=e;this.yData=k;for(i=c&&c.length||0;i--;)c[i]&&c[i].destroy&&c[i].destroy();if(h)h.minRange=h.userMinRange;this.isDirty=this.isDirtyData=f.isDirtyBox=!0;n(b,!0)&&f.redraw(!1)},remove:function(a,b){var c=this,d=c.chart,a=n(a,!0);if(!c.isRemoving)c.isRemoving=!0,F(c,"remove",null,function(){c.destroy();d.isDirtyLegend=d.isDirtyBox=!0;a&&d.redraw(b)});c.isRemoving=!1},processData:function(a){var b=this.xData,c=this.yData,d=b.length,e=0,f=d,g,h,i=this.xAxis,j=this.options,k=j.cropThreshold,
-l=this.isCartesian;if(l&&!this.isDirty&&!i.isDirty&&!this.yAxis.isDirty&&!a)return!1;if(l&&this.sorted&&(!k||d>k||this.forceCrop))if(a=i.getExtremes(),i=a.min,k=a.max,b[d-1]<i||b[0]>k)b=[],c=[];else if(b[0]<i||b[d-1]>k){for(a=0;a<d;a++)if(b[a]>=i){e=s(0,a-1);break}for(;a<d;a++)if(b[a]>k){f=a+1;break}b=b.slice(e,f);c=c.slice(e,f);g=!0}for(a=b.length-1;a>0;a--)if(d=b[a]-b[a-1],d>0&&(h===A||d<h))h=d;this.cropped=g;this.cropStart=e;this.processedXData=b;this.processedYData=c;if(j.pointRange===null)this.pointRange=
-h||1;this.closestPointRange=h},generatePoints:function(){var a=this.options.data,b=this.data,c,d=this.processedXData,e=this.processedYData,f=this.pointClass,g=d.length,h=this.cropStart||0,i,j=this.hasGroupedData,k,l=[],m;if(!b&&!j)b=[],b.length=a.length,b=this.data=b;for(m=0;m<g;m++)i=h+m,j?l[m]=(new f).init(this,[d[m]].concat(la(e[m]))):(b[i]?k=b[i]:a[i]!==A&&(b[i]=k=(new f).init(this,a[i],d[m])),l[m]=k);if(b&&(g!==(c=b.length)||j))for(m=0;m<c;m++)if(m===h&&!j&&(m+=g),b[m])b[m].destroyElements(),
-b[m].plotX=A;this.data=b;this.points=l},translate:function(){this.processedXData||this.processData();this.generatePoints();for(var a=this.chart,b=this.options,c=b.stacking,d=this.xAxis,e=d.categories,f=this.yAxis,g=this.points,h=g.length,i=!!this.modifyValue,j,k=f.series,l=k.length,m=b.pointPlacement==="between";l--;)if(k[l].visible){k[l]===this&&(j=!0);break}for(l=0;l<h;l++){var k=g[l],q=k.x,p=k.y,o=k.low,t=f.stacks[(p<b.threshold?"-":"")+this.stackKey];k.plotX=d.translate(q,0,0,0,1,m);if(c&&this.visible&&
-t&&t[q])o=t[q],q=o.total,o.cum=o=o.cum-p,p=o+p,j&&(o=n(b.threshold,f.min)),f.isLog&&o<=0&&(o=null),c==="percent"&&(o=q?o*100/q:0,p=q?p*100/q:0),k.percentage=q?k.y*100/q:0,k.total=k.stackTotal=q,k.stackY=p;k.yBottom=r(o)?f.translate(o,0,1,0,1):null;i&&(p=this.modifyValue(p,k));k.plotY=typeof p==="number"?u(f.translate(p,0,1,0,1)*10)/10:A;k.clientX=a.inverted?a.plotHeight-k.plotX:k.plotX;k.category=e&&e[k.x]!==A?e[k.x]:k.x}this.getSegments()},setTooltipPoints:function(a){var b=[],c,d,e=(c=this.xAxis)?
-c.tooltipLen||c.len:this.chart.plotSizeX,f=c&&c.tooltipPosName||"plotX",g,h,i=[];if(this.options.enableMouseTracking!==!1){if(a)this.tooltipPoints=null;o(this.segments||this.points,function(a){b=b.concat(a)});c&&c.reversed&&(b=b.reverse());a=b.length;for(h=0;h<a;h++){g=b[h];c=b[h-1]?d+1:0;for(d=b[h+1]?s(0,U((g[f]+(b[h+1]?b[h+1][f]:e))/2)):e;c>=0&&c<=d;)i[c++]=g}this.tooltipPoints=i}},tooltipHeaderFormatter:function(a){var b=this.tooltipOptions,c=b.xDateFormat,d=this.xAxis,e=d&&d.options.type==="datetime",
-f;if(e&&!c)for(f in D)if(D[f]>=d.closestPointRange){c=b.dateTimeLabelFormats[f];break}return b.headerFormat.replace("{point.key}",e&&Da(a)?db(c,a):a).replace("{series.name}",this.name).replace("{series.color}",this.color)},onMouseOver:function(){var a=this.chart,b=a.hoverSeries;if(b&&b!==this)b.onMouseOut();this.options.events.mouseOver&&F(this,"mouseOver");this.setState("hover");a.hoverSeries=this},onMouseOut:function(){var a=this.options,b=this.chart,c=b.tooltip,d=b.hoverPoint;if(d)d.onMouseOut();
-this&&a.events.mouseOut&&F(this,"mouseOut");c&&!a.stickyTracking&&!c.shared&&c.hide();this.setState();b.hoverSeries=null},animate:function(a){var b=this,c=b.chart,d=c.renderer,e;e=b.options.animation;var f=c.clipBox,g=c.inverted,h;if(e&&!Y(e))e=X[b.type].animation;h="_sharedClip"+e.duration+e.easing;if(a)a=c[h],e=c[h+"m"],a||(c[h]=a=d.clipRect(x(f,{width:0})),c[h+"m"]=e=d.clipRect(-99,g?-c.plotLeft:-c.plotTop,99,g?c.chartWidth:c.chartHeight)),b.group.clip(a),b.markerGroup.clip(e),b.sharedClipKey=
-h;else{if(a=c[h])a.animate({width:c.plotSizeX},e),c[h+"m"].animate({width:c.plotSizeX+99},e);b.animate=null;b.animationTimeout=setTimeout(function(){b.afterAnimate()},e.duration)}},afterAnimate:function(){var a=this.chart,b=this.sharedClipKey,c=this.group,d=this.trackerGroup;c&&this.options.clip!==!1&&(c.clip(a.clipRect),d&&d.clip(a.clipRect),this.markerGroup.clip());setTimeout(function(){b&&a[b]&&(a[b]=a[b].destroy(),a[b+"m"]=a[b+"m"].destroy())},100)},drawPoints:function(){var a,b=this.points,c=
-this.chart,d,e,f,g,h,i,j,k,l=this.options.marker,m,o=this.markerGroup;if(l.enabled||this._hasPointMarkers)for(f=b.length;f--;)if(g=b[f],d=g.plotX,e=g.plotY,k=g.graphic,i=g.marker||{},a=l.enabled&&i.enabled===A||i.enabled,m=c.isInsidePlot(d,e,c.inverted),a&&e!==A&&!isNaN(e))if(a=g.pointAttr[g.selected?"select":""],h=a.r,i=n(i.symbol,this.symbol),j=i.indexOf("url")===0,k)k.attr({visibility:m?ca?"inherit":"visible":"hidden"}).animate(x({x:d-h,y:e-h},k.symbolName?{width:2*h,height:2*h}:{}));else{if(m&&
-(h>0||j))g.graphic=c.renderer.symbol(i,d-h,e-h,2*h,2*h).attr(a).add(o)}else if(k)g.graphic=k.destroy()},convertAttribs:function(a,b,c,d){var e=this.pointAttrToOptions,f,g,h={},a=a||{},b=b||{},c=c||{},d=d||{};for(f in e)g=e[f],h[f]=n(a[g],b[f],c[f],d[f]);return h},getAttribs:function(){var a=this,b=X[a.type].marker?a.options.marker:a.options,c=b.states,d=c.hover,e,f=a.color,g={stroke:f,fill:f},h=a.points||[],i=[],j,k=a.pointAttrToOptions,l;a.options.marker?(d.radius=d.radius||b.radius+2,d.lineWidth=
-d.lineWidth||b.lineWidth+1):d.color=d.color||qa(d.color||f).brighten(d.brightness).get();i[""]=a.convertAttribs(b,g);o(["hover","select"],function(b){i[b]=a.convertAttribs(c[b],i[""])});a.pointAttr=i;for(f=h.length;f--;){g=h[f];if((b=g.options&&g.options.marker||g.options)&&b.enabled===!1)b.radius=0;e=a.options.colorByPoint;if(g.options)for(l in k)r(b[k[l]])&&(e=!0);if(e){b=b||{};j=[];c=b.states||{};e=c.hover=c.hover||{};if(!a.options.marker)e.color=qa(e.color||g.color).brighten(e.brightness||d.brightness).get();
-j[""]=a.convertAttribs(x({color:g.color},b),i[""]);j.hover=a.convertAttribs(c.hover,i.hover,j[""]);j.select=a.convertAttribs(c.select,i.select,j[""])}else j=i;g.pointAttr=j}},destroy:function(){var a=this,b=a.chart,c=/AppleWebKit\/533/.test(na),d,e,f=a.data||[],g,h,i;F(a,"destroy");R(a);o(["xAxis","yAxis"],function(b){if(i=a[b])ta(i.series,a),i.isDirty=!0});a.legendItem&&a.chart.legend.destroyItem(a);for(e=f.length;e--;)(g=f[e])&&g.destroy&&g.destroy();a.points=null;clearTimeout(a.animationTimeout);
-o("area,graph,dataLabelsGroup,group,markerGroup,tracker,trackerGroup".split(","),function(b){a[b]&&(d=c&&b==="group"?"hide":"destroy",a[b][d]())});if(b.hoverSeries===a)b.hoverSeries=null;ta(b.series,a);for(h in a)delete a[h]},drawDataLabels:function(){var a=this,b=a.options.dataLabels,c=a.points,d,e,f,g;if(b.enabled||a._hasPointLabels)a.dlProcessOptions&&a.dlProcessOptions(b),g=a.plotGroup("dataLabelsGroup","data-labels",a.visible?"visible":"hidden",b.zIndex||6),e=b,o(c,function(c){var i,j=c.dataLabel,
-k,l=!0;d=c.options&&c.options.dataLabels;i=e.enabled||d&&d.enabled;if(j&&!i)c.dataLabel=j.destroy();else if(i){i=b.rotation;b=B(e,d);f=b.formatter.call(c.getLabelConfig(),b);b.style.color=n(b.color,b.style.color,a.color,"black");if(j)j.attr({text:f}),l=!1;else if(r(f)){j={fill:b.backgroundColor,stroke:b.borderColor,"stroke-width":b.borderWidth,r:b.borderRadius||0,rotation:i,padding:b.padding,zIndex:1};for(k in j)j[k]===A&&delete j[k];j=c.dataLabel=a.chart.renderer[i?"text":"label"](f,0,-999,null,
-null,null,b.useHTML).attr(j).css(b.style).add(g).shadow(b.shadow)}j&&a.alignDataLabel(c,j,b,null,l)}})},alignDataLabel:function(a,b,c,d,e){var f=this.chart,g=f.inverted,h=n(a.plotX,-999),a=n(a.plotY,-999),i=b.getBBox(),d=x({x:g?f.plotWidth-a:h,y:u(g?f.plotHeight-h:a),width:0,height:0},d);x(c,{width:i.width,height:i.height});c.rotation?(d={align:c.align,x:d.x+c.x+d.width/2,y:d.y+c.y+d.height/2},b[e?"attr":"animate"](d)):(b.align(c,null,d),d=b.alignAttr);b.attr({visibility:c.crop===!1||f.isInsidePlot(d.x,
-d.y)||f.isInsidePlot(h,a,g)?f.renderer.isSVG?"inherit":"visible":"hidden"})},getSegmentPath:function(a){var b=this,c=[],d=b.options.step;o(a,function(e,f){var g=e.plotX,h=e.plotY,i;b.getPointSpline?c.push.apply(c,b.getPointSpline(a,e,f)):(c.push(f?"L":"M"),d&&f&&(i=a[f-1],d==="right"?c.push(i.plotX,h):d==="center"?c.push((i.plotX+g)/2,i.plotY,(i.plotX+g)/2,h):c.push(g,i.plotY)),c.push(e.plotX,e.plotY))});return c},getGraphPath:function(){var a=this,b=[],c,d=[];o(a.segments,function(e){c=a.getSegmentPath(e);
-e.length>1?b=b.concat(c):d.push(e[0])});a.singlePoints=d;return a.graphPath=b},drawGraph:function(){var a=this.options,b=this.graph,c=this.group,d=a.lineColor||this.color,e=a.lineWidth,f=a.dashStyle,g=this.getGraphPath();if(b)fb(b),b.animate({d:g});else if(e){b={stroke:d,"stroke-width":e,zIndex:1};if(f)b.dashstyle=f;this.graph=this.chart.renderer.path(g).attr(b).add(c).shadow(a.shadow)}},invertGroups:function(){function a(){var a={width:b.yAxis.len,height:b.xAxis.len};o(["group","trackerGroup","markerGroup"],
-function(c){b[c]&&b[c].attr(a).invert()})}var b=this,c=b.chart;J(c,"resize",a);J(b,"destroy",function(){R(c,"resize",a)});a();b.invertGroups=a},plotGroup:function(a,b,c,d,e){var f=this[a],g=this.chart,h=this.xAxis,i=this.yAxis;f||(this[a]=f=g.renderer.g(b).attr({visibility:c,zIndex:d||0.1}).add(e));f.translate(h?h.left:g.plotLeft,i?i.top:g.plotTop);return f},render:function(){var a=this.chart,b,c=this.options,d=c.animation&&!!this.animate,e=this.visible?"visible":"hidden",f=c.zIndex,g=this.hasRendered,
-h=a.seriesGroup;b=this.plotGroup("group","series",e,f,h);this.markerGroup=this.plotGroup("markerGroup","markers",e,f,h);d&&this.animate(!0);this.getAttribs();b.inverted=a.inverted;this.drawGraph&&this.drawGraph();this.drawPoints();this.drawDataLabels();this.options.enableMouseTracking!==!1&&this.drawTracker();a.inverted&&this.invertGroups();c.clip!==!1&&!this.sharedClipKey&&!g&&(b.clip(a.clipRect),this.trackerGroup&&this.trackerGroup.clip(a.clipRect));d?this.animate():g||this.afterAnimate();this.isDirty=
-this.isDirtyData=!1;this.hasRendered=!0},redraw:function(){var a=this.chart,b=this.isDirtyData,c=this.group;c&&(a.inverted&&c.attr({width:a.plotWidth,height:a.plotHeight}),c.animate({translateX:this.xAxis.left,translateY:this.yAxis.top}));this.translate();this.setTooltipPoints(!0);this.render();b&&F(this,"updatedData")},setState:function(a){var b=this.options,c=this.graph,d=b.states,b=b.lineWidth,a=a||"";if(this.state!==a)this.state=a,d[a]&&d[a].enabled===!1||(a&&(b=d[a].lineWidth||b+1),c&&!c.dashstyle&&
-c.attr({"stroke-width":b},a?0:500))},setVisible:function(a,b){var c=this.chart,d=this.legendItem,e=this.group,f=this.tracker,g=this.dataLabelsGroup,h=this.markerGroup,i,j=this.points,k=c.options.chart.ignoreHiddenSeries;i=this.visible;i=(this.visible=a=a===A?!i:a)?"show":"hide";if(e)e[i]();if(h)h[i]();if(f)f[i]();else if(j)for(e=j.length;e--;)if(f=j[e],f.tracker)f.tracker[i]();if(c.hoverSeries===this)this.onMouseOut();if(g)g[i]();d&&c.legend.colorizeItem(this,a);this.isDirty=!0;this.options.stacking&&
-o(c.series,function(a){if(a.options.stacking&&a.visible)a.isDirty=!0});if(k)c.isDirtyBox=!0;b!==!1&&c.redraw();F(this,i)},show:function(){this.setVisible(!0)},hide:function(){this.setVisible(!1)},select:function(a){this.selected=a=a===A?!this.selected:a;if(this.checkbox)this.checkbox.checked=a;F(this,a?"select":"unselect")},drawTracker:function(){var a=this,b=a.options,c=b.trackByArea,d=[].concat(c?a.areaPath:a.graphPath),e=d.length,f=a.chart,g=f.renderer,h=f.options.tooltip.snap,i=a.tracker,j=b.cursor,
-j=j&&{cursor:j},k=a.singlePoints,l=this.isCartesian&&this.plotGroup("trackerGroup",null,"visible",b.zIndex||1,f.trackerGroup),m,n=function(){if(f.hoverSeries!==a)a.onMouseOver()},o=function(){if(!b.stickyTracking)a.onMouseOut()};if(e&&!c)for(m=e+1;m--;)d[m]==="M"&&d.splice(m+1,0,d[m+1]-h,d[m+2],"L"),(m&&d[m]==="M"||m===e)&&d.splice(m,0,"L",d[m-2]+h,d[m-1]);for(m=0;m<k.length;m++)e=k[m],d.push("M",e.plotX-h,e.plotY,"L",e.plotX+h,e.plotY);if(i)i.attr({d:d});else if(a.tracker=i=g.path(d).attr({isTracker:!0,
-"stroke-linejoin":"round",visibility:a.visible?"visible":"hidden",stroke:vb,fill:c?vb:Q,"stroke-width":b.lineWidth+(c?0:2*h)}).on("mouseover",n).on("mouseout",o).css(j).add(l),Ba)i.on("touchstart",n)}};G=ba(P);$.line=G;X.area=B(ea,{threshold:0});G=ba(P,{type:"area",getSegmentPath:function(a){var b=P.prototype.getSegmentPath.call(this,a),c=[].concat(b),d,e=this.options;b.length===3&&c.push("L",b[1],b[2]);if(e.stacking&&!this.closedStacks)for(d=a.length-1;d>=0;d--)d<a.length-1&&e.step&&c.push(a[d+1].plotX,
-a[d].yBottom),c.push(a[d].plotX,a[d].yBottom);else this.closeSegment(c,a);this.areaPath=this.areaPath.concat(c);return b},closeSegment:function(a,b){var c=this.yAxis.getThreshold(this.options.threshold);a.push("L",b[b.length-1].plotX,c,"L",b[0].plotX,c)},drawGraph:function(){this.areaPath=[];P.prototype.drawGraph.apply(this);var a=this.areaPath,b=this.options,c=this.area;c?c.animate({d:a}):this.area=this.chart.renderer.path(a).attr({fill:n(b.fillColor,qa(this.color).setOpacity(b.fillOpacity||0.75).get()),
-zIndex:0}).add(this.group)},drawLegendSymbol:function(a,b){b.legendSymbol=this.chart.renderer.rect(0,a.baseline-11,a.options.symbolWidth,12,2).attr({zIndex:3}).add(b.legendGroup)}});$.area=G;X.spline=B(ea);fa=ba(P,{type:"spline",getPointSpline:function(a,b,c){var d=b.plotX,e=b.plotY,f=a[c-1],g=a[c+1],h,i,j,k;if(f&&g){a=f.plotY;j=g.plotX;var g=g.plotY,l;h=(1.5*d+f.plotX)/2.5;i=(1.5*e+a)/2.5;j=(1.5*d+j)/2.5;k=(1.5*e+g)/2.5;l=(k-i)*(j-d)/(j-h)+e-k;i+=l;k+=l;i>a&&i>e?(i=s(a,e),k=2*e-i):i<a&&i<e&&(i=O(a,
-e),k=2*e-i);k>g&&k>e?(k=s(g,e),i=2*e-k):k<g&&k<e&&(k=O(g,e),i=2*e-k);b.rightContX=j;b.rightContY=k}c?(b=["C",f.rightContX||f.plotX,f.rightContY||f.plotY,h||d,i||e,d,e],f.rightContX=f.rightContY=null):b=["M",d,e];return b}});$.spline=fa;X.areaspline=B(X.area);var Ca=G.prototype,fa=ba(fa,{type:"areaspline",closedStacks:!0,getSegmentPath:Ca.getSegmentPath,closeSegment:Ca.closeSegment,drawGraph:Ca.drawGraph});$.areaspline=fa;X.column=B(ea,{borderColor:"#FFFFFF",borderWidth:1,borderRadius:0,groupPadding:0.2,
-marker:null,pointPadding:0.1,minPointLength:0,cropThreshold:50,pointRange:null,states:{hover:{brightness:0.1,shadow:!1},select:{color:"#C0C0C0",borderColor:"#000000",shadow:!1}},dataLabels:{align:null,verticalAlign:null,y:null},threshold:0});fa=ba(P,{type:"column",tooltipOutsidePlot:!0,pointAttrToOptions:{stroke:"borderColor","stroke-width":"borderWidth",fill:"color",r:"borderRadius"},init:function(){P.prototype.init.apply(this,arguments);var a=this,b=a.chart;b.hasRendered&&o(b.series,function(b){if(b.type===
-a.type)b.isDirty=!0})},translate:function(){var a=this,b=a.chart,c=a.options,d=c.stacking,e=c.borderWidth,f=0,g=a.xAxis,h=a.yAxis,i=g.reversed,j={},k,l;P.prototype.translate.apply(a);c.grouping===!1?f=1:o(b.series,function(b){var c=b.options;if(b.type===a.type&&b.visible&&a.options.group===c.group)c.stacking?(k=b.stackKey,j[k]===A&&(j[k]=f++),l=j[k]):c.grouping!==!1&&(l=f++),b.columnIndex=l});var m=a.points,g=M(g.transA)*(g.ordinalSlope||c.pointRange||g.closestPointRange||1),q=g*c.groupPadding,p=
-(g-2*q)/f,y=c.pointWidth,t=r(y)?(p-y)/2:p*c.pointPadding,u=n(y,p-2*t),x=za(s(u,1+2*e)),v=t+(q+((i?f-(a.columnIndex||0):a.columnIndex)||0)*p-g/2)*(i?-1:1),z=a.translatedThreshold=h.getThreshold(c.threshold),w=n(c.minPointLength,5);o(m,function(c){var f=O(s(-999,c.plotY),h.len+999),g=n(c.yBottom,z),i=c.plotX+v,j=za(O(f,g)),k=za(s(f,g)-j),l=h.stacks[(c.y<0?"-":"")+a.stackKey];d&&a.visible&&l&&l[c.x]&&l[c.x].setOffset(v,x);M(k)<w&&w&&(k=w,j=M(j-z)>w?g-w:z-(f<=z?w:0));c.barX=i;c.pointWidth=u;c.shapeType=
-"rect";c.shapeArgs=f=b.renderer.Element.prototype.crisp.call(0,e,i,j,x,k);e%2&&(f.y-=1,f.height+=1);c.trackerArgs=M(k)<3&&B(c.shapeArgs,{height:6,y:j-3})})},getSymbol:pa,drawLegendSymbol:G.prototype.drawLegendSymbol,drawGraph:pa,drawPoints:function(){var a=this,b=a.options,c=a.chart.renderer,d;o(a.points,function(e){var f=e.plotY,g=e.graphic;if(f!==A&&!isNaN(f)&&e.y!==null)d=e.shapeArgs,g?(fb(g),g.animate(B(d))):e.graphic=c[e.shapeType](d).attr(e.pointAttr[e.selected?"select":""]).add(a.group).shadow(b.shadow,
-null,b.stacking&&!b.borderRadius);else if(g)e.graphic=g.destroy()})},drawTracker:function(){for(var a=this,b=a.chart,c=b.renderer,d,e,f=+new Date,g=a.options,h=(d=g.cursor)&&{cursor:d},i=a.isCartesian&&a.plotGroup("trackerGroup",null,"visible",g.zIndex||1,b.trackerGroup),j,k,l=a.points,m,n=l.length,o=function(c){j=c.relatedTarget||c.fromElement;if(b.hoverSeries!==a&&w(j,"isTracker")!==f)a.onMouseOver();l[c.target._i].onMouseOver()},r=function(b){if(!g.stickyTracking&&(j=b.relatedTarget||b.toElement,
-w(j,"isTracker")!==f))a.onMouseOut()};n--;)if(m=l[n],e=m.tracker,d=m.trackerArgs||m.shapeArgs,k=m.plotY,k=!a.isCartesian||k!==A&&!isNaN(k),delete d.strokeWidth,m.y!==null&&k){if(e)e.attr(d);else if(m.tracker=e=c[m.shapeType](d).attr({isTracker:f,fill:vb,visibility:a.visible?"visible":"hidden"}).on("mouseover",o).on("mouseout",r).css(h).add(m.group||i),Ba)e.on("touchstart",o);e.element._i=n}},alignDataLabel:function(a,b,c,d,e){var f=this.chart,g=f.inverted,h=a.below||a.plotY>n(this.translatedThreshold,
-f.plotSizeY),i=this.options.stacking||c.inside;if(a.shapeArgs&&(d=B(a.shapeArgs),g&&(d={x:f.plotWidth-d.y-d.height,y:f.plotHeight-d.x-d.width,width:d.height,height:d.width}),!i))g?(d.x+=h?0:d.width,d.width=0):(d.y+=h?d.height:0,d.height=0);c.align=n(c.align,!g||i?"center":h?"right":"left");c.verticalAlign=n(c.verticalAlign,g||i?"middle":h?"top":"bottom");P.prototype.alignDataLabel.call(this,a,b,c,d,e)},animate:function(a){var b=this,c=b.points,d=b.options;if(!a)o(c,function(a){var c=a.graphic,a=a.shapeArgs,
-g=b.yAxis,h=d.threshold;c&&(c.attr({height:0,y:r(h)?g.getThreshold(h):g.translate(g.getExtremes().min,0,1,0,1)}),c.animate({height:a.height,y:a.y},d.animation))}),b.animate=null},remove:function(){var a=this,b=a.chart;b.hasRendered&&o(b.series,function(b){if(b.type===a.type)b.isDirty=!0});P.prototype.remove.apply(a,arguments)}});$.column=fa;X.bar=B(X.column);Ca=ba(fa,{type:"bar",inverted:!0});$.bar=Ca;X.scatter=B(ea,{lineWidth:0,states:{hover:{lineWidth:0}},tooltip:{headerFormat:'<span style="font-size: 10px; color:{series.color}">{series.name}</span><br/>',
-pointFormat:"x: <b>{point.x}</b><br/>y: <b>{point.y}</b><br/>"}});Ca=ba(P,{type:"scatter",sorted:!1,requireSorting:!1,translate:function(){var a=this;P.prototype.translate.apply(a);o(a.points,function(b){b.shapeType="circle";b.shapeArgs={x:b.plotX,y:b.plotY,r:a.chart.options.tooltip.snap}})},drawTracker:function(){for(var a=this,b=a.options.cursor,b=b&&{cursor:b},c=a.points,d=c.length,e,f=a.markerGroup,g=function(b){a.onMouseOver();if(b.target._i!==A)c[b.target._i].onMouseOver()};d--;)if(e=c[d].graphic)e.element._i=
-d;if(a._hasTracking)a._hasTracking=!0;else if(f.attr({isTracker:!0}).on("mouseover",g).on("mouseout",function(){if(!a.options.stickyTracking)a.onMouseOut()}).css(b),Ba)f.on("touchstart",g)},setTooltipPoints:pa});$.scatter=Ca;X.pie=B(ea,{borderColor:"#FFFFFF",borderWidth:1,center:["50%","50%"],colorByPoint:!0,dataLabels:{distance:30,enabled:!0,formatter:function(){return this.point.name}},legendType:"point",marker:null,size:"75%",showInLegend:!1,slicedOffset:10,states:{hover:{brightness:0.1,shadow:!1}}});
-pa={type:"pie",isCartesian:!1,pointClass:ba(Ua,{init:function(){Ua.prototype.init.apply(this,arguments);var a=this,b;x(a,{visible:a.visible!==!1,name:n(a.name,"Slice")});b=function(){a.slice()};J(a,"select",b);J(a,"unselect",b);return a},setVisible:function(a){var b=this.series,c=b.chart,d=this.tracker,e=this.dataLabel,f=this.connector,g=this.shadowGroup,h;h=(this.visible=a=a===A?!this.visible:a)?"show":"hide";this.group[h]();if(d)d[h]();if(e)e[h]();if(f)f[h]();if(g)g[h]();this.legendItem&&c.legend.colorizeItem(this,
-a);if(!b.isDirty&&b.options.ignoreHiddenPoint)b.isDirty=!0,c.redraw()},slice:function(a,b,c){var d=this.series.chart,e=this.slicedTranslation;xa(c,d);n(b,!0);a=this.sliced=r(a)?a:!this.sliced;a={translateX:a?e[0]:d.plotLeft,translateY:a?e[1]:d.plotTop};this.group.animate(a);this.shadowGroup&&this.shadowGroup.animate(a)}}),requireSorting:!1,pointAttrToOptions:{stroke:"borderColor","stroke-width":"borderWidth",fill:"color"},getColor:function(){this.initialColor=this.chart.counters.color},animate:function(){var a=
-this,b=a.startAngleRad;o(a.points,function(c){var d=c.graphic,c=c.shapeArgs;d&&(d.attr({r:a.center[3]/2,start:b,end:b}),d.animate({r:c.r,start:c.start,end:c.end},a.options.animation))});a.animate=null},setData:function(a,b){P.prototype.setData.call(this,a,!1);this.processData();this.generatePoints();n(b,!0)&&this.chart.redraw()},getCenter:function(){var a=this.options,b=this.chart,c=b.plotWidth,d=b.plotHeight,a=a.center.concat([a.size,a.innerSize||0]),e=O(c,d),f;return Ta(a,function(a,b){return(f=
-/%$/.test(a))?[c,d,e,e][b]*z(a)/100:a})},translate:function(){this.generatePoints();var a=0,b=0,c=this.options,d=c.slicedOffset,e=d+c.borderWidth,f,g=this.chart,h,i,j,k=this.startAngleRad=Aa/180*((c.startAngle||0)%360-90),l=this.points,m=2*Aa,n=c.dataLabels.distance,o=c.ignoreHiddenPoint,r,t=l.length,s;this.center=f=this.getCenter();this.getX=function(a,b){j=K.asin((a-f[1])/(f[2]/2+n));return f[0]+(b?-1:1)*W(j)*(f[2]/2+n)};for(r=0;r<t;r++)s=l[r],a+=o&&!s.visible?0:s.y;for(r=0;r<t;r++){s=l[r];c=a?
-s.y/a:0;h=u((k+b*m)*1E3)/1E3;if(!o||s.visible)b+=c;i=u((k+b*m)*1E3)/1E3;s.shapeType="arc";s.shapeArgs={x:f[0],y:f[1],r:f[2]/2,innerR:f[3]/2,start:h,end:i};j=(i+h)/2;j>0.75*m&&(j-=2*Aa);s.slicedTranslation=Ta([W(j)*d+g.plotLeft,Z(j)*d+g.plotTop],u);h=W(j)*f[2]/2;i=Z(j)*f[2]/2;s.tooltipPos=[f[0]+h*0.7,f[1]+i*0.7];s.half=j<m/4?0:1;s.angle=j;s.labelPos=[f[0]+h+W(j)*n,f[1]+i+Z(j)*n,f[0]+h+W(j)*e,f[1]+i+Z(j)*e,f[0]+h,f[1]+i,n<0?"center":s.half?"right":"left",j];s.percentage=c*100;s.total=a}this.setTooltipPoints()},
-render:function(){this.getAttribs();this.drawPoints();this.options.enableMouseTracking!==!1&&this.drawTracker();this.drawDataLabels();this.options.animation&&this.animate&&this.animate();this.isDirty=!1},drawPoints:function(){var a=this,b=a.chart,c=b.renderer,d,e,f,g=a.options.shadow,h,i;o(a.points,function(j){e=j.graphic;i=j.shapeArgs;f=j.group;h=j.shadowGroup;if(g&&!h)h=j.shadowGroup=c.g("shadow").attr({zIndex:4}).add();if(!f)f=j.group=c.g("point").attr({zIndex:5}).add();d=j.sliced?j.slicedTranslation:
-[b.plotLeft,b.plotTop];f.translate(d[0],d[1]);h&&h.translate(d[0],d[1]);e?e.animate(i):j.graphic=e=c.arc(i).setRadialReference(a.center).attr(x(j.pointAttr[""],{"stroke-linejoin":"round"})).add(j.group).shadow(g,h);j.visible===!1&&j.setVisible(!1)})},drawDataLabels:function(){var a=this.data,b,c=this.chart,d=this.options.dataLabels,e=n(d.connectorPadding,10),f=n(d.connectorWidth,1),g,h,i=n(d.softConnector,!0),j=d.distance,k=this.center,l=k[2]/2,m=k[1],q=j>0,p=[[],[]],r,t,s,u=2,v,x=function(a,b){return b.y-
-a.y},z=function(a,b){a.sort(function(a,c){return(c.angle-a.angle)*b})};if(d.enabled||this._hasPointLabels){P.prototype.drawDataLabels.apply(this);o(a,function(a){a.dataLabel&&p[a.half].push(a)});for(a=p[0][0]&&p[0][0].dataLabel&&(p[0][0].dataLabel.getBBox().height||21);u--;){var w=[],A=[],B=p[u],C=B.length,D;z(B,u-0.5);if(j>0){for(v=m-l-j;v<=m+l+j;v+=a)w.push(v);s=w.length;if(C>s){h=[].concat(B);h.sort(x);for(v=C;v--;)h[v].rank=v;for(v=C;v--;)B[v].rank>=s&&B.splice(v,1);C=B.length}for(v=0;v<C;v++){b=
-B[v];h=b.labelPos;b=9999;for(t=0;t<s;t++)g=M(w[t]-h[1]),g<b&&(b=g,D=t);if(D<v&&w[v]!==null)D=v;else for(s<C-v+D&&w[v]!==null&&(D=s-C+v);w[D]===null;)D++;A.push({i:D,y:w[D]});w[D]=null}A.sort(x)}for(v=0;v<C;v++){b=B[v];h=b.labelPos;g=b.dataLabel;s=b.visible===!1?"hidden":"visible";r=h[1];if(j>0){if(t=A.pop(),D=t.i,t=t.y,r>t&&w[D+1]!==null||r<t&&w[D-1]!==null)t=r}else t=r;r=d.justify?k[0]+(u?-1:1)*(l+j):this.getX(D===0||D===w.length-1?r:t,u);g.attr({visibility:s,align:h[6]})[g.moved?"animate":"attr"]({x:r+
-d.x+({left:e,right:-e}[h[6]]||0),y:t+d.y-10});g.moved=!0;if(q&&f)g=b.connector,h=i?["M",r+(h[6]==="left"?5:-5),t,"C",r,t,2*h[2]-h[4],2*h[3]-h[5],h[2],h[3],"L",h[4],h[5]]:["M",r+(h[6]==="left"?5:-5),t,"L",h[2],h[3],"L",h[4],h[5]],g?(g.animate({d:h}),g.attr("visibility",s)):b.connector=g=this.chart.renderer.path(h).attr({"stroke-width":f,stroke:d.connectorColor||b.color||"#606060",visibility:s,zIndex:3}).translate(c.plotLeft,c.plotTop).add()}}}},alignDataLabel:pa,drawTracker:fa.prototype.drawTracker,
-drawLegendSymbol:G.prototype.drawLegendSymbol,getSymbol:function(){}};pa=ba(P,pa);$.pie=pa;x(Highcharts,{Axis:ob,CanVGRenderer:gb,Chart:sb,Color:qa,Legend:rb,MouseTracker:qb,Point:Ua,Tick:Qa,Tooltip:pb,Renderer:Sa,Series:P,SVGRenderer:sa,VMLRenderer:ha,arrayMin:Fa,arrayMax:wa,charts:Ha,dateFormat:db,pathAnim:ub,getOptions:function(){return N},hasBidiBug:Sb,isTouchDevice:Mb,numberFormat:Ja,seriesTypes:$,setOptions:function(a){N=B(N,a);Jb();return N},addEvent:J,removeEvent:R,createElement:T,discardElement:Na,
-css:I,each:o,extend:x,map:Ta,merge:B,pick:n,splat:la,extendClass:ba,pInt:z,wrap:function(a,b,c){var d=a[b];a[b]=function(){var a=Array.prototype.slice.call(arguments);a.unshift(d);return c.apply(this,a)}},svg:ca,canvas:V,vml:!ca&&!V,product:"Highcharts",version:"2.3.5"})})();
+App.Router.map(function() {
+	"use strict";
+	
+	this.route('index',{ path:'/' });
+});
 
-/*
- Highcharts JS v2.3.5 (2012-12-19)
-
- (c) 2009-2011 Torstein Hønsi
-
- License: www.highcharts.com/license
+/**
+*	Define base api url
 */
-(function(i,v){function A(a,b,c){this.init.call(this,a,b,c)}function B(a,b,c){a.call(this,b,c);if(this.chart.polar)this.closeSegment=function(a){var b=this.xAxis.center;a.push("L",b[0],b[1])},this.closedStacks=!0}function C(a,b){var c=this.chart,d=this.options.animation,g=this.group,f=this.markerGroup,e=this.xAxis.center,h=c.plotLeft,m=c.plotTop;if(c.polar){if(c.renderer.isSVG)if(d===!0&&(d={}),b){if(g.attrSetters.scaleX=g.attrSetters.scaleY=function(a,b){this[b]=a;this.scaleX!==v&&this.scaleY!==
-v&&this.element.setAttribute("transform","translate("+this.translateX+","+this.translateY+") scale("+this.scaleX+","+this.scaleY+")");return!1},c={translateX:e[0]+h,translateY:e[1]+m,scaleX:0,scaleY:0},g.attr(c),f)f.attrSetters=g.attrSetters,f.attr(c)}else c={translateX:h,translateY:m,scaleX:1,scaleY:1},g.animate(c,d),f&&f.animate(c,d),this.animate=null}else a.call(this,b)}var q=i.each,w=i.extend,p=i.merge,G=i.map,o=i.pick,x=i.pInt,n=i.getOptions().plotOptions,j=i.seriesTypes,D=i.extendClass,E=i.splat,
-l=i.wrap,s=i.Axis,H=i.Tick,z=i.Series,r=j.column.prototype,t=function(){};w(A.prototype,{init:function(a,b,c){var d=this,g=d.defaultOptions;d.chart=b;if(b.angular)g.background={};d.options=a=p(g,a);(a=a.background)&&q([].concat(E(a)).reverse(),function(a){var b=a.backgroundColor,a=p(d.defaultBackgroundOptions,a);if(b)a.backgroundColor=b;a.color=a.backgroundColor;c.options.plotBands.unshift(a)})},defaultOptions:{center:["50%","50%"],size:"85%",startAngle:0},defaultBackgroundOptions:{shape:"circle",
-borderWidth:1,borderColor:"silver",backgroundColor:{linearGradient:{x1:0,y1:0,x2:0,y2:1},stops:[[0,"#FFF"],[1,"#DDD"]]},from:Number.MIN_VALUE,innerRadius:0,to:Number.MAX_VALUE,outerRadius:"105%"}});var y=s.prototype,s=H.prototype,I={getOffset:t,redraw:function(){this.isDirty=!1},render:function(){this.isDirty=!1},setScale:t,setCategories:t,setTitle:t},F={isRadial:!0,defaultRadialGaugeOptions:{labels:{align:"center",x:0,y:null},minorGridLineWidth:0,minorTickInterval:"auto",minorTickLength:10,minorTickPosition:"inside",
-minorTickWidth:1,plotBands:[],tickLength:10,tickPosition:"inside",tickWidth:2,title:{rotation:0},zIndex:2},defaultRadialXOptions:{gridLineWidth:1,labels:{align:null,distance:15,x:0,y:null},maxPadding:0,minPadding:0,plotBands:[],showLastLabel:!1,tickLength:0},defaultRadialYOptions:{gridLineInterpolation:"circle",labels:{align:"right",x:-3,y:-2},plotBands:[],showLastLabel:!1,title:{x:4,text:null,rotation:90}},setOptions:function(a){this.options=p(this.defaultOptions,this.defaultRadialOptions,a)},getOffset:function(){y.getOffset.call(this);
-this.chart.axisOffset[this.side]=0;this.center=this.pane.center=j.pie.prototype.getCenter.call(this.pane)},getLinePath:function(a,b){var c=this.center,b=o(b,c[2]/2-this.offset);return this.chart.renderer.symbols.arc(this.left+c[0],this.top+c[1],b,b,{start:this.startAngleRad,end:this.endAngleRad,open:!0,innerR:0})},setAxisTranslation:function(){y.setAxisTranslation.call(this);if(this.center&&(this.transA=this.isCircular?(this.endAngleRad-this.startAngleRad)/(this.max-this.min||1):this.center[2]/2/
-(this.max-this.min||1),this.isXAxis))this.minPixelPadding=this.transA*this.minPointOffset+(this.reversed?(this.endAngleRad-this.startAngleRad)/4:0)},beforeSetTickPositions:function(){this.autoConnect&&(this.max+=this.categories&&1||this.pointRange||this.closestPointRange)},setAxisSize:function(){y.setAxisSize.call(this);if(this.center)this.len=this.width=this.height=this.isCircular?this.center[2]*(this.endAngleRad-this.startAngleRad)/2:this.center[2]/2},getPosition:function(a,b){if(!this.isCircular)b=
-this.translate(a),a=this.min;return this.postTranslate(this.translate(a),o(b,this.center[2]/2)-this.offset)},postTranslate:function(a,b){var c=this.chart,d=this.center,a=this.startAngleRad+a;return{x:c.plotLeft+d[0]+Math.cos(a)*b,y:c.plotTop+d[1]+Math.sin(a)*b}},getPlotBandPath:function(a,b,c){var d=this.center,g=this.startAngleRad,f=d[2]/2,e=[o(c.outerRadius,"100%"),c.innerRadius,o(c.thickness,10)],h=/%$/,m,k=this.isCircular;this.options.gridLineInterpolation==="polygon"?d=this.getPlotLinePath(a).concat(this.getPlotLinePath(b,
-!0)):(k||(e[0]=this.translate(a),e[1]=this.translate(b)),e=G(e,function(a){h.test(a)&&(a=x(a,10)*f/100);return a}),c.shape==="circle"||!k?(a=-Math.PI/2,b=Math.PI*1.5,m=!0):(a=g+this.translate(a),b=g+this.translate(b)),d=this.chart.renderer.symbols.arc(this.left+d[0],this.top+d[1],e[0],e[0],{start:a,end:b,innerR:o(e[1],e[0]-e[2]),open:m}));return d},getPlotLinePath:function(a,b){var c=this.center,d=this.chart,g=this.getPosition(a),f,e,h;this.isCircular?h=["M",c[0]+d.plotLeft,c[1]+d.plotTop,"L",g.x,
-g.y]:this.options.gridLineInterpolation==="circle"?(a=this.translate(a))&&(h=this.getLinePath(0,a)):(f=d.xAxis[0],h=[],a=this.translate(a),c=f.tickPositions,f.autoConnect&&(c=c.concat([c[0]])),b&&(c=[].concat(c).reverse()),q(c,function(b,c){e=f.getPosition(b,a);h.push(c?"L":"M",e.x,e.y)}));return h},getTitlePosition:function(){var a=this.center,b=this.chart,c=this.options.title;return{x:b.plotLeft+a[0]+(c.x||0),y:b.plotTop+a[1]-{high:0.5,middle:0.25,low:0}[c.align]*a[2]+(c.y||0)}}};l(y,"init",function(a,
-b,c){var d=b.angular,g=b.polar,f=c.isX,e=d&&f,h,m;m=b.options;var k=c.pane||0;if(d){if(w(this,e?I:F),h=!f)this.defaultRadialOptions=this.defaultRadialGaugeOptions}else if(g)w(this,F),this.defaultRadialOptions=(h=f)?this.defaultRadialXOptions:p(this.defaultYAxisOptions,this.defaultRadialYOptions);a.call(this,b,c);if(!e&&(d||g)){a=this.options;if(!b.panes)b.panes=[];this.pane=b.panes[k]=k=new A(E(m.pane)[k],b,this);k=k.options;b.inverted=!1;m.chart.zoomType=null;this.startAngleRad=b=(k.startAngle-90)*
-Math.PI/180;this.endAngleRad=m=(o(k.endAngle,k.startAngle+360)-90)*Math.PI/180;this.offset=a.offset||0;if((this.isCircular=h)&&c.max===v&&m-b===2*Math.PI)this.autoConnect=!0}});l(s,"getPosition",function(a,b,c,d,g){var f=this.axis;return f.getPosition?f.getPosition(c):a.call(this,b,c,d,g)});l(s,"getLabelPosition",function(a,b,c,d,g,f,e,h,m){var k=this.axis,i=f.y,j=f.align,l=(k.translate(this.pos)+k.startAngleRad+Math.PI/2)/Math.PI*180;k.isRadial?(a=k.getPosition(this.pos,k.center[2]/2+o(f.distance,
--25)),f.rotation==="auto"?d.attr({rotation:l}):i===null&&(i=x(d.styles.lineHeight)*0.9-d.getBBox().height/2),j===null&&(j=k.isCircular?l>20&&l<160?"left":l>200&&l<340?"right":"center":"center",d.attr({align:j})),a.x+=f.x,a.y+=i):a=a.call(this,b,c,d,g,f,e,h,m);return a});l(s,"getMarkPath",function(a,b,c,d,g,f,e){var h=this.axis;h.isRadial?(a=h.getPosition(this.pos,h.center[2]/2+d),b=["M",b,c,"L",a.x,a.y]):b=a.call(this,b,c,d,g,f,e);return b});n.arearange=p(n.area,{lineWidth:1,marker:null,threshold:null,
-tooltip:{pointFormat:'<span style="color:{series.color}">{series.name}</span>: <b>{point.low}</b> - <b>{point.high}</b><br/>'},trackByArea:!0,dataLabels:{verticalAlign:null,xLow:0,xHigh:0,yLow:0,yHigh:0},shadow:!1});s=i.extendClass(i.Point,{applyOptions:function(a,b){var c=this.series,d=c.pointArrayMap,g=0,f=0,e=d.length;if(typeof a==="object"&&typeof a.length!=="number")w(this,a),this.options=a;else if(a.length){if(a.length>e){if(typeof a[0]==="string")this.name=a[0];else if(typeof a[0]==="number")this.x=
-a[0];g++}for(;f<e;)this[d[f++]]=a[g++]}this.y=this[c.pointValKey];if(this.x===v&&c)this.x=b===v?c.autoIncrement():b;return this},toYData:function(){return[this.low,this.high]}});j.arearange=i.extendClass(j.area,{type:"arearange",pointArrayMap:["low","high"],pointClass:s,pointValKey:"low",translate:function(){var a=this.yAxis;j.area.prototype.translate.apply(this);q(this.points,function(b){if(b.y!==null)b.plotLow=b.plotY,b.plotHigh=a.translate(b.high,0,1,0,1)})},getSegmentPath:function(a){var b=[],
-c=a.length,d=z.prototype.getSegmentPath,g,f;f=this.options;for(var e=f.step;c--;)g=a[c],b.push({plotX:g.plotX,plotY:g.plotHigh});a=d.call(this,a);if(e)e===!0&&(e="left"),f.step={left:"right",center:"center",right:"left"}[e];b=d.call(this,b);f.step=e;f=[].concat(a,b);b[0]="L";this.areaPath=this.areaPath.concat(a,b);return f},drawDataLabels:function(){var a=this.data,b=a.length,c,d=[],g=z.prototype,f=this.options.dataLabels,e,h=this.chart.inverted;if(f.enabled||this._hasPointLabels){for(c=b;c--;)e=
-a[c],e.y=e.high,e.plotY=e.plotHigh,d[c]=e.dataLabel,e.dataLabel=e.dataLabelUpper,e.below=!1,h?(f.align="left",f.x=f.xHigh):f.y=f.yHigh;g.drawDataLabels.apply(this,arguments);for(c=b;c--;)e=a[c],e.dataLabelUpper=e.dataLabel,e.dataLabel=d[c],e.y=e.low,e.plotY=e.plotLow,e.below=!0,h?(f.align="right",f.x=f.xLow):f.y=f.yLow;g.drawDataLabels.apply(this,arguments)}},alignDataLabel:j.column.prototype.alignDataLabel,getSymbol:j.column.prototype.getSymbol,drawPoints:t});n.areasplinerange=p(n.arearange);j.areasplinerange=
-D(j.arearange,{type:"areasplinerange",getPointSpline:j.spline.prototype.getPointSpline});n.columnrange=p(n.column,n.arearange,{lineWidth:1,pointRange:null});j.columnrange=D(j.arearange,{type:"columnrange",translate:function(){var a=this.yAxis,b;r.translate.apply(this);q(this.points,function(c){var d=c.shapeArgs;c.plotHigh=b=a.translate(c.high,0,1,0,1);c.plotLow=c.plotY;d.y=b;d.height=c.plotY-b;c.trackerArgs=d})},drawGraph:t,pointAttrToOptions:r.pointAttrToOptions,drawPoints:r.drawPoints,drawTracker:r.drawTracker,
-animate:r.animate});n.gauge=p(n.line,{dataLabels:{enabled:!0,y:15,borderWidth:1,borderColor:"silver",borderRadius:3,style:{fontWeight:"bold"},verticalAlign:"top",zIndex:2},dial:{},pivot:{},tooltip:{headerFormat:""},showInLegend:!1});n={type:"gauge",pointClass:i.extendClass(i.Point,{setState:function(a){this.state=a}}),angular:!0,translate:function(){var a=this,b=a.yAxis,c=b.center;a.generatePoints();q(a.points,function(d){var g=p(a.options.dial,d.dial),f=x(o(g.radius,80))*c[2]/200,e=x(o(g.baseLength,
-70))*f/100,h=x(o(g.rearLength,10))*f/100,m=g.baseWidth||3,k=g.topWidth||1;d.shapeType="path";d.shapeArgs={d:g.path||["M",-h,-m/2,"L",e,-m/2,f,-k/2,f,k/2,e,m/2,-h,m/2,"z"],translateX:c[0],translateY:c[1],rotation:(b.startAngleRad+b.translate(d.y,null,null,null,!0))*180/Math.PI};d.plotX=c[0];d.plotY=c[1]})},drawPoints:function(){var a=this,b=a.yAxis.center,c=a.pivot,d=a.options,g=d.pivot,f=a.chart.renderer;q(a.points,function(b){var c=b.graphic,g=b.shapeArgs,k=g.d,i=p(d.dial,b.dial);c?(c.animate(g),
-g.d=k):b.graphic=f[b.shapeType](g).attr({stroke:i.borderColor||"none","stroke-width":i.borderWidth||0,fill:i.backgroundColor||"black",rotation:g.rotation}).add(a.group)});c?c.animate({translateX:b[0],translateY:b[1]}):a.pivot=f.circle(0,0,o(g.radius,5)).attr({"stroke-width":g.borderWidth||0,stroke:g.borderColor||"silver",fill:g.backgroundColor||"black"}).translate(b[0],b[1]).add(a.group)},animate:function(){var a=this;q(a.points,function(b){var c=b.graphic;c&&(c.attr({rotation:a.yAxis.startAngleRad*
-180/Math.PI}),c.animate({rotation:b.shapeArgs.rotation},a.options.animation))});a.animate=null},render:function(){this.group=this.plotGroup("group","series",this.visible?"visible":"hidden",this.options.zIndex,this.chart.seriesGroup);j.pie.prototype.render.call(this);this.group.clip(this.chart.clipRect)},setData:j.pie.prototype.setData,drawTracker:j.column.prototype.drawTracker};j.gauge=i.extendClass(j.line,n);var u=z.prototype,n=i.MouseTracker.prototype;u.toXY=function(a){var b,c=this.chart;b=a.plotX;
-var d=a.plotY;a.rectPlotX=b;a.rectPlotY=d;a.deg=b/Math.PI*180;b=this.xAxis.postTranslate(a.plotX,this.yAxis.len-d);a.plotX=a.polarPlotX=b.x-c.plotLeft;a.plotY=a.polarPlotY=b.y-c.plotTop};l(j.area.prototype,"init",B);l(j.areaspline.prototype,"init",B);l(j.spline.prototype,"getPointSpline",function(a,b,c,d){var g,f,e,h,i,k,j;if(this.chart.polar){g=c.plotX;f=c.plotY;a=b[d-1];e=b[d+1];this.connectEnds&&(a||(a=b[b.length-2]),e||(e=b[1]));if(a&&e)h=a.plotX,i=a.plotY,b=e.plotX,k=e.plotY,h=(1.5*g+h)/2.5,
-i=(1.5*f+i)/2.5,e=(1.5*g+b)/2.5,j=(1.5*f+k)/2.5,b=Math.sqrt(Math.pow(h-g,2)+Math.pow(i-f,2)),k=Math.sqrt(Math.pow(e-g,2)+Math.pow(j-f,2)),h=Math.atan2(i-f,h-g),i=Math.atan2(j-f,e-g),j=Math.PI/2+(h+i)/2,Math.abs(h-j)>Math.PI/2&&(j-=Math.PI),h=g+Math.cos(j)*b,i=f+Math.sin(j)*b,e=g+Math.cos(Math.PI+j)*k,j=f+Math.sin(Math.PI+j)*k,c.rightContX=e,c.rightContY=j;d?(c=["C",a.rightContX||a.plotX,a.rightContY||a.plotY,h||g,i||f,g,f],a.rightContX=a.rightContY=null):c=["M",g,f]}else c=a.call(this,b,c,d);return c});
-l(u,"translate",function(a){a.call(this);if(this.chart.polar&&!this.preventPostTranslate)for(var a=this.points,b=a.length;b--;)this.toXY(a[b])});l(u,"getSegmentPath",function(a,b){var c=this.points;if(this.chart.polar&&this.options.connectEnds!==!1&&b[b.length-1]===c[c.length-1]&&c[0].y!==null)this.connectEnds=!0,b=[].concat(b,[c[0]]);return a.call(this,b)});l(u,"animate",C);l(r,"animate",C);l(u,"setTooltipPoints",function(a,b){this.chart.polar&&w(this.xAxis,{tooltipLen:360,tooltipPosName:"deg"});
-return a.call(this,b)});l(r,"translate",function(a){var b=this.xAxis,c=this.yAxis.len,d=b.center,g=b.startAngleRad,f=this.chart.renderer,e,h;this.preventPostTranslate=!0;a.call(this);if(b.isRadial){b=this.points;for(h=b.length;h--;)e=b[h],a=e.barX+g,e.shapeType="path",e.shapeArgs={d:f.symbols.arc(d[0],d[1],c-e.plotY,null,{start:a,end:a+e.pointWidth,innerR:c-o(e.yBottom,c)})},this.toXY(e)}});l(r,"alignDataLabel",function(a,b,c,d,g,f){if(this.chart.polar){a=b.rectPlotX/Math.PI*180;if(d.align===null)d.align=
-a>20&&a<160?"left":a>200&&a<340?"right":"center";if(d.verticalAlign===null)d.verticalAlign=a<45||a>315?"bottom":a>135&&a<225?"top":"middle";u.alignDataLabel.call(this,b,c,d,g,f)}else a.call(this,b,c,d,g,f)});l(n,"getIndex",function(a,b){var c,d=this.chart,g;d.polar?(g=d.xAxis[0].center,c=b.chartX-g[0]-d.plotLeft,d=b.chartY-g[1]-d.plotTop,c=180-Math.round(Math.atan2(c,d)/Math.PI*180)):c=a.call(this,b);return c});l(n,"getMouseCoordinates",function(a,b){var c=this.chart,d={xAxis:[],yAxis:[]};c.polar?
-q(c.axes,function(a){var f=a.isXAxis,e=a.center,h=b.chartX-e[0]-c.plotLeft,e=b.chartY-e[1]-c.plotTop;d[f?"xAxis":"yAxis"].push({axis:a,value:a.translate(f?Math.PI-Math.atan2(h,e):Math.sqrt(Math.pow(h,2)+Math.pow(e,2)),!0)})}):d=a.call(this,b);return d})})(Highcharts);
+DS.RESTAdapter.reopen({
+	namespace:'public/api'
+});
+
+/**
+*	Specialized Plurals
+*/
+DS.RESTAdapter.configure("plurals", {
+	
+});
+
+/**
+*	Initialize Store
+*/
+App.store = DS.Store.create({
+	
+});
 
 var JQ = JQ || {};
 
@@ -66175,113 +65453,6 @@ JQ.Resizable = Ember.Mixin.create( JQ.Widget, {
 		'minWidth'],
 	uiEvents: ['create', 'start', 'resize', 'stop']
 });
-// Adds a dollar sign and appropriate commas to a provided number.
-Ember.Handlebars.registerBoundHelper('formatCurrency', function(value) {
-	value += '';
-	// do not format empty values.
-	if(!value) return '';
-
-	//
-	var x = value.split('.');
-	var x1 = x[0];
-	var x2 = x.length > 1 ? '.' + x[1] : '';
-	var rgx = /(\d+)(\d{3})/;
-	while (rgx.test(x1)) {
-		x1 = x1.replace(rgx, '$1' + ',' + '$2');
-	}
-	return '$'+ x1 + x2;
-});
-
-// Converts a given string to all upper case characters
-Ember.Handlebars.registerBoundHelper('toUpperCase', function(value) {
-	return String(value).toUpperCase();
-});
-
-/**
- * EMBER DEBUGGING APPROACHES
- * source: http://www.akshay.cc/blog/2013-02-22-debugging-ember-js-and-ember-data.html
- *
- * Log Object Bindings:
- * Ember.LOG_BINDINGS = true;
- *
- * View All Registered Route:
- * Ember.keys(App.Router.router.recognizer.names);
- *
- * Log State Transitions:
- * record.stateManager.get('currentPath')
- *
- * View Registered Temlates:
- * Ember.keys(Ember.TEMPLATES)
- *
- * View an instance of something from the container:
- * App.__container__.lookup("controller:posts")
- * App.__container__.lookup("route:application")
- *
- * View ember-data's identity map:
- * App.__container__.lookup('store:main').recordCache # all records in memory
- * App.__container__.lookup('store:main').recordCache[2].get('data.attributes') #attributes
- * App.__container__.lookup('store:main').recordCache[2].get('comments') #loaded associations
- *
- * See all observers for a object, key:
- * Ember.observersFor(comments, keyName);
- *
- * Dealing with deprecations:
- * Ember.ENV.RAISE_ON_DEPRECATION = true
- * Ember.LOG_STACKTRACE_ON_DEPRECATION = true
- *
- *
- * Handlebars:
- * {{debugger}}
- * {{log record}}
- *
- * Implement a Ember.onerror hook to log all errors in production:
- * Ember.onerror = function(error) {
- *  Em.$.ajax('/error-notification', 'POST', {
- *     stack: error.stack,
- *    otherInformation: 'exception message'
- *  });
- * }
- *
- * Use ember extension when its ready:
- * https://github.com/tildeio/ember-extension.git
- */
-
-// Application
-window.App = Ember.Application.create({
-	LOG_TRANSITIONS: true
-});
-/**
-* Application Router
-*
-* @class Router
-*/
-App.Router.map(function() {
-	"use strict";
-	
-	this.route('index',{ path:'/' });
-});
-
-/**
-*	Define base api url
-*/
-DS.RESTAdapter.reopen({
-	namespace:'public/api'
-});
-
-/**
-*	Specialized Plurals
-*/
-DS.RESTAdapter.configure("plurals", {
-	
-});
-
-/**
-*	Initialize Store
-*/
-App.store = DS.Store.create({
-	revision: 12
-});
-
 var JQ = JQ || {};
 
 JQ.Transition = Ember.Mixin.create({
@@ -66515,20 +65686,21 @@ App.User = DS.Model.extend({
 */
 App.AppController = Ember.ObjectController.extend();
 Ember.TEMPLATES["application"] = Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [2,'>= 1.0.0-rc.3'];
+this.compilerInfo = [3,'>= 1.0.0-rc.4'];
 helpers = helpers || Ember.Handlebars.helpers; data = data || {};
-  var buffer = '', hashTypes, escapeExpression=this.escapeExpression;
+  var buffer = '', hashTypes, hashContexts, escapeExpression=this.escapeExpression;
 
 
   data.buffer.push("<h1>Welcome to Ember Start!</h1>\n\n");
   hashTypes = {};
-  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "outlet", {hash:{},contexts:[depth0],types:["ID"],hashTypes:hashTypes,data:data})));
+  hashContexts = {};
+  data.buffer.push(escapeExpression(helpers._triageMustache.call(depth0, "outlet", {hash:{},contexts:[depth0],types:["ID"],hashContexts:hashContexts,hashTypes:hashTypes,data:data})));
   return buffer;
   
 });
 
 Ember.TEMPLATES["index"] = Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
-this.compilerInfo = [2,'>= 1.0.0-rc.3'];
+this.compilerInfo = [3,'>= 1.0.0-rc.4'];
 helpers = helpers || Ember.Handlebars.helpers; data = data || {};
   
 
@@ -66536,129 +65708,14 @@ helpers = helpers || Ember.Handlebars.helpers; data = data || {};
   data.buffer.push("<p>This is the app index page</p>");
   
 });
-/**
-* @namespace Views
-* @class BackgroundColorView
+/*
+* Application Initialization 
 */
-App.BackgroundColorView = App.BaseView.extend({
-	cssProperties:['backgroundColor'],
-	didInsertElement:function() {
+App.initializer({
+	//
+	name: 'initializerName',
+	//
+	initialize: function(container) {
 		"use strict";
-		this._super();
-		this.setProperties({
-			duration:300,
-			backgroundColor:this.get('color')
-		});
 	}
-});
-
-/**
- * Formats value and colors based on a supplied truthValue.
- *
- * @namespace Views
- * @class ColoredValueView
- */
-App.ColoredValueView = Ember.View.extend(JQ.Transition, {
-	template: Ember.Handlebars.compile('{{view.formatValue}}'),
-	cssProperties: ['color'],
-	didInsertElement: function() {
-		"use strict";
-		this._super();
-		this.colorObserver();
-	},
-	/**
-	 * Transition duration
-	 * @property duration
-	 * @type {Integer}
-	 * @default 400
-	 */
-	duration: 400,
-	/**
-	 * Color to use when truthValue is true (hex etc)
-	 * @property trueColor
-	 * @type {String}
-	 * @default #8dc500
-	 */
-	trueColor: '#8dc500',
-	/**
-	 * Color to use when truthValue is false (hex etc)
-	 * @property falseColor
-	 * @type {String}
-	 * @default #cc0000
-	 */
-	falseColor: '#cc0000',
-	/**
-	 * @property truthValue
-	 * @type {Boolean}
-	 * @default true
-	 */
-	truthValue: true,
-	/**
-	 * Actual value to display (a string, number etc.)
-	 * @property value
-	 * @type {String}
-	 * @default 0
-	 */
-	value: '0',
-	/**
-	 * Reverse trueColor and falseColor
-	 * @property swapColors
-	 * @type {Boolean}
-	 * @default false
-	 */
-	swapColors: false,
-	/**
-	 * If set to true adds a dollar sign, and applicable commas
-	 * @property isCurrency
-	 * @type {Boolean}
-	 * @default false
-	 */
-	isCurrency: false,
-	/**
-	 * Current value formatted with $ and commas
-	 *
-	 * @property formatValue
-	 * @type {String}
-	 */
-	formatValue: function() {
-		"use strict";
-		if (this.get('isCurrency')) {
-			return '$' + this.get('value').toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-		}
-		return this.get('value');
-	}.property('truthValue', 'trueColor', 'falseColor', 'value', 'swapColors'),
-	colorObserver: function() {
-		"use strict";
-		var truthValue = this.get('truthValue');
-		if (this.get('swapColors')) {
-			truthValue = !truthValue;
-		}
-		var color = truthValue ? this.get('trueColor') : this.get('falseColor');
-		this.set('color', color);
-	}.observes('truthValue', 'trueColor', 'falseColor', 'value', 'swapColors')
-});
-/**
- * Simple Wrapper View for HighCharts
- *
- * @namespace Views
- * @class HighChartView
- */
-App.HighChartView = App.BaseView.extend({
-	/**
-	 * A wrapped instance of HighCharts
-	 * @property chart
-	 * @type {HighChart}
-	 */
-	chart: false,
-	//
-	didInsertElement: function() {
-		"use strict";
-		this._super();
-		this.set('chart', new Highcharts.Chart(this.get('data')));
-	},
-	//
-	dataObserver: function() {
-		"use strict";
-		this.set('chart', new Highcharts.Chart(this.get('data')));
-	}.observes('data')
 });
