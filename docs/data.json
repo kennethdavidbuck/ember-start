@@ -137,7 +137,7 @@
             "namespace": "Models",
             "file": "app/models/user.js",
             "line": 1,
-            "description": "Basic User model"
+            "description": "Example User model"
         },
         "Core.ArrayController": {
             "name": "Core.ArrayController",

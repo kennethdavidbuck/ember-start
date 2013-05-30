@@ -1,5 +1,5 @@
 /**
- * Basic User model
+ * Example User model
  *
  * @namespace Models
  * @class User

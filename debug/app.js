@@ -50772,7 +50772,7 @@ Em.ObjectController.reopen();
  */
 App.BaseView = Em.View.reopen(JQ.Transition);
 /**
- * Basic User model
+ * Example User model
  *
  * @namespace Models
  * @class User
