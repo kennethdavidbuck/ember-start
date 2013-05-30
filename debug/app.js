@@ -50785,6 +50785,18 @@ App.User = DS.Model.extend({
 	 */
 	username: DS.attr('string'),
 	/**
+	 * Users first name
+	 * @property username
+	 * @type {String}
+	 */
+	firstName: DS.attr('string'),
+	/**
+	 * Users last name
+	 * @property username
+	 * @type {String}
+	 */
+	lastName: DS.attr('string'),
+	/**
 	 * Users Email
 	 * @property email
 	 * @type {String}
@@ -50803,8 +50815,8 @@ App.User = DS.Model.extend({
 	 */
 	full_name: function() {
 		"use strict";
-		return "%@ %@".fmt(this.get('first_name'), this.get('last_name'));
-	}.property('first_name', 'last_name')
+		return "%@ %@".fmt(this.get('firstName'), this.get('lastName'));
+	}.property('firstName', 'lastName')
 });
 /**
  * Main Application controller

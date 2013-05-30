@@ -112,6 +112,18 @@ App.User = DS.Model.extend({
 	 */
 	username: DS.attr(&#x27;string&#x27;),
 	/**
+	 * Users first name
+	 * @property username
+	 * @type {String}
+	 */
+	firstName: DS.attr(&#x27;string&#x27;),
+	/**
+	 * Users last name
+	 * @property username
+	 * @type {String}
+	 */
+	lastName: DS.attr(&#x27;string&#x27;),
+	/**
 	 * Users Email
 	 * @property email
 	 * @type {String}
@@ -130,8 +142,8 @@ App.User = DS.Model.extend({
 	 */
 	full_name: function() {
 		&quot;use strict&quot;;
-		return &quot;%@ %@&quot;.fmt(this.get(&#x27;first_name&#x27;), this.get(&#x27;last_name&#x27;));
-	}.property(&#x27;first_name&#x27;, &#x27;last_name&#x27;)
+		return &quot;%@ %@&quot;.fmt(this.get(&#x27;firstName&#x27;), this.get(&#x27;lastName&#x27;));
+	}.property(&#x27;firstName&#x27;, &#x27;lastName&#x27;)
 });
     </pre>
 </div>

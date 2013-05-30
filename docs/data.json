@@ -208,6 +208,26 @@
         {
             "file": "app/models/user.js",
             "line": 14,
+            "description": "Users first name",
+            "itemtype": "property",
+            "name": "username",
+            "type": "{String}",
+            "class": "Models.User",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/models/user.js",
+            "line": 20,
+            "description": "Users last name",
+            "itemtype": "property",
+            "name": "username",
+            "type": "{String}",
+            "class": "Models.User",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/models/user.js",
+            "line": 26,
             "description": "Users Email",
             "itemtype": "property",
             "name": "email",
@@ -217,7 +237,7 @@
         },
         {
             "file": "app/models/user.js",
-            "line": 20,
+            "line": 32,
             "description": "Date user was created",
             "itemtype": "property",
             "name": "createdAt",
@@ -227,7 +247,7 @@
         },
         {
             "file": "app/models/user.js",
-            "line": 26,
+            "line": 38,
             "description": "Users Full Name (firstName LastName)",
             "itemtype": "property",
             "name": "fullName",
