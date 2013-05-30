@@ -29,7 +29,6 @@ module.exports = function(grunt) {
 					document:true,
 					Ember:true,
 					Em:true,
-					Highcharts:true,
 					$:true,
 					App:true,
 					JQ:true,
