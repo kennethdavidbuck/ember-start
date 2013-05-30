@@ -210,7 +210,7 @@
             "line": 14,
             "description": "Users first name",
             "itemtype": "property",
-            "name": "username",
+            "name": "firstName",
             "type": "{String}",
             "class": "Models.User",
             "namespace": "Models"
@@ -220,7 +220,7 @@
             "line": 20,
             "description": "Users last name",
             "itemtype": "property",
-            "name": "username",
+            "name": "lastName",
             "type": "{String}",
             "class": "Models.User",
             "namespace": "Models"

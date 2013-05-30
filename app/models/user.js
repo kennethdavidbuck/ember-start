@@ -13,13 +13,13 @@ App.User = DS.Model.extend({
 	username: DS.attr('string'),
 	/**
 	 * Users first name
-	 * @property username
+	 * @property firstName
 	 * @type {String}
 	 */
 	firstName: DS.attr('string'),
 	/**
 	 * Users last name
-	 * @property username
+	 * @property lastName
 	 * @type {String}
 	 */
 	lastName: DS.attr('string'),
