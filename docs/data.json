@@ -6,11 +6,22 @@
         "url": "http://www.example.com"
     },
     "files": {
-        "app/controllers/app.js": {
-            "name": "app/controllers/app.js",
+        "app/controllers/application.js": {
+            "name": "app/controllers/application.js",
             "modules": {},
             "classes": {
                 "Controllers.AppController": 1
+            },
+            "fors": {},
+            "namespaces": {
+                "Controllers": 1
+            }
+        },
+        "app/controllers/index.js": {
+            "name": "app/controllers/index.js",
+            "modules": {},
+            "classes": {
+                "Controllers.IndexController": 1
             },
             "fors": {},
             "namespaces": {
@@ -27,6 +38,20 @@
             "namespaces": {
                 "Models": 1
             }
+        },
+        "app/routes/application.js": {
+            "name": "app/routes/application.js",
+            "modules": {},
+            "classes": {},
+            "fors": {},
+            "namespaces": {}
+        },
+        "app/routes/index.js": {
+            "name": "app/routes/index.js",
+            "modules": {},
+            "classes": {},
+            "fors": {},
+            "namespaces": {}
         },
         "app/core/controllers/array.js": {
             "name": "app/core/controllers/array.js",
@@ -84,9 +109,22 @@
             "plugin_for": [],
             "extension_for": [],
             "namespace": "Controllers",
-            "file": "app/controllers/app.js",
+            "file": "app/controllers/application.js",
             "line": 1,
             "description": "Main Application controller"
+        },
+        "Controllers.IndexController": {
+            "name": "Controllers.IndexController",
+            "shortname": "Controllers.IndexController",
+            "classitems": [],
+            "plugins": [],
+            "extensions": [],
+            "plugin_for": [],
+            "extension_for": [],
+            "namespace": "Controllers",
+            "file": "app/controllers/index.js",
+            "line": 1,
+            "description": "Application index controller"
         },
         "Models.User": {
             "name": "Models.User",
@@ -198,6 +236,34 @@
             "namespace": "Models"
         },
         {
+            "file": "app/routes/application.js",
+            "line": 2,
+            "description": "Executed upon entering the route",
+            "class": "Core.ArrayController",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/routes/application.js",
+            "line": 10,
+            "description": "Executed upone exiting the route",
+            "class": "Core.ArrayController",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/routes/index.js",
+            "line": 2,
+            "description": "Executed upon entering the route",
+            "class": "Core.ArrayController",
+            "namespace": "Models"
+        },
+        {
+            "file": "app/routes/index.js",
+            "line": 9,
+            "description": "Executed upone exiting the route",
+            "class": "Core.ArrayController",
+            "namespace": "Models"
+        },
+        {
             "file": "app/core/models/model.js",
             "line": 7,
             "description": "Sums up all values from a given property in the model",
@@ -266,6 +332,22 @@
         }
     ],
     "warnings": [
+        {
+            "message": "Missing item type\nExecuted upon entering the route",
+            "line": " app/routes/application.js:2"
+        },
+        {
+            "message": "Missing item type\nExecuted upone exiting the route",
+            "line": " app/routes/application.js:10"
+        },
+        {
+            "message": "Missing item type\nExecuted upon entering the route",
+            "line": " app/routes/index.js:2"
+        },
+        {
+            "message": "Missing item type\nExecuted upone exiting the route",
+            "line": " app/routes/index.js:9"
+        },
         {
             "message": "Missing item type\nSums up all values from a given property in the model",
             "line": " app/core/models/model.js:7"

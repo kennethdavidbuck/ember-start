@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>app/core/models/model.js - Project Name</title>
+    <title>app/routes/application.js - Project Name</title>
     <link rel="stylesheet" href="http://yui.yahooapis.com/3.9.1/build/cssgrids/cssgrids-min.css">
     <link rel="stylesheet" href="../assets/vendor/prettify/prettify-min.css">
     <link rel="stylesheet" href="../assets/css/main.css" id="site_styles">
@@ -94,79 +94,25 @@
             <div class="apidocs">
                 <div id="docs-main">
                     <div class="content">
-                        <h1 class="file-heading">File: app/core/models/model.js</h1>
+                        <h1 class="file-heading">File: app/routes/application.js</h1>
 
 <div class="file">
     <pre class="code prettyprint linenums">
-/**
-* Reopening of DS.Model
-* @namespace Core
-* @class Model
-*/
-DS.Model.reopen({
+App.ApplicationRoute = Em.Route.extend({
 	/**
-	 * Sums up all values from a given property in the model
-	 *
-	 * @param property The a property (must be an array!) to iterate over
-	 * @param key The property being added to the total sum
-	 * @return {Number} Resulting total after summing up all object
-	 */
-	calculate:function(property,key) {
+	* Executed upon entering the route
+	*/
+	activate:function() {
 		&quot;use strict&quot;;
-		var total = 0;
-		this.get(property).forEach(function(item){
-			var value = item.get(key);
-			total+= (Ember.isEmpty(value) || isNaN(value) ) ? 0 : parseInt(value,10);
-		});
-		
-		return total;
+		console.log(&#x27;activate&#x27;);
 	},
-
+	
 	/**
-	 * Checks if a given property results to true. If so it includes a value
-	 * as produced by calling the given key on the object.
-	 *
-	 * @param property An array within the current model
-	 * @param key Used to check if a given property if true or false
-	 * @param value User to obtain property value to add to the total
-	 * @return {Number} Sum of values where property of satisfied
-	 */
-	conditionalAccumulate:function(property,key,value) {
+	* Executed upone exiting the route
+	*/
+	deactivate:function() {
 		&quot;use strict&quot;;
-		var total = 0;
-		var paid =  this.get(property).forEach(function(item){
-			if(item.get(key)) {
-				var tempValue = item.get(value);
-				total+= (Ember.isEmpty(tempValue) || isNaN(tempValue)) ? 0 : parseInt(tempValue,10);
-			}
-		});
-		
-		return total;
-	},
-
-	/**
-	 * Checks if a given property results to true. If so a total is incremented
-	 *
-	 * @param property An array within the current model
-	 * @param keys a single, or list of keys to check on the model (for a boolean value)
-	 * @return {Number} Total count of objects satisfying all key requirements
-	 */
-	conditionalCount:function(property,keys) {
-		&quot;use strict&quot;;
-		keys = [].concat(keys);
-
-		var total = 0;
-		this.get(property).forEach(function(item){
-			var result = true;
-			for(var i=0;i&lt;keys.length;i++) {
-				result &amp;= item.get(keys[i]);
-			}
-			if(result) {
-				total++;
-			}
-		});
-		
-		return total;
+		console.log(&#x27;deactivate&#x27;);
 	}
 });
     </pre>

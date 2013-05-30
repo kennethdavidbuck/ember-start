@@ -50827,7 +50827,14 @@ App.User = DS.Model.extend({
 * @namespace Controllers
 * @class AppController
 */
-App.AppController = Em.ObjectController.extend();
+App.ApplicationController = Em.ObjectController.extend();
+/**
+* Application index controller
+*
+* @namespace Controllers
+* @class IndexController
+*/
+App.IndexController = Em.ArrayController.extend();
 Ember.TEMPLATES["application"] = Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
 this.compilerInfo = [3,'>= 1.0.0-rc.4'];
 helpers = helpers || Ember.Handlebars.helpers; data = data || {};
@@ -50859,6 +50866,38 @@ App.initializer({
 	name: 'initializerName',
 	//
 	initialize: function(container) {
+		"use strict";
+	}
+});
+App.ApplicationRoute = Em.Route.extend({
+	/**
+	* Executed upon entering the route
+	*/
+	activate:function() {
+		"use strict";
+		console.log('activate');
+	},
+	
+	/**
+	* Executed upone exiting the route
+	*/
+	deactivate:function() {
+		"use strict";
+		console.log('deactivate');
+	}
+});
+App.IndexRoute = Em.Route.extend({
+	/**
+	* Executed upon entering the route
+	*/
+	activate:function() {
+		"use strict";
+	},
+	
+	/**
+	* Executed upone exiting the route
+	*/
+	deactivate:function() {
 		"use strict";
 	}
 });
