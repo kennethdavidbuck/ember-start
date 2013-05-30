@@ -41,6 +41,7 @@ module.exports = function(grunt) {
 				src:[
 					// Core Library
 					'app/core/library/jquery-1.10.0.js',
+					'app/core/library/jquery.ui-1.10.0.js',
 					'app/core/library/jquery.transit.js',
 					'app/core/library/handlebars-rc4.js',
 					'app/core/library/ember-rc4.js',

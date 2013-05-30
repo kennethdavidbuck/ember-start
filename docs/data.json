@@ -28,8 +28,8 @@
                 "Models": 1
             }
         },
-        "app/core/controllers/baseArray.js": {
-            "name": "app/core/controllers/baseArray.js",
+        "app/core/controllers/array.js": {
+            "name": "app/core/controllers/array.js",
             "modules": {},
             "classes": {
                 "Core.BaseArrayController": 1
@@ -39,8 +39,8 @@
                 "Core": 1
             }
         },
-        "app/core/controllers/baseObject.js": {
-            "name": "app/core/controllers/baseObject.js",
+        "app/core/controllers/object.js": {
+            "name": "app/core/controllers/object.js",
             "modules": {},
             "classes": {
                 "Core.BaseObjectController": 1
@@ -48,8 +48,8 @@
             "fors": {},
             "namespaces": {}
         },
-        "app/core/models/baseModel.js": {
-            "name": "app/core/models/baseModel.js",
+        "app/core/models/model.js": {
+            "name": "app/core/models/model.js",
             "modules": {},
             "classes": {
                 "Core.BaseModel": 1
@@ -59,8 +59,8 @@
                 "Core": 1
             }
         },
-        "app/core/views/baseView.js": {
-            "name": "app/core/views/baseView.js",
+        "app/core/views/view.js": {
+            "name": "app/core/views/view.js",
             "modules": {},
             "classes": {
                 "Core.BaseView": 1
@@ -108,7 +108,7 @@
             "plugin_for": [],
             "extension_for": [],
             "namespace": "Core",
-            "file": "app/core/controllers/baseArray.js",
+            "file": "app/core/controllers/array.js",
             "line": 1,
             "is_constructor": 1
         },
@@ -121,7 +121,7 @@
             "plugin_for": [],
             "extension_for": [],
             "namespace": "Core",
-            "file": "app/core/controllers/baseObject.js",
+            "file": "app/core/controllers/object.js",
             "line": 1
         },
         "Core.BaseModel": {
@@ -133,7 +133,7 @@
             "plugin_for": [],
             "extension_for": [],
             "namespace": "Core",
-            "file": "app/core/models/baseModel.js",
+            "file": "app/core/models/model.js",
             "line": 1
         },
         "Core.BaseView": {
@@ -145,7 +145,7 @@
             "plugin_for": [],
             "extension_for": [],
             "namespace": "Core",
-            "file": "app/core/views/baseView.js",
+            "file": "app/core/views/view.js",
             "line": 1,
             "description": "Mixin to add property delegates for JQ.Transition"
         }
@@ -192,7 +192,7 @@
             "namespace": "Models"
         },
         {
-            "file": "app/core/models/baseModel.js",
+            "file": "app/core/models/model.js",
             "line": 6,
             "description": "Sums up all values from a given property in the model",
             "params": [
@@ -213,7 +213,7 @@
             "namespace": "Core"
         },
         {
-            "file": "app/core/models/baseModel.js",
+            "file": "app/core/models/model.js",
             "line": 24,
             "description": "Checks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
             "params": [
@@ -238,7 +238,7 @@
             "namespace": "Core"
         },
         {
-            "file": "app/core/models/baseModel.js",
+            "file": "app/core/models/model.js",
             "line": 46,
             "description": "Checks if a given property results to true. If so a total is incremented",
             "params": [
@@ -262,15 +262,15 @@
     "warnings": [
         {
             "message": "Missing item type\nSums up all values from a given property in the model",
-            "line": " app/core/models/baseModel.js:6"
+            "line": " app/core/models/model.js:6"
         },
         {
             "message": "Missing item type\nChecks if a given property results to true. If so it includes a value\nas produced by calling the given key on the object.",
-            "line": " app/core/models/baseModel.js:24"
+            "line": " app/core/models/model.js:24"
         },
         {
             "message": "Missing item type\nChecks if a given property results to true. If so a total is incremented",
-            "line": " app/core/models/baseModel.js:46"
+            "line": " app/core/models/model.js:46"
         }
     ]
 }
