@@ -40,17 +40,17 @@ module.exports = function(grunt) {
 			dist: {
 				src:[
 					// Core Library
-					'app/core/library/jquery-1.10.0.js',
-					'app/core/library/jquery.ui-1.10.0.js',
-					'app/core/library/jquery.transit.js',
-					'app/core/library/handlebars-rc4.js',
-					'app/core/library/ember-rc4.js',
-					'app/core/library/ember-data-0.1.3.js',
-					'app/core/library/moment-2.0.0.js',
-					'app/core/library/jquery-ui-1.10.0/js/jquery-ui-1.10.0.js',
+					'app/core/vendor/jquery-1.10.0.js',
+					'app/core/vendor/jquery.ui-1.10.0.js',
+					'app/core/vendor/jquery.transit.js',
+					'app/core/vendor/handlebars-rc4.js',
+					'app/core/vendor/ember-rc4.js',
+					'app/core/vendor/ember-data-0.1.3.js',
+					'app/core/vendor/moment-2.0.0.js',
+					'app/core/vendor/jquery-ui-1.10.0/js/jquery-ui-1.10.0.js',
 					
 					// Vendor
-					'app/library/*.js',
+					'app/vendor/*.js',
 					
 					// Mixins / Helpers
 					'app/mixins/*.js',
