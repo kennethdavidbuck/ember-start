@@ -10165,9 +10165,8 @@ Handlebars.template = Handlebars.VM.template;
 // lib/handlebars/browser-suffix.js
 })(Handlebars);
 ;
-
-// Version: v1.0.0-rc.4-3-gbd1629e
-// Last commit: bd1629e (2013-05-28 10:37:17 -0500)
+// Version: v1.0.0-rc.5-1-gf84c193
+// Last commit: f84c193 (2013-06-01 13:57:19 -0400)
 
 
 (function() {
@@ -10319,8 +10318,8 @@ Ember.deprecateFunc = function(message, func) {
 
 })();
 
-// Version: v1.0.0-rc.4-3-gbd1629e
-// Last commit: bd1629e (2013-05-28 10:37:17 -0500)
+// Version: v1.0.0-rc.5-1-gf84c193
+// Last commit: f84c193 (2013-06-01 13:57:19 -0400)
 
 
 (function() {
@@ -10387,7 +10386,7 @@ var define, requireModule;
 
   @class Ember
   @static
-  @version 1.0.0-rc.4
+  @version 1.0.0-rc.5
 */
 
 if ('undefined' === typeof Ember) {
@@ -10414,10 +10413,10 @@ Ember.toString = function() { return "Ember"; };
 /**
   @property VERSION
   @type String
-  @default '1.0.0-rc.4'
+  @default '1.0.0-rc.5'
   @final
 */
-Ember.VERSION = '1.0.0-rc.4';
+Ember.VERSION = '1.0.0-rc.5';
 
 /**
   Standard environmental variables. You can define these in a global `ENV`
@@ -14863,7 +14862,7 @@ define("backburner",
           clearTimeout(laterTimer);
           laterTimer = null;
         }
-        laterTimer = setTimeout(function() {
+        laterTimer = window.setTimeout(function() {
           executeTimers(self);
           laterTimer = null;
           laterTimerExpiresAt = null;
@@ -14884,7 +14883,7 @@ define("backburner",
           if (debouncee[0] === target && debouncee[1] === method) { return; } // do nothing
         }
 
-        var timer = setTimeout(function() {
+        var timer = window.setTimeout(function() {
           self.run.apply(self, args);
 
           // remove debouncee
@@ -14945,7 +14944,7 @@ define("backburner",
 
     function createAutorun(backburner) {
       backburner.begin();
-      autorun = setTimeout(function() {
+      autorun = window.setTimeout(function() {
         backburner.end();
         autorun = null;
       });
@@ -14970,7 +14969,7 @@ define("backburner",
       });
 
       if (timers.length) {
-        laterTimer = setTimeout(function() {
+        laterTimer = window.setTimeout(function() {
           executeTimers(self);
           laterTimer = null;
           laterTimerExpiresAt = null;
@@ -15172,6 +15171,7 @@ define("backburner/queue",
 
     __exports__.Queue = Queue;
   });
+
 })();
 
 
@@ -16747,6 +16747,29 @@ Ember.immediateObserver = function() {
 };
 
 /**
+  When observers fire, they are called with the arguments `obj`, `keyName`
+  and `value`. In a typical observer, value is the new, post-change value.
+
+  A `beforeObserver` fires before a property changes. The `value` argument contains
+  the pre-change value.
+
+  A `beforeObserver` is an alternative form of `.observesBefore()`.
+
+  ```javascript
+  App.PersonView = Ember.View.extend({
+    valueWillChange: function (obj, keyName, value) {
+      this.changingFrom = value;
+    }.observesBefore('content.value'),
+    valueDidChange: function(obj, keyName, value) {
+        // only run if updating a value already in the DOM
+        if(this.get('state') === 'inDOM') {
+            var color = value > this.changingFrom ? 'green' : 'red';
+            // logic
+        }
+    }.observes('content.value')
+  });
+  ```
+
   @method beforeObserver
   @for Ember
   @param {Function} func
@@ -29218,7 +29241,7 @@ function makeBindings(options) {
 Ember.Handlebars.helper = function(name, value) {
   if (Ember.View.detect(value)) {
     Ember.Handlebars.registerHelper(name, function(options) {
-      Ember.assert("You can only pass attributes as parameters to a application-defined helper", arguments.length < 3);
+      Ember.assert("You can only pass attributes as parameters (not values) to a application-defined helper", arguments.length < 2);
       makeBindings(options);
       return Ember.Handlebars.helpers.view.call(this, value, options);
     });
@@ -33932,7 +33955,7 @@ define("router",
         its ancestors.
       */
       reset: function() {
-        eachHandler(this.currentHandlerInfos, function(handler) {
+        eachHandler(this.currentHandlerInfos || [], function(handler) {
           if (handler.exit) {
             handler.exit();
           }
@@ -35074,6 +35097,9 @@ Ember.Route = Ember.Object.extend({
     Transition into another route while replacing the current URL if
     possible. Identical to `transitionTo` in all other respects.
 
+    Of the bundled location types, only `history` currently supports
+    this behavior.
+
     @method replaceWith
     @param {String} name the name of the route
     @param {...Object} models the
@@ -35515,6 +35541,8 @@ Ember.Route = Ember.Object.extend({
 
 function parentRoute(route) {
   var handlerInfos = route.router.router.targetHandlerInfos;
+
+  if (!handlerInfos) { return; }
 
   var parent, current;
 
@@ -36430,7 +36458,7 @@ Ember.onLoad('Ember.Handlebars', function(Handlebars) {
 
     Alternatively, a `target` option can be provided to the helper to change
     which object will receive the method call. This option must be a path
-    path to an object, accessible in the current context:
+    to an object, accessible in the current context:
 
     ```handlebars
     <script type="text/x-handlebars" data-template-name='a-template'>
@@ -38251,10 +38279,11 @@ function resolverFor(namespace) {
 }
 
 function normalize(fullName) {
-  var split = fullName.split(':'),
+  var split = fullName.split(':', 2),
       type = split[0],
       name = split[1];
 
+  Ember.assert("Tried to normalize a container name without a colon (:) in it. You probably tried to lookup a name that did not contain a type, a colon, and a name. A proper lookup name would be `view:post`.", split.length === 2);
 
   if (type !== 'template') {
     var result = name;
@@ -40078,12 +40107,6 @@ helper('wait', wait);
 
 })();
 
-
-})();
-// Version: v1.0.0-rc.4-3-gbd1629e
-// Last commit: bd1629e (2013-05-28 10:37:17 -0500)
-
-
 (function() {
 /**
 Ember
@@ -40093,6 +40116,8 @@ Ember
 
 })();
 
+
+})();
 
 // Last commit: 3981a7c (2013-05-28 05:00:14 -0700)
 
