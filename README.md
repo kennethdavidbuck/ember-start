@@ -1,6 +1,6 @@
 # Ember Start
 
-Now updated to to Ember rc5, Handlebars rc4, Ember Data 0.13 and JQuery 1.10.0
+Now updated to to Ember rc6, Handlebars rc4, Ember Data 0.13 and JQuery 1.10.2
 
 This is a build/development tool for Ember developers to setup a basic application that includes: LESS compilation, concatenation of all javascript to a single app.js file, ember templates compilation, jshinting, yui documentation compilation, local http server, project watch tools.  It also includes a "release" function which will uglify (minify/compress) all files for a production deployment version of your app.  
 
