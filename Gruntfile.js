@@ -125,7 +125,8 @@ module.exports = function(grunt) {
 						"app/less/imports",
 						"app/less/imports/**"
 					],
-					yuicompress: true
+					// this breaks some css.
+					yuicompress: false
 				},
 				files: {
 					"release/app.min.css": "app/less/style.less"
