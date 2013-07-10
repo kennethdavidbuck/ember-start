@@ -11,4 +11,4 @@ DS.RESTAdapter.configure("plurals", {});
 /**
  *	Initialize Store
  */
-App.store = DS.Store.create();
+App.Store = DS.Store.extend();

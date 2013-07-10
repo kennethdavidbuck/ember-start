@@ -54079,7 +54079,7 @@ DS.RESTAdapter.configure("plurals", {});
 /**
  *	Initialize Store
  */
-App.store = DS.Store.create();
+App.Store = DS.Store.extend();
 var JQ = JQ || {};
 
 // Create a new mixin for jQuery UI widgets using the Ember
