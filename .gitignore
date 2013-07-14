@@ -6,6 +6,7 @@
 *.exe
 *.o
 *.so
+*.iml
 
 # Packages #
 ############
@@ -41,3 +42,4 @@ Thumbs.db
 ######################
 node_modules/
 cli/
+.idea/

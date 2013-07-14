@@ -54345,6 +54345,7 @@ App.User = DS.Model.extend({
 		return "%@ %@".fmt(this.get('firstName'), this.get('lastName'));
 	}.property('firstName', 'lastName')
 });
+
 /**
  * Main Application controller
  *
