@@ -43,6 +43,7 @@ module.exports = function(grunt) {
 			dist: {
 				src:[
 					// Core Library
+					'app/core/vendor/modernizr.js',
 					'app/core/vendor/jquery.js',
 					'app/core/vendor/jquery.transit.js',
 					'app/core/vendor/handlebars.js',
