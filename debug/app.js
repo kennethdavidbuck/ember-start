@@ -56272,7 +56272,7 @@ App.User = DS.Model.extend({
  * @namespace Controllers
  * @class AppController
  */
-App.ApplicationController = Em.ObjectController.extend();
+App.ApplicationController = Em.Controller.extend();
 /**
  * Application index controller
  *
