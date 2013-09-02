@@ -68,7 +68,7 @@ These tests will run in the **terminal on save** of javascript files within the 
 
 Qunit Tests via web browser can be found at **http://localhost:9091/**
 
-## Documentaiton
+## Documentation
 
 This project includes yuidoc compilation, and will automatically check for the appropraite markup and compile api documentation. 
 
