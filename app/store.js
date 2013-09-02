@@ -6,11 +6,6 @@ DS.RESTAdapter.reopen({
 });
 
 /**
- *	Specialized Plurals
- */
-DS.RESTAdapter.configure("plurals", {});
-
-/**
  *	Initialize Store
  */
 App.Store = DS.Store.extend();

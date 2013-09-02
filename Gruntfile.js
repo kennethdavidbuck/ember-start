@@ -48,6 +48,7 @@ module.exports = function(grunt) {
 					'app/core/vendor/jquery.transit.js',
 					'app/core/vendor/handlebars.js',
 					'app/core/vendor/ember.js',
+					'app/core/vendor/ember-states.js',
 					'app/core/vendor/ember-data.js',
 					'app/core/vendor/moment.js',
 					
