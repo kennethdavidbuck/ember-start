@@ -43,3 +43,6 @@ Thumbs.db
 node_modules/
 cli/
 .idea/
+debug/
+release/
+

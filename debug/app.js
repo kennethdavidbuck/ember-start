@@ -59484,6 +59484,15 @@ App.ApplicationController = Em.Controller.extend();
  * @class IndexController
  */
 App.IndexController = Em.ArrayController.extend();
+/*
+ * Application Initialization
+ */
+App.initializer({
+	name: 'initializerName',
+	initialize: function(container) {
+		"use strict";
+	}
+});
 Ember.TEMPLATES["application"] = Ember.Handlebars.template(function anonymous(Handlebars,depth0,helpers,partials,data) {
 this.compilerInfo = [4,'>= 1.0.0'];
 helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
@@ -59506,15 +59515,6 @@ helpers = this.merge(helpers, Ember.Handlebars.helpers); data = data || {};
 
   data.buffer.push("<p>This template is located in <code>app/templates/index.hbs</code></p>");
   
-});
-/*
- * Application Initialization
- */
-App.initializer({
-	name: 'initializerName',
-	initialize: function(container) {
-		"use strict";
-	}
 });
 App.ApplicationRoute = Em.Route.extend({
 	/**

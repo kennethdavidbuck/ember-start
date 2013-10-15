@@ -40,7 +40,7 @@ module.exports = function(grunt) {
 			}
 		},
 		concat: {
-			dist: {
+			debug: {
 				src:[
 					// Core Library
 					'app/core/vendor/modernizr.js',
@@ -74,7 +74,6 @@ module.exports = function(grunt) {
 					'app/models/*.js',
 					'app/models/user/*.js',
 					'app/controllers/*.js',
-					'debug/templates.js',
 					'app/views/*.js',
 					
 					// Initializers
@@ -85,6 +84,9 @@ module.exports = function(grunt) {
 					'app/modules/**/models/*.js',
 					'app/modules/**/controllers/*.js',
 					'app/modules/**/views/*.js',
+					
+					// compiled templates
+					'app/templates/templates.js',
 					
 					//
 					'app/routes/*.js'
@@ -106,7 +108,7 @@ module.exports = function(grunt) {
 					}
 				},
 				files: {
-					"debug/templates.js": [
+					"app/templates/templates.js": [
 						"app/**/*.hbs"
 					]
 				}
@@ -123,19 +125,6 @@ module.exports = function(grunt) {
 				files: {
 					"debug/app.css": "app/less/style.less"
 				}
-			},
-			production: {
-				options: {
-					paths: [
-						"app/less/imports",
-						"app/less/imports/**"
-					],
-					// this breaks some css.
-					yuicompress: false
-				},
-				files: {
-					"release/app.min.css": "app/less/style.less"
-				}
 			}
 		},
 
@@ -144,14 +133,18 @@ module.exports = function(grunt) {
 			main: {
 				files: [
 					{expand:true, cwd:'app/images/', src: ['**'], dest: 'debug/images/'},
-					{expand:true, cwd:'app/images/', src: ['**'], dest: 'release/images/'}
+					{expand:true, cwd:'app/images/', src: ['**'], dest: 'release/images/'},
+					
+					// public 
+					{expand:true, cwd:'app/public/', src: ['**'], dest: 'debug/'},
+					{expand:true, cwd:'app/public/', src: ['**'], dest: 'release/'}
 				]
 			}
 		},
 		uglify: {
 			build: {
 				src: 'debug/app.js',
-				dest:'release/app.min.js'
+				dest:'release/app.js'
 			}
 		},
 		watch: {
@@ -177,7 +170,12 @@ module.exports = function(grunt) {
 		qunit: {
 			all: ['qunit/index.html']
 		},
-		
+		cssmin: {
+			minify: {
+				src: 'debug/app.css',
+				dest: 'release/app.css'
+			}
+		},
 		yuidoc: {
 			compile: {
 				name: 'Project Name',
@@ -238,7 +236,9 @@ module.exports = function(grunt) {
     grunt.loadNpmTasks('grunt-contrib-qunit');
     grunt.loadNpmTasks('grunt-contrib-clean');
     grunt.loadNpmTasks('grunt-contrib-copy');
+    grunt.loadNpmTasks('grunt-contrib-cssmin');
+
 
 	grunt.registerTask('default', ['jshint','emberTemplates','concat','less','clean','copy','connect','qunit','yuidoc','watch']);
-	grunt.registerTask('release', ['uglify','less','clean','copy']);
+	grunt.registerTask('release', ['uglify','cssmin','clean','copy']);
 };
