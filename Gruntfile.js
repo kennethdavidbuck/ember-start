@@ -152,7 +152,8 @@ module.exports = function(grunt) {
 				files: [
 					'app/**/*.js',
 					'app/**/*.hbs',
-					'app/**/*.less'	
+					'app/**/*.less',
+					'Gruntfile.js'
 				],
 				tasks: ['jshint','emberTemplates','less','concat','qunit','yuidoc'],
 				options: {
