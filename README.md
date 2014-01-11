@@ -1,6 +1,6 @@
 # Ember Start
 
-Now user Bower to manage dependencies. Currently bower.json pulls all the most current dependencies.
+Now using Bower to manage dependencies. Currently bower.json pulls all the most current dependencies.
 
 This is a build/development tool for Ember developers to setup a basic application that includes: LESS compilation, concatenation of all javascript to a single app.js file, ember templates compilation, jshinting, yui documentation compilation, local http server, project watch tools.  It also includes a "release" function which will uglify (minify/compress) all files for a production deployment version of your app.  
 
