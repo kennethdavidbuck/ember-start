@@ -35,7 +35,7 @@ module.exports = function(grunt) {
 					$:true,
 					App:true,
 					JQ:true,
-					DS:true
+					RL:true
 				}
 			}
 		},
@@ -48,7 +48,7 @@ module.exports = function(grunt) {
 					'vendor/jquery.transit/jquery.transit.js',
 					'vendor/handlebars/handlebars.js',
 					'vendor/ember/ember.js',
-					'vendor/ember-restless/ember-restless.js',
+					'vendor/ember-restless/dist/ember-restless.js',
 					'vendor/moment/moment.js',
                     'vendor/retina.js/src/retina.js',
 
@@ -59,7 +59,8 @@ module.exports = function(grunt) {
 					// App Instantiation
 					'app/app.js',
 					'app/router.js',
-					'app/store.js',
+                    'app/data/adapter.js',
+					'app/data/store.js',
 					
 					// Core MVC
 					'app/core/mixins/*.js',
