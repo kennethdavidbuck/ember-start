@@ -48,6 +48,7 @@ module.exports = function(grunt) {
 					'vendor/jquery.transit/jquery.transit.js',
 					'vendor/handlebars/handlebars.js',
 					'vendor/ember/ember.js',
+                    'vendor/jquery-requestAnimationFrame/dist/jquery.requestAnimationFrame.js',
 					'vendor/ember-restless/dist/ember-restless.js',
 					'vendor/moment/moment.js',
                     'vendor/retina.js/src/retina.js',
