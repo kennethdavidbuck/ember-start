@@ -1,0 +1,16 @@
+{
+    "name": "Ember Start",
+    "version": "0.0.1",
+    "dependencies": {
+        "modernizr": "*",
+        "jquery": "*",
+        "jquery-easing": "*",
+        "jquery-requestAnimationFrame": "*",
+        "jquery.transit": "*",
+        "handlebars": "*",
+        "ember": "*",
+        "ember-restless":"*",
+        "moment": "*",
+        "retina.js": "*"
+    }
+}

@@ -45,4 +45,5 @@ cli/
 .idea/
 debug/
 release/
+vendor/
 

@@ -42,19 +42,16 @@ module.exports = function(grunt) {
 		concat: {
 			debug: {
 				src:[
-					// Core Library
-					'app/core/vendor/modernizr.js',
-					'app/core/vendor/jquery.js',
-					'app/core/vendor/jquery.transit.js',
-					'app/core/vendor/handlebars.js',
-					'app/core/vendor/ember.js',
-					'app/core/vendor/ember-states.js',
-					'app/core/vendor/ember-data.js',
-					'app/core/vendor/moment.js',
-					
-					// Vendor
-					'app/vendor/*.js',
-					
+					//
+					'vendor/modernizr/modernizr.js',
+					'vendor/jquery/jquery.js',
+					'vendor/jquery.transit/jquery.transit.js',
+					'vendor/handlebars/handlebars.js',
+					'vendor/ember/ember.js',
+					'vendor/ember-restless/ember-restless.js',
+					'vendor/moment/moment.js',
+                    'vendor/retina.js/src/retina.js',
+
 					// Mixins / Helpers
 					'app/mixins/*.js',
 					'app/helpers/*.js',
