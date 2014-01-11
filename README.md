@@ -90,4 +90,4 @@ grunt release
 The **/release** directory will contain your production-ready code
 
 ##Thank You
-A big thank-you goes out to sgterban, who authored ember-grunt. This is my variation of the work they started, and from which a large portion of this README has been derived.
+A big thank-you goes out to the Ember team, and also to sgterban, who authored ember-grunt. This is my variation of the work they started, and from which a large portion of this README has been derived.
