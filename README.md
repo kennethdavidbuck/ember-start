@@ -1,3 +1,5 @@
+## This repo is no longer being maintained in favour of using ember-cli instead.
+
 # Ember Start
 
 Now using Bower to manage dependencies. Currently bower.json pulls all the most current dependencies.
